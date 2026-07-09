@@ -16,6 +16,7 @@ const props = defineProps<{
   pageIndex: number
   metrics: TextMetrics
   pxPerMm: number
+  drawMode?: boolean
 }>()
 
 const documentStore = useDocument()
@@ -67,7 +68,7 @@ function updateRuns(noteId: string, runs: TextRun[]) {
 </script>
 
 <template>
-  <div class="free-layer">
+  <div class="free-layer" :class="{ 'draw-mode': props.drawMode }">
     <EditableText
       v-for="note in page.notes ?? []"
       :ref="bindEditable(note.id)"
@@ -94,5 +95,10 @@ function updateRuns(noteId: string, runs: TextRun[]) {
   pointer-events: auto;
   white-space: pre-wrap;
   cursor: text;
+}
+/* While drawing, the notes are shown but the ink canvas above owns the pointer, so a
+   stroke can cross them like any mark on the page. */
+.free-layer.draw-mode .note {
+  pointer-events: none;
 }
 </style>

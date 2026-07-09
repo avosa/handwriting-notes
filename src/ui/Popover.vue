@@ -1,31 +1,69 @@
 <script setup lang="ts">
-// A small floating panel anchored to a trigger. On a wide screen it opens beside the
-// trigger; on a narrow screen it rises from the bottom as a sheet, the way a native
-// app behaves. Clicking outside or pressing Escape closes it.
+// A small floating panel anchored to a trigger. The panel is teleported to the body so
+// it is never clipped by a scrolling toolbar or an overflow-hidden card — it floats
+// above everything and is positioned with fixed coordinates measured from the trigger.
+// On a wide screen it opens beside the trigger, flipping above when there is no room
+// below; on a narrow screen it rises from the bottom as a native-style sheet. Clicking
+// outside or pressing Escape closes it.
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = withDefaults(defineProps<{ align?: 'left' | 'right' | 'center' }>(), { align: 'left' })
 const open = ref(false)
-// Whether the panel sits above the trigger, chosen so it never spills off the bottom.
-const above = ref(false)
+const mobile = ref(false)
 const root = ref<HTMLElement | null>(null)
 const panel = ref<HTMLElement | null>(null)
+const style = ref<Record<string, string>>({})
+
+function isMobile(): boolean {
+  return window.matchMedia('(max-width: 640px)').matches
+}
+
+// Measure the trigger and place the panel with fixed coordinates. On a phone the CSS
+// sheet layout takes over, so no inline coordinates are set.
+async function place() {
+  mobile.value = isMobile()
+  if (mobile.value) {
+    style.value = {}
+    return
+  }
+  await nextTick()
+  const trigger = root.value?.getBoundingClientRect()
+  const el = panel.value
+  if (!trigger || !el) return
+  const h = el.offsetHeight
+  const w = el.offsetWidth
+  const gap = 8
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  // Flip above when the panel would run past the bottom but there is room above.
+  const above = trigger.bottom + h + 16 > vh && trigger.top - h - 16 > 0
+  const s: Record<string, string> = { position: 'fixed' }
+  if (above) s.bottom = `${Math.round(vh - trigger.top + gap)}px`
+  else s.top = `${Math.round(trigger.bottom + gap)}px`
+
+  if (props.align === 'right') {
+    s.right = `${Math.round(Math.max(8, vw - trigger.right))}px`
+  } else if (props.align === 'center') {
+    const cx = Math.min(Math.max(trigger.left + trigger.width / 2, w / 2 + 8), vw - w / 2 - 8)
+    s.left = `${Math.round(cx - w / 2)}px`
+  } else {
+    s.left = `${Math.round(Math.min(trigger.left, vw - w - 8))}px`
+  }
+  style.value = s
+}
 
 async function toggle() {
   open.value = !open.value
   if (!open.value) return
   await nextTick()
-  const trigger = root.value?.getBoundingClientRect()
-  const height = panel.value?.offsetHeight ?? 0
-  // Flip up when the panel would run past the bottom of the window but there is room
-  // above the trigger.
-  above.value = !!trigger && trigger.bottom + height + 16 > window.innerHeight && trigger.top - height - 16 > 0
+  await place()
 }
 function close() {
   open.value = false
 }
-function onDocClick(event: MouseEvent) {
-  if (open.value && root.value && !root.value.contains(event.target as Node)) close()
+function onDocPointer(event: MouseEvent) {
+  const target = event.target as Node
+  if (open.value && !root.value?.contains(target) && !panel.value?.contains(target)) close()
 }
 function onKey(event: KeyboardEvent) {
   if (event.key === 'Escape') close()
@@ -34,14 +72,21 @@ function onKey(event: KeyboardEvent) {
 function onPanelClick(event: MouseEvent) {
   if ((event.target as HTMLElement).closest('.menu-item')) close()
 }
+function onReflow() {
+  if (open.value) void place()
+}
 
 onMounted(() => {
-  document.addEventListener('mousedown', onDocClick)
+  document.addEventListener('mousedown', onDocPointer)
   document.addEventListener('keydown', onKey)
+  window.addEventListener('resize', onReflow)
+  window.addEventListener('scroll', onReflow, true)
 })
 onBeforeUnmount(() => {
-  document.removeEventListener('mousedown', onDocClick)
+  document.removeEventListener('mousedown', onDocPointer)
   document.removeEventListener('keydown', onKey)
+  window.removeEventListener('resize', onReflow)
+  window.removeEventListener('scroll', onReflow, true)
 })
 
 defineExpose({ close })
@@ -52,14 +97,24 @@ defineExpose({ close })
     <div class="trigger" @click="toggle">
       <slot name="trigger" :open="open" />
     </div>
-    <Transition name="pop">
-      <div v-if="open" ref="panel" class="panel" :class="[`align-${props.align}`, { above }]" @click="onPanelClick">
-        <slot :close="close" />
-      </div>
-    </Transition>
-    <Transition name="fade">
-      <div v-if="open" class="scrim" @click="close" />
-    </Transition>
+    <Teleport to="body">
+      <Transition name="pop">
+        <div
+          v-if="open"
+          ref="panel"
+          class="panel"
+          :class="{ mobile }"
+          :style="style"
+          @click="onPanelClick"
+          @mousedown.stop
+        >
+          <slot :close="close" />
+        </div>
+      </Transition>
+      <Transition name="fade">
+        <div v-if="open && mobile" class="scrim" @click="close" />
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -71,33 +126,14 @@ defineExpose({ close })
 .trigger {
   display: inline-flex;
 }
-.scrim {
-  display: none;
-}
 .panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  z-index: 60;
-  background: #fff;
+  position: fixed;
+  z-index: 80;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 14px;
-  box-shadow:
-    0 12px 40px rgba(51, 51, 76, 0.22),
-    0 0 0 1px rgba(51, 51, 76, 0.06);
+  box-shadow: var(--pop-shadow);
   overflow: hidden;
-}
-.panel.above {
-  top: auto;
-  bottom: calc(100% + 8px);
-}
-.align-left {
-  left: 0;
-}
-.align-right {
-  right: 0;
-}
-.align-center {
-  left: 50%;
-  transform: translateX(-50%);
 }
 .pop-enter-active,
 .pop-leave-active {
@@ -110,37 +146,37 @@ defineExpose({ close })
   opacity: 0;
   transform: translateY(-6px) scale(0.98);
 }
-.align-center.pop-enter-from,
-.align-center.pop-leave-to {
-  transform: translateX(-50%) translateY(-6px) scale(0.98);
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  z-index: 79;
+}
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.18s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
 @media (max-width: 640px) {
-  .scrim {
-    display: block;
-    position: fixed;
-    inset: 0;
-    background: rgba(31, 31, 40, 0.35);
-    z-index: 59;
-  }
-  .panel {
+  .panel.mobile {
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
     top: auto;
-    transform: none;
     border-radius: 20px 20px 0 0;
     padding-bottom: env(safe-area-inset-bottom);
-    max-height: 80vh;
+    max-height: 82vh;
     overflow-y: auto;
   }
-  .pop-enter-from,
-  .pop-leave-to {
-    transform: translateY(100%);
-  }
-  .align-center.pop-enter-from,
-  .align-center.pop-leave-to {
+  .panel.mobile.pop-enter-from,
+  .panel.mobile.pop-leave-to {
+    opacity: 1;
     transform: translateY(100%);
   }
 }

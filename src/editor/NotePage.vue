@@ -87,12 +87,15 @@ onBeforeUnmount(() => observer?.disconnect())
       :px-per-mm="pxPerMm"
       :editable="mode === 'write'"
     />
+    <!-- Free notes stay on the page in both modes: the ink canvas sits above them, so a
+         stroke can cross a jotted note just as it can cross the flowing text. In draw
+         mode the canvas takes the pointer, so the notes are shown but not editable. -->
     <FreeTextLayer
-      v-if="mode === 'write'"
       :page="page"
       :page-index="pageIndex"
       :metrics="metrics"
       :px-per-mm="pxPerMm"
+      :draw-mode="mode === 'draw'"
     />
     <InkLayer
       class="layer"
