@@ -8,7 +8,7 @@ import type { ChatRequest, Provider } from './types'
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages'
 const API_VERSION = '2023-06-01'
-const MODEL = import.meta.env.VITE_ANTHROPIC_MODEL ?? 'claude-sonnet-4-6'
+const MODEL = import.meta.env.VITE_ANTHROPIC_MODEL ?? 'claude-sonnet-5'
 
 function headers(key: string): Record<string, string> {
   return {
@@ -31,7 +31,7 @@ export const anthropic: Provider = {
     'Create a key and copy it. It is shown once.',
     'Paste it here. It stays in this browser and is sent only to Anthropic.',
   ],
-  supportsImages: true,
+  reads: { images: true, pdf: true, docs: false },
 
   async *stream(request: ChatRequest, key: string, signal: AbortSignal): AsyncGenerator<string> {
     const content = [{ type: 'text', text: request.prompt }, ...(await encodeAttachments(request.attachments))]

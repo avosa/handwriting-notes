@@ -54,12 +54,19 @@ vendor. You can connect more than one and switch which is in use; Claude is the 
 
 | Provider | Reads | Where to get a key | Default model (override) |
 |---|---|---|---|
-| **Claude** (Anthropic) | text, images, PDF | [console.anthropic.com](https://console.anthropic.com/settings/keys) | `claude-sonnet-4-6` (`VITE_ANTHROPIC_MODEL`) |
-| **ChatGPT** (OpenAI) | text, images | [platform.openai.com](https://platform.openai.com/api-keys) | `gpt-4o` (`VITE_OPENAI_MODEL`) |
-| **Gemini** (Google) | text, images | [aistudio.google.com](https://aistudio.google.com/app/apikey) | `gemini-2.0-flash` (`VITE_GEMINI_MODEL`) |
-| **DeepSeek** | text only | [platform.deepseek.com](https://platform.deepseek.com/api_keys) | `deepseek-chat` (`VITE_DEEPSEEK_MODEL`) |
+| **Claude** (Anthropic) | text, images, PDF | [console.anthropic.com](https://console.anthropic.com/settings/keys) | `claude-sonnet-5` (`VITE_ANTHROPIC_MODEL`) |
+| **ChatGPT** (OpenAI) | text, images, PDF, Word and other documents | [platform.openai.com](https://platform.openai.com/api-keys) | `gpt-5.5` (`VITE_OPENAI_MODEL`) |
+| **Gemini** (Google) | text, images, PDF | [aistudio.google.com](https://aistudio.google.com/app/apikey) | `gemini-flash-latest` (`VITE_GEMINI_MODEL`) |
+| **DeepSeek** | text only | [platform.deepseek.com](https://platform.deepseek.com/api_keys) | `deepseek-v4-flash` (`VITE_DEEPSEEK_MODEL`) |
+
+Attachments are matched to what the chosen model can read: images go to the ones with
+vision, a PDF goes to the ones that open PDFs, ChatGPT also reads Word, PowerPoint, Excel,
+and CSV files, and a plain text file is readable by all of them. Anything a model cannot
+take is summarised in a line instead, so the request still goes through.
 
 To pin a different model, set the matching `VITE_*_MODEL` variable in a `.env.local` file.
+Model names move quickly; these defaults were current in mid 2026, and the override lets
+you follow a newer one without a code change.
 A recorded voice note is transcribed on the device (the browser's recogniser, falling
 back to a small on-device model) and the text is what reaches the AI.
 

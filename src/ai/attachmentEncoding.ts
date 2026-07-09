@@ -10,6 +10,13 @@ export type ContentBlock =
   | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }
   | { type: 'document'; source: { type: 'base64'; media_type: string; data: string } }
 
+// A document whose bytes are readable as text, so it can be inlined rather than sent as a
+// binary a model may not open.
+function isPlainText(attachment: Attachment): boolean {
+  if (attachment.mime.startsWith('text/')) return true
+  return /\.(txt|md|markdown|csv|tsv|json|xml|html?|ya?ml|log|rtf)$/i.test(attachment.name)
+}
+
 export async function blobToBase64(blob: Blob): Promise<string> {
   const buffer = await blob.arrayBuffer()
   let binary = ''
@@ -67,9 +74,15 @@ export async function encodeAttachment(attachment: Attachment): Promise<ContentB
     ]
   }
 
+  // A document whose bytes are text goes in as text; a rich format Claude does not open
+  // inline (a Word or slides file) is noted so its binary is never sent as gibberish.
   if (attachment.kind === 'document') {
-    const text = await blob.text()
-    return [{ type: 'text', text: `Attached document "${attachment.name}":\n${text}` }]
+    if (isPlainText(attachment)) {
+      return [{ type: 'text', text: `Attached document "${attachment.name}":\n${await blob.text()}` }]
+    }
+    return [
+      { type: 'text', text: `A document "${attachment.name}" was attached. Convert it to PDF for Claude to read it.` },
+    ]
   }
 
   // Audio is not model readable, so a voice note contributes its spoken transcript.

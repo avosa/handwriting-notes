@@ -13,6 +13,15 @@ export interface ChatRequest {
   maxTokens: number
 }
 
+// What kinds of attachment a vendor's model can actually read. Plain text is always
+// readable, so it is not listed; anything a model cannot take is sent as a short note.
+export interface Reads {
+  images: boolean
+  pdf: boolean
+  /** Office and rich documents: docx, pptx, xlsx, csv, and the like. */
+  docs: boolean
+}
+
 export interface Provider {
   id: ProviderId
   /** Product name the writer knows: Claude, ChatGPT, DeepSeek. */
@@ -27,8 +36,8 @@ export interface Provider {
   consoleUrl: string
   /** Short, ordered steps to obtain a key. */
   steps: string[]
-  /** Whether images in attachments can be sent to this vendor. */
-  supportsImages: boolean
+  /** Which attachment kinds this vendor's model can read. */
+  reads: Reads
 
   /** Stream the reply as plain text deltas. Rejects with a readable error on failure. */
   stream(request: ChatRequest, key: string, signal: AbortSignal): AsyncGenerator<string>

@@ -14,7 +14,7 @@ export const gemini = openAiCompatible({
     'Create a key and copy it.',
     'Paste it here. It stays in this browser and is sent only to Google.',
   ],
-  supportsImages: true,
+  reads: { images: true, pdf: true, docs: false },
   endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-  model: import.meta.env.VITE_GEMINI_MODEL ?? 'gemini-2.0-flash',
+  model: import.meta.env.VITE_GEMINI_MODEL ?? 'gemini-flash-latest',
 })

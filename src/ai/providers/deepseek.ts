@@ -1,5 +1,5 @@
-// DeepSeek, which speaks the same chat protocol as OpenAI. It reads text only, so images
-// in attachments are noted rather than sent.
+// DeepSeek, which speaks the same chat protocol as OpenAI. Its chat model reads text only,
+// so images and documents in attachments are noted rather than sent.
 import { openAiCompatible } from './openaiCompatible'
 
 export const deepseek = openAiCompatible({
@@ -14,7 +14,7 @@ export const deepseek = openAiCompatible({
     'Create a key and copy it. It is shown once.',
     'Paste it here. It stays in this browser and is sent only to DeepSeek.',
   ],
-  supportsImages: false,
+  reads: { images: false, pdf: false, docs: false },
   endpoint: 'https://api.deepseek.com/chat/completions',
-  model: import.meta.env.VITE_DEEPSEEK_MODEL ?? 'deepseek-chat',
+  model: import.meta.env.VITE_DEEPSEEK_MODEL ?? 'deepseek-v4-flash',
 })

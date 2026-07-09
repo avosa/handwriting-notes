@@ -102,7 +102,7 @@ const glyph: Record<AttachmentKind, string> = { image: 'image', video: 'video', 
       class="hidden"
       type="file"
       multiple
-      accept="image/*,video/*,audio/*,application/pdf,.txt,.md"
+      accept="image/*,video/*,audio/*,application/pdf,.txt,.md,.csv,.tsv,.json,.xml,.html,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.rtf,.odt"
       @change="onPick"
     />
 

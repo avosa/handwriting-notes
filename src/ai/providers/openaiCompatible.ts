@@ -5,7 +5,7 @@
 import { attachmentParts, type ContentPart } from './content'
 import { describeHttpError } from './errors'
 import { sseData } from './sse'
-import type { ChatRequest, Provider } from './types'
+import type { ChatRequest, Provider, Reads } from './types'
 
 interface Config {
   id: Provider['id']
@@ -15,7 +15,7 @@ interface Config {
   keyPrefix: string
   consoleUrl: string
   steps: string[]
-  supportsImages: boolean
+  reads: Reads
   endpoint: string
   model: string
 }
@@ -29,7 +29,7 @@ interface Completion {
 
 export function openAiCompatible(config: Config): Provider {
   async function userContent(request: ChatRequest): Promise<ContentPart[]> {
-    const parts = await attachmentParts(request.attachments, config.supportsImages)
+    const parts = await attachmentParts(request.attachments, config.reads)
     return [{ type: 'text', text: request.prompt }, ...parts]
   }
   function headers(key: string): Record<string, string> {
@@ -44,7 +44,7 @@ export function openAiCompatible(config: Config): Provider {
     keyPrefix: config.keyPrefix,
     consoleUrl: config.consoleUrl,
     steps: config.steps,
-    supportsImages: config.supportsImages,
+    reads: config.reads,
 
     async *stream(request: ChatRequest, key: string, signal: AbortSignal): AsyncGenerator<string> {
       const response = await fetch(config.endpoint, {

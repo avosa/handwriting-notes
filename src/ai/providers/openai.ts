@@ -13,7 +13,7 @@ export const openai = openAiCompatible({
     'Create a new secret key and copy it. It is shown once.',
     'Paste it here. It stays in this browser and is sent only to OpenAI.',
   ],
-  supportsImages: true,
+  reads: { images: true, pdf: true, docs: true },
   endpoint: 'https://api.openai.com/v1/chat/completions',
-  model: import.meta.env.VITE_OPENAI_MODEL ?? 'gpt-4o',
+  model: import.meta.env.VITE_OPENAI_MODEL ?? 'gpt-5.5',
 })

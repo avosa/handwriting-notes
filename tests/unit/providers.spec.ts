@@ -19,9 +19,14 @@ describe('provider registry', () => {
   it('offers Claude, ChatGPT, Gemini, and DeepSeek, with Claude first', () => {
     expect(providerList.map((p) => p.name)).toEqual(['Claude', 'ChatGPT', 'Gemini', 'DeepSeek'])
   })
-  it('marks which providers can see images', () => {
-    const vision = Object.fromEntries(providerList.map((p) => [p.id, p.supportsImages]))
-    expect(vision).toEqual({ anthropic: true, openai: true, gemini: true, deepseek: false })
+  it('records what each provider can read', () => {
+    const reads = Object.fromEntries(providerList.map((p) => [p.id, p.reads]))
+    expect(reads).toEqual({
+      anthropic: { images: true, pdf: true, docs: false },
+      openai: { images: true, pdf: true, docs: true },
+      gemini: { images: true, pdf: true, docs: false },
+      deepseek: { images: false, pdf: false, docs: false },
+    })
   })
   it('resolves a known id and falls back to Claude for an unknown one', () => {
     expect(getProvider('openai').vendor).toBe('OpenAI')
@@ -32,8 +37,14 @@ describe('provider registry', () => {
   })
 })
 
+const FULL = { images: true, pdf: true, docs: true }
+const NONE = { images: false, pdf: false, docs: false }
+
 function image(): Attachment {
   return { id: 'i', kind: 'image', name: 'shot.png', mime: 'image/png', size: 5, blobRef: 'b' }
+}
+function doc(mime: string, name: string): Attachment {
+  return { id: 'd', kind: 'document', name, mime, size: 5, blobRef: 'b' }
 }
 function voice(transcript?: string): Attachment {
   return { id: 'a', kind: 'audio', name: 'Voice note', mime: 'audio/webm', size: 5, blobRef: 'b', transcript }
@@ -41,17 +52,37 @@ function voice(transcript?: string): Attachment {
 
 describe('attachment parts for OpenAI-style providers', () => {
   it('sends an image inline when the model can see it', async () => {
-    const parts = await attachmentParts([image()], true)
-    expect(parts[0].type).toBe('image_url')
-    expect(parts[0]).toMatchObject({ image_url: { url: expect.stringContaining('data:image/png;base64,') } })
+    const parts = await attachmentParts([image()], FULL)
+    expect(parts[0]).toMatchObject({
+      type: 'image_url',
+      image_url: { url: expect.stringContaining('data:image/png;base64,') },
+    })
   })
   it('notes an image as text when the model has no vision', async () => {
-    const parts = await attachmentParts([image()], false)
-    expect(parts[0].type).toBe('text')
-    expect(parts[0]).toMatchObject({ text: expect.stringContaining('cannot read images') })
+    const parts = await attachmentParts([image()], NONE)
+    expect(parts[0]).toMatchObject({ type: 'text', text: expect.stringContaining('cannot read images') })
+  })
+  it('sends a PDF as a file part when the model can read PDFs', async () => {
+    const parts = await attachmentParts([doc('application/pdf', 'notes.pdf')], FULL)
+    expect(parts[0]).toMatchObject({
+      type: 'file',
+      file: { filename: 'notes.pdf', file_data: expect.stringContaining('data:application/pdf;base64,') },
+    })
+  })
+  it('sends a Word document as a file part only where docs are supported', async () => {
+    const docx = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    expect((await attachmentParts([doc(docx, 'essay.docx')], FULL))[0].type).toBe('file')
+    expect((await attachmentParts([doc(docx, 'essay.docx')], NONE))[0]).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining('cannot read that format'),
+    })
+  })
+  it('inlines a plain-text file for every model', async () => {
+    const parts = await attachmentParts([doc('text/plain', 'notes.txt')], NONE)
+    expect(parts[0]).toMatchObject({ type: 'text', text: expect.stringContaining('document text') })
   })
   it('carries a voice note as its transcript', async () => {
-    const parts = await attachmentParts([voice('take notes on sets')], false)
+    const parts = await attachmentParts([voice('take notes on sets')], NONE)
     expect(parts[0]).toEqual({ type: 'text', text: 'Transcript of a spoken voice note:\ntake notes on sets' })
   })
 })
