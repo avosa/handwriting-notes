@@ -51,7 +51,7 @@ describe('parseGeneratedNotes', () => {
   it('strips dashes from generated prose', () => {
     const reply = JSON.stringify({ pages: [[{ type: 'text', role: 'body', content: 'a — b' }]] })
     const block = parseGeneratedNotes(reply).pages[0][0]
-    expect(block.type === 'text' && block.text.content).toBe('a, b')
+    expect(block.type === 'text' && block.text.runs.map((r) => r.text).join('')).toBe('a, b')
   })
 
   it('rejects a reply with no pages', () => {

@@ -1,9 +1,21 @@
 // Renders the document to a DOCX. Word cannot draw the ruled sheet as live vectors,
-// so each page becomes a section whose background is the sheet, with the writing set
-// in the handwriting fonts over it and each diagram placed as a crisp rendering of the
-// same pen-drawn figure. The text stays real, selectable text.
-import { AlignmentType, Document, ImageRun, Packer, Paragraph, TextRun, type ISectionOptions } from 'docx'
-import type { Block, NoteDocument, Page, TextRole } from '@/types'
+// so each page is a section whose background is the sheet, with the writing set in the
+// handwriting fonts over it, real tables, and each figure placed as a crisp rendering
+// of the same pen-drawn shape. The text stays real, selectable text.
+import {
+  AlignmentType,
+  Document,
+  ImageRun,
+  Packer,
+  Paragraph,
+  Table,
+  TableCell,
+  TableRow,
+  TextRun as DocxTextRun,
+  WidthType,
+  type ISectionOptions,
+} from 'docx'
+import type { Block, NoteDocument, Page, TextRole, TextRun } from '@/types'
 import { getPreset, ruleYs, type SheetPreset } from '@/paper/sheetSpec'
 import { getHandwriting } from '@/handwriting/registry'
 import { renderDiagram } from '@/diagrams/render'
@@ -11,23 +23,48 @@ import { useSettings } from '@/store/settings'
 import { triggerDownload } from './toPdf'
 
 const MM_TO_TWIP = 1440 / 25.4
+const twip = (v: number) => Math.round(v * MM_TO_TWIP)
+const px = (mmValue: number) => Math.round(mmValue * (96 / 25.4))
 
-function twip(mm: number): number {
-  return Math.round(mm * MM_TO_TWIP)
+const ROLE_SIZE: Record<TextRole, number> = {
+  title: 40,
+  subtitle: 26,
+  heading: 30,
+  subheading: 26,
+  body: 24,
+  caption: 20,
 }
 
-function fontName(role: TextRole, bodyFont: string, headerFont: string): string {
-  return role === 'body' ? bodyFont : headerFont
+function fontFor(role: TextRole, bodyFont: string, headerFont: string): string {
+  return role === 'title' || role === 'heading' ? headerFont : bodyFont
 }
-
 function roleColor(role: TextRole, palette: ReturnType<typeof getHandwriting>['palette']): string {
-  return (role === 'title' ? palette.title : role === 'heading' ? palette.heading : palette.ink).replace('#', '')
+  return (
+    role === 'title' ? palette.title : role === 'heading' || role === 'subheading' ? palette.heading : palette.ink
+  ).replace('#', '')
+}
+function alignment(a: string | undefined, role: TextRole) {
+  const value = a ?? (role === 'caption' || role === 'subtitle' ? 'center' : 'left')
+  return value === 'justify' ? AlignmentType.JUSTIFIED : value === 'center' ? AlignmentType.CENTER : AlignmentType.LEFT
 }
 
-// Half-point font sizes tuned to sit close to the on-screen writing.
-const ROLE_SIZE: Record<TextRole, number> = { title: 40, heading: 30, body: 24 }
+function runs(list: TextRun[], font: string, size: number, fallbackColor: string): DocxTextRun[] {
+  return (list.length ? list : [{ text: '' }]).map(
+    (r) =>
+      new DocxTextRun({
+        text: r.text,
+        font,
+        size,
+        bold: r.bold,
+        italics: r.italic,
+        underline: r.underline ? {} : undefined,
+        color: (r.color ?? fallbackColor).replace('#', ''),
+        highlight: undefined,
+        shading: r.highlight ? { fill: r.highlight.replace('#', '') } : undefined,
+      }),
+  )
+}
 
-/** Draw the ruled sheet to an SVG string used as the page background image. */
 function sheetSvg(preset: SheetPreset): string {
   const rules = ruleYs(preset)
     .map(
@@ -38,122 +75,185 @@ function sheetSvg(preset: SheetPreset): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${preset.width} ${preset.height}"><rect width="${preset.width}" height="${preset.height}" fill="${preset.background}"/>${rules}<line x1="${preset.margin.left}" y1="0" x2="${preset.margin.left}" y2="${preset.height}" stroke="${preset.margin.color}" stroke-width="0.4"/></svg>`
 }
 
-/** Rasterise an SVG string to PNG bytes in the browser. */
-async function svgToPng(svg: string, widthPx: number, heightPx: number): Promise<Uint8Array> {
-  const blob = new Blob([svg], { type: 'image/svg+xml' })
-  const url = URL.createObjectURL(blob)
-  try {
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image()
-      img.onload = () => resolve(img)
-      img.onerror = () => reject(new Error('The figure could not be drawn.'))
-      img.src = url
-    })
-    const canvas = document.createElement('canvas')
-    canvas.width = widthPx
-    canvas.height = heightPx
-    const ctx = canvas.getContext('2d')!
-    ctx.drawImage(image, 0, 0, widthPx, heightPx)
-    const pngBlob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), 'image/png'))
-    return new Uint8Array(await pngBlob.arrayBuffer())
-  } finally {
-    URL.revokeObjectURL(url)
-  }
-}
-
-/** Build an SVG for a diagram scene, sized to the writing column. */
-function diagramSvg(
-  spec: Extract<Block, { type: 'diagram' }>['spec'],
-  widthMm: number,
-  heightMm: number,
-  fontFamily: string,
-): string {
-  const rendered = renderDiagram(spec)
-  const paths = rendered.paths
+function diagramSvg(spec: Extract<Block, { type: 'diagram' }>['spec'], fontFamily: string): string {
+  const d = renderDiagram(spec)
+  const paths = d.paths
     .map(
       (p) =>
-        `<path d="${p.d}" fill="${p.fill}" stroke="${p.stroke}" stroke-width="${rendered.strokeWidth}" stroke-linejoin="round" stroke-linecap="round"/>`,
+        `<path d="${p.d}" fill="${p.fill}" stroke="${p.stroke}" stroke-width="${d.strokeWidth}" stroke-linejoin="round" stroke-linecap="round"/>`,
     )
     .join('')
-  const labels = rendered.labels
+  const labels = d.labels
     .map(
       (l) =>
         `<text x="${l.x}" y="${l.y}" fill="${l.color}" font-size="${l.size}" text-anchor="${l.anchor}" font-family="${fontFamily}">${escapeXml(l.text)}</text>`,
     )
     .join('')
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${rendered.width} ${rendered.height}" width="${widthMm}mm" height="${heightMm}mm">${paths}${labels}</svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${d.width} ${d.height}">${paths}${labels}</svg>`
 }
-
 function escapeXml(text: string): string {
   return text.replace(/[<>&]/g, (c) => (c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&amp;'))
 }
 
-async function pageChildren(
-  page: Page,
+async function svgToPng(svg: string, w: number, h: number): Promise<Uint8Array> {
+  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => resolve(img)
+      img.onerror = () => reject(new Error('A figure could not be drawn.'))
+      img.src = url
+    })
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    canvas.getContext('2d')!.drawImage(image, 0, 0, w, h)
+    const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), 'image/png'))
+    return new Uint8Array(await blob.arrayBuffer())
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+async function blockToChildren(
+  block: Block,
+  preset: SheetPreset,
   bodyFont: string,
   headerFont: string,
   palette: ReturnType<typeof getHandwriting>['palette'],
-): Promise<Paragraph[]> {
-  const preset = getPreset(page.presetId)
+): Promise<(Paragraph | Table)[]> {
   const colWidthMm = preset.text.right - preset.text.left
-  const children: Paragraph[] = []
+  const lineTwip = twip(preset.rule.spacing * preset.text.leadingRules)
 
-  for (const block of page.blocks) {
-    if (block.type === 'text') {
-      const t = block.text
-      children.push(
-        new Paragraph({
-          alignment: t.align === 'justify' ? AlignmentType.JUSTIFIED : AlignmentType.LEFT,
-          spacing: {
-            line: twip(preset.rule.spacing * preset.text.leadingRules),
-            lineRule: 'exact',
-            before: 0,
-            after: 0,
-          },
-          indent: t.indent ? { left: twip(t.indent) } : undefined,
-          children: [
-            new TextRun({
-              text: t.content,
-              font: fontName(t.role, bodyFont, headerFont),
-              size: ROLE_SIZE[t.role],
-              bold: t.bold,
-              color: t.color ? t.color.replace('#', '') : roleColor(t.role, palette),
-            }),
-          ],
-        }),
-      )
-    } else {
-      const heightMm = block.heightRules * preset.rule.spacing * preset.text.leadingRules
-      const svg = diagramSvg(block.spec, colWidthMm, heightMm, bodyFont)
-      const png = await svgToPng(svg, Math.round(colWidthMm * 4), Math.round(heightMm * 4))
-      children.push(
-        new Paragraph({
-          spacing: { before: 0, after: 0 },
-          children: [
-            new ImageRun({
-              data: png,
-              type: 'png',
-              transformation: {
-                width: Math.round(colWidthMm * (96 / 25.4)),
-                height: Math.round(heightMm * (96 / 25.4)),
-              },
-            }),
-          ],
-        }),
-      )
-    }
+  if (block.type === 'text') {
+    const t = block.text
+    return [
+      new Paragraph({
+        alignment: alignment(t.align, t.role),
+        spacing: { line: lineTwip, lineRule: 'exact', before: 0, after: 0 },
+        children: runs(t.runs, fontFor(t.role, bodyFont, headerFont), ROLE_SIZE[t.role], roleColor(t.role, palette)),
+      }),
+    ]
   }
+  if (block.type === 'list') {
+    return block.items.map(
+      (item, i) =>
+        new Paragraph({
+          spacing: { line: lineTwip, lineRule: 'exact' },
+          bullet: block.ordered ? undefined : { level: 0 },
+          numbering: block.ordered ? { reference: 'ordered', level: 0 } : undefined,
+          children: runs(item, bodyFont, ROLE_SIZE.body, palette.ink),
+          ...(block.ordered ? { text: `${i + 1}.` } : {}),
+        }),
+    )
+  }
+  if (block.type === 'table') {
+    const makeRow = (cells: string[], head: boolean) =>
+      new TableRow({
+        children: cells.map(
+          (c) =>
+            new TableCell({
+              children: [
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  children: [
+                    new DocxTextRun({
+                      text: c,
+                      font: bodyFont,
+                      size: ROLE_SIZE.body,
+                      bold: head,
+                      color: palette.ink.replace('#', ''),
+                    }),
+                  ],
+                }),
+              ],
+            }),
+        ),
+      })
+    const rows = [makeRow(block.header, true), ...block.rows.map((r) => makeRow(r, false))]
+    const out: (Paragraph | Table)[] = []
+    if (block.caption)
+      out.push(
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [
+            new DocxTextRun({
+              text: block.caption,
+              font: bodyFont,
+              size: ROLE_SIZE.caption,
+              color: palette.ink.replace('#', ''),
+            }),
+          ],
+        }),
+      )
+    out.push(new Table({ width: { size: px(colWidthMm) * 15, type: WidthType.DXA }, rows }))
+    return out
+  }
+  if (block.type === 'callouts') {
+    const row = new TableRow({
+      children: block.boxes.map(
+        (box) =>
+          new TableCell({
+            margins: { top: 60, bottom: 60, left: 100, right: 100 },
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: runs(box.heading, bodyFont, ROLE_SIZE.body, box.color),
+              }),
+              ...box.items.map((it) => new Paragraph({ children: runs(it, bodyFont, ROLE_SIZE.body, palette.ink) })),
+            ],
+          }),
+      ),
+    })
+    const out: (Paragraph | Table)[] = []
+    if (block.caption)
+      out.push(
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [
+            new DocxTextRun({
+              text: block.caption,
+              font: bodyFont,
+              size: ROLE_SIZE.caption,
+              color: palette.ink.replace('#', ''),
+            }),
+          ],
+        }),
+      )
+    out.push(new Table({ width: { size: px(colWidthMm) * 15, type: WidthType.DXA }, rows: [row] }))
+    return out
+  }
+  // diagram
+  const heightMm = block.heightRules * preset.rule.spacing * preset.text.leadingRules
+  const png = await svgToPng(diagramSvg(block.spec, bodyFont), Math.round(colWidthMm * 4), Math.round(heightMm * 4))
+  return [
+    new Paragraph({
+      children: [
+        new ImageRun({ data: png, type: 'png', transformation: { width: px(colWidthMm), height: px(heightMm) } }),
+      ],
+    }),
+  ]
+}
+
+async function pageChildren(
+  page: Page,
+  preset: SheetPreset,
+  bodyFont: string,
+  headerFont: string,
+  palette: ReturnType<typeof getHandwriting>['palette'],
+) {
+  const children: (Paragraph | Table)[] = []
+  for (const block of page.blocks)
+    children.push(...(await blockToChildren(block, preset, bodyFont, headerFont, palette)))
   return children
 }
 
 export async function documentToDocx(doc: NoteDocument): Promise<Blob> {
-  const settings = useSettings()
-  const handwriting = getHandwriting(settings.activeHandwritingId)
+  const handwriting = getHandwriting(useSettings().activeHandwritingId)
   const bodyFont = handwriting.bodyFont
   const headerFont = handwriting.headerFont
-  const preset = getPreset(doc.pages[0]?.presetId ?? '1C')
-
-  const background = await svgToPng(sheetSvg(preset), Math.round(preset.width * 4), Math.round(preset.height * 4))
+  const first = getPreset(doc.pages[0]?.presetId ?? '1C')
+  const background = await svgToPng(sheetSvg(first), Math.round(first.width * 4), Math.round(first.height * 4))
 
   const sections: ISectionOptions[] = []
   for (const page of doc.pages) {
@@ -183,20 +283,30 @@ export async function documentToDocx(doc: NoteDocument): Promise<Blob> {
             new ImageRun({
               data: background,
               type: 'png',
-              transformation: { width: Math.round(p.width * (96 / 25.4)), height: Math.round(p.height * (96 / 25.4)) },
+              transformation: { width: px(p.width), height: px(p.height) },
             }),
           ],
         }),
-        ...(await pageChildren(page, bodyFont, headerFont, handwriting.palette)),
+        ...(await pageChildren(page, p, bodyFont, headerFont, handwriting.palette)),
       ],
     })
   }
 
-  const docx = new Document({ sections })
-  return Packer.toBlob(docx)
+  return Packer.toBlob(
+    new Document({
+      numbering: {
+        config: [
+          {
+            reference: 'ordered',
+            levels: [{ level: 0, format: 'decimal', text: '%1.', alignment: AlignmentType.START }],
+          },
+        ],
+      },
+      sections,
+    }),
+  )
 }
 
 export async function downloadDocx(doc: NoteDocument): Promise<void> {
-  const blob = await documentToDocx(doc)
-  triggerDownload(blob, `${doc.title || 'notes'}.docx`)
+  triggerDownload(await documentToDocx(doc), `${doc.title || 'notes'}.docx`)
 }

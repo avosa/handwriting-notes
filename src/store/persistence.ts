@@ -11,6 +11,10 @@ const DB_VERSION = 1
 const DOC_KEY = 'current'
 const SETTINGS_KEY = 'current'
 const API_KEY_KEY = 'anthropic-api-key'
+// The saved document carries the shape it was written with. A document from an earlier
+// shape is ignored rather than rendered, so a stored note can never blank the page.
+const SCHEMA_VERSION = 2
+const VERSION_KEY = 'schema-version'
 
 interface Stores {
   document: NoteDocument
@@ -40,12 +44,28 @@ function plain<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 
+function isValidDocument(doc: unknown): doc is NoteDocument {
+  if (!doc || typeof doc !== 'object') return false
+  const pages = (doc as NoteDocument).pages
+  if (!Array.isArray(pages)) return false
+  // Every text block must carry runs, the current shape. Anything else is discarded.
+  return pages.every((page) =>
+    Array.isArray(page.blocks) ? page.blocks.every((b) => b.type !== 'text' || Array.isArray(b.text?.runs)) : false,
+  )
+}
+
 export async function loadDocument(): Promise<NoteDocument | undefined> {
-  return (await db()).get('document', DOC_KEY)
+  const database = await db()
+  const version = await database.get('meta', VERSION_KEY)
+  if (version !== String(SCHEMA_VERSION)) return undefined
+  const doc = await database.get('document', DOC_KEY)
+  return isValidDocument(doc) ? doc : undefined
 }
 
 export async function saveDocument(doc: NoteDocument): Promise<void> {
-  await (await db()).put('document', plain(doc), DOC_KEY)
+  const database = await db()
+  await database.put('document', plain(doc), DOC_KEY)
+  await database.put('meta', String(SCHEMA_VERSION), VERSION_KEY)
 }
 
 export async function loadSettings(): Promise<Settings | undefined> {

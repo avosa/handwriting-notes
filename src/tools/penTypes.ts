@@ -29,10 +29,11 @@ export const penProfiles: Record<PenType, PenProfile> = {
     opacity: 0.35,
     blend: 'multiply',
   },
+  fill: { id: 'fill', name: 'Fill', width: 1, minWidth: 1, maxWidth: 1, opacity: 0.4, blend: 'normal' },
   eraser: { id: 'eraser', name: 'Eraser', width: 4, minWidth: 1, maxWidth: 12, opacity: 1, blend: 'normal' },
 }
 
-export const penOrder: PenType[] = ['pencil', 'fine', 'marker', 'highlighter', 'eraser']
+export const penOrder: PenType[] = ['pencil', 'fine', 'marker', 'highlighter', 'fill', 'eraser']
 
 export function penProfile(tool: PenType): PenProfile {
   return penProfiles[tool]

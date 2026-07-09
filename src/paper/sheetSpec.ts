@@ -106,8 +106,13 @@ export function getPreset(id: string): SheetPreset {
 
 /** Y positions of every horizontal rule from the top edge, in millimetres. */
 export function ruleYs(preset: SheetPreset): number[] {
+  return ruleYsForHeight(preset, preset.height)
+}
+
+/** Rule positions for a page of an arbitrary height, so a page can grow as it fills. */
+export function ruleYsForHeight(preset: SheetPreset, heightMm: number): number[] {
   const ys: number[] = []
-  for (let y = preset.rule.topGap; y <= preset.height - preset.rule.spacing; y += preset.rule.spacing) {
+  for (let y = preset.rule.topGap; y <= heightMm - preset.rule.spacing; y += preset.rule.spacing) {
     ys.push(Number(y.toFixed(4)))
   }
   return ys

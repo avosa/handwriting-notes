@@ -20,7 +20,7 @@ export interface UploadResult {
  * new style reuses the default fonts, so notes stay legible while the name is real.
  */
 export function registerSample(sample: HandwritingSample): UploadResult {
-  const base = getHandwriting('sanobia')
+  const base = getHandwriting('casual')
   const firstName = sample.firstName.trim() || 'Your'
   return {
     handwriting: {

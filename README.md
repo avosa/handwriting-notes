@@ -1,13 +1,14 @@
 # Handwriting Notes
 
-A note taking web app that renders notes as neat handwriting on ruled paper, lets you
-draw over them with pens and pencils, and turns an instruction plus attachments into
-finished handwritten pages with the Claude API. It opens on a full set of Sets and
-Venn Diagrams notes so you can see the look immediately.
+A note-taking web app that turns what you type into neat handwriting on ruled paper.
+You start on a blank page and build the note with a full set of tools: titles and
+headings, bold, italic, underline and colour, lists, tables, callout boxes, and
+hand-drawn diagrams. You can also draw and fill shapes freehand, and ask Claude to
+draft a whole note for you using those same tools.
 
-Everything runs in the browser. There is no backend and nothing to deploy or pay for:
-your work is saved locally in the browser, and the Claude API is called directly with
-a key you enter once and that never leaves your machine except to reach Anthropic.
+Everything runs in the browser. There is no backend and nothing to deploy or pay for.
+Your work is saved locally in the browser. The app and all of its tools are free; the
+AI drafting feature calls Claude with a key you enter once, which stays on your device.
 
 ## Running it
 
@@ -16,47 +17,52 @@ bun install
 bun dev
 ```
 
-Open the printed URL. To generate notes with Claude, click the key button and paste an
-Anthropic API key from console.anthropic.com. It is stored only in this browser.
+Open the printed URL and start writing.
 
-## What it does
+## What you can do
 
-- **The paper.** A ruled A4 sheet drawn as real vector lines, uniform at any zoom. Sheet
-  styles are presets; the light blue college ruled sheet is the default.
-- **Handwriting.** Two embedded fonts, Caveat for body and Indie Flower for titles and
-  headings, coloured with the note palette. Nothing is fetched from a CDN.
-- **Hand-drawn diagrams.** A seeded wobble engine draws circles, boxes, triangles, and
-  arrows so figures look pen-drawn, never like clip art. Any figure is expressible as a
-  scene of primitives, so the engine is not limited to the built-in Venn layouts.
-- **Drawing.** Pencil, fine pen, marker, highlighter, and eraser, with adjustable width
-  and an editable colour palette that also tints generated diagrams.
-- **Compose with Claude.** Type an instruction, attach photos, PDFs, or a video with a
-  pasted transcript, and Claude writes the notes onto new pages.
-- **Local first.** Text, ink, settings, and attachments autosave to IndexedDB and
-  restore after a refresh, a crash, or going offline.
-- **Export.** PDF (a true vector page: the sheet as lines, the writing in the embedded
-  fonts, the diagrams as pen paths) and DOCX.
+- **Write on real paper.** A ruled sheet drawn as crisp vector lines that grows as you
+  fill it, so you are never stopped by a page edge. Add pages or break to a new one
+  whenever you like.
+- **Format freely.** Turn any line into a title, subtitle, heading, subheading, body,
+  or caption. Make text bold, italic, or underlined, and colour any word, heading, or
+  highlight from a rich colour picker with a full spectrum, hex entry, and your recent
+  and saved swatches. Long-press or select text for the quick menu.
+- **Structure a note.** Numbered and bulleted lists, tables, and coloured callout
+  boxes, all ruled by hand so they match the paper.
+- **Draw diagrams.** Insert Venn diagrams, triangles, and flow figures, or let the
+  engine place any custom shape. Every figure is drawn pen-style, never a stiff
+  perfect circle.
+- **Draw by hand.** Pencil, fine pen, marker, highlighter, and an eraser, with
+  adjustable width and any colour. Tap the fill tool inside a shape you drew to colour
+  it in.
+- **Write with AI.** Describe the note you want, attach photos, a PDF, or a video with
+  its transcript, and Claude drafts it onto new pages using the same tools you have.
+  This needs your own Anthropic key, entered from the key button.
+- **Nothing is lost.** Text, drawings, settings, and attachments save to the browser
+  and come back after a refresh or going offline.
+- **Save as.** Export to PDF (a true vector page) or to a Word document.
 
 ## Verifying
 
 ```bash
-bun run typecheck   # vue-tsc
-bun run lint        # eslint + prettier
-bun run test        # vitest unit tests
-bun run test:e2e    # playwright: ruling uniformity + hand-drawn diagrams
+bun run typecheck
+bun run lint
+bun run test
+bun run test:e2e
 ```
 
 ## Layout
 
 ```
 src/
-  paper/        the ruled sheet: spec and vector component
-  diagrams/     wobble engine, scene model, renderer, component
-  editor/       note page, writing layer, ink layer, grid alignment
-  tools/        pens, toolbar, colour palette
-  compose/      instruction bar, attachments, the Claude call
-  ai/           system prompt, attachment encoding, output parsing, dash lint
-  store/        document and settings stores, IndexedDB persistence
-  content/      the default Sets and Venn Diagrams document
-  export/       PDF and DOCX exporters
+  paper/     the ruled sheet: spec and vector component
+  editor/    pages, the writing layer, blocks, ink, the tool bar and menus
+  diagrams/  the pen-drawn shape engine, scene model, and presets
+  tools/     pens and widths
+  ui/        icons, colour picker, popovers, dialogs
+  compose/   the AI panel, attachments, and the Claude call
+  ai/        prompt, attachment encoding, output parsing, dash lint
+  store/     document and settings stores, local persistence
+  export/    PDF and Word exporters
 ```

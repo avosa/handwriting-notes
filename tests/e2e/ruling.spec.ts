@@ -34,8 +34,13 @@ test('the 1C sheet rules are uniform and complete', async ({ page }) => {
   expect(Math.abs((geometry.marginX as number) - 24.8)).toBeLessThan(0.3)
 })
 
-test('diagrams are drawn as pen paths, never perfect primitives', async ({ page }) => {
+test('an inserted diagram is drawn as pen paths, never perfect primitives', async ({ page }) => {
   await page.goto('/')
+  await page.waitForSelector('.note-page')
+
+  // Insert a Venn diagram from the tools, then inspect what it drew.
+  await page.locator('button:has-text("Insert")').click()
+  await page.locator('.menu-item:has-text("Overlap")').click()
   await page.waitForSelector('.note-page .diagram')
 
   const shapes = await page.evaluate(() => {

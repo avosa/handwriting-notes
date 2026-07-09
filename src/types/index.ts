@@ -1,6 +1,6 @@
 // Domain types shared across the editor, stores, AI layer, and exporters.
 
-export type PenType = 'pencil' | 'fine' | 'marker' | 'highlighter' | 'eraser'
+export type PenType = 'pencil' | 'fine' | 'marker' | 'highlighter' | 'eraser' | 'fill'
 
 export type InkColor = string
 
@@ -11,6 +11,8 @@ export interface Stroke {
   color: InkColor
   width: number
   points: StrokePoint[]
+  /** When set, the closed shape the stroke outlines is flooded with this colour. */
+  fill?: string
 }
 
 export interface StrokePoint {
@@ -20,24 +22,39 @@ export interface StrokePoint {
 }
 
 /**
- * A run of handwriting placed on the rule grid. `role` picks the font and colour
- * from the active handwriting: a title uses the header font in title blue, a
- * heading uses the header font in section red, body uses the body font in ink.
+ * The kind of line a paragraph is. The role sets the default font and colour: titles
+ * and headings use the header font, body and captions the body font. Every default is
+ * only a starting point; a paragraph or an individual run can override the colour.
  */
-export type TextRole = 'title' | 'heading' | 'body'
+export type TextRole = 'title' | 'subtitle' | 'heading' | 'subheading' | 'body' | 'caption'
 
-export type TextAlign = 'left' | 'justify'
+export type TextAlign = 'left' | 'center' | 'justify'
 
-export interface TextBlock {
+/** A span of text carrying its own emphasis and colour. */
+export interface TextRun {
+  text: string
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  color?: string
+  highlight?: string
+}
+
+/** One line of writing: a role, its runs, and how it sits on the page. */
+export interface Paragraph {
   id: string
   role: TextRole
-  content: string
-  /** Colour override; when absent the colour comes from the role. */
-  color?: string
-  bold?: boolean
+  runs: TextRun[]
   align?: TextAlign
-  /** Extra left inset in millimetres, for indented callouts. */
+  /** Extra left inset in millimetres, for indented passages. */
   indent?: number
+}
+
+/** A coloured, bordered box holding a heading and a few lines, drawn hand-ruled. */
+export interface CalloutBox {
+  color: string
+  heading: TextRun[]
+  items: TextRun[][]
 }
 
 /**
@@ -120,9 +137,12 @@ export interface LabeledSet {
   color: string
 }
 
-/** A block flows down a page: either handwriting or a diagram. */
+/** The things that flow down a page, in order. */
 export type Block =
-  | { id: string; type: 'text'; text: TextBlock }
+  | { id: string; type: 'text'; text: Paragraph }
+  | { id: string; type: 'list'; ordered: boolean; items: TextRun[][]; indent?: number }
+  | { id: string; type: 'table'; header: string[]; rows: string[][]; caption?: string }
+  | { id: string; type: 'callouts'; boxes: CalloutBox[]; caption?: string }
   | { id: string; type: 'diagram'; spec: DiagramSpec; heightRules: number }
 
 export interface Page {
@@ -174,7 +194,10 @@ export interface ColorScheme {
 
 export interface Settings {
   activeHandwritingId: string
+  /** Saved swatches shown first in every colour picker. */
   penColors: string[]
+  /** Colours the user recently chose anywhere, most recent first. */
+  recentColors: string[]
   activeTool: PenType
   activeColor: string
   activeWidth: number
