@@ -406,18 +406,17 @@ function addPage() {
   justify-content: center;
   width: 42px;
   height: 42px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  padding: 0;
+  border: none;
+  background: transparent;
   color: var(--text);
-  border-radius: 11px;
   cursor: pointer;
-  transition:
-    transform 0.32s cubic-bezier(0.4, 0, 0.2, 1),
-    background 0.12s ease;
+  transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
   will-change: transform;
+  -webkit-tap-highlight-color: transparent;
 }
-.menu-toggle:hover {
-  background: var(--accent-wash);
+.menu-toggle:active {
+  opacity: 0.6;
 }
 .menu-toggle.open {
   transform: translateX(calc(var(--drawer-w) - 62px));
