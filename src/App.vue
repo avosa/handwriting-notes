@@ -117,6 +117,10 @@ function fit() {
 // blocks are contenteditable, so those use the note's history instead.
 const themeIcon = computed(() => (resolvedTheme.value === 'dark' ? 'moon' : 'sun'))
 
+// A full-screen space carries its own top bar and its own way back, so the menu toggle
+// steps aside there instead of floating over it.
+const overlayOpen = computed(() => showHome.value || showCompose.value || showKey.value)
+
 function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && drawerOpen.value) {
     drawerOpen.value = false
@@ -190,6 +194,7 @@ function addPage() {
          page: at rest it sits at the top left; opening carries it to the drawer's right
          edge; tapping it opens or closes the menu. Phone only. -->
     <button
+      v-if="!overlayOpen"
       class="menu-toggle hide-desktop"
       :class="{ open: drawerOpen }"
       :aria-label="drawerOpen ? 'Close menu' : 'Open menu'"
@@ -398,15 +403,18 @@ function addPage() {
    motion. Open, it rests just inside the drawer's right edge. */
 .menu-toggle {
   position: fixed;
-  top: max(8px, env(safe-area-inset-top));
-  left: 10px;
+  top: 0;
+  left: 0;
   z-index: 72;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
-  padding: 0;
+  width: 56px;
+  height: calc(max(8px, env(safe-area-inset-top)) + 46px);
+  padding-top: max(8px, env(safe-area-inset-top));
+  /* No border and no fill of its own on the bar: it shows the top bar straight through
+     so it is indistinguishable from it, leaving only the icon to tap. Open, it takes the
+     drawer's surface so it blends into the sidebar the same way. */
   border: none;
   background: transparent;
   color: var(--text);
@@ -415,11 +423,9 @@ function addPage() {
   will-change: transform;
   -webkit-tap-highlight-color: transparent;
 }
-.menu-toggle:active {
-  opacity: 0.6;
-}
 .menu-toggle.open {
-  transform: translateX(calc(var(--drawer-w) - 62px));
+  background: var(--surface);
+  transform: translateX(calc(var(--drawer-w) - 56px));
 }
 .drawer-scrim {
   position: fixed;
