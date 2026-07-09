@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // The freehand drawing surface for one page. Pointer events capture strokes with
 // pressure when the device reports it; strokes are stored per page in millimetres so
-// they scale with the paper and export identically. The eraser removes whole strokes
-// it crosses. The fill tool floods the closed shape a stroke outlines, so a circle or
+// they scale with the paper and export identically. The eraser rubs out only what it
+// passes over, splitting a stroke into the parts left behind, and its size follows the
+// width slider. The fill tool floods the closed shape a stroke outlines, so a circle or
 // any figure drawn by hand can be coloured in with a tap.
 import { onMounted, ref, watch } from 'vue'
 import type { Page, Stroke, StrokePoint } from '@/types'
@@ -26,7 +27,11 @@ const canvas = ref<HTMLCanvasElement | null>(null)
 
 let drawing = false
 let current: Stroke | null = null
-const erased = new Set<string>()
+// While the eraser is down, work on a copy of the strokes so rubbing shows live, then
+// commit the result once. The ring shows where and how big the eraser is.
+let working: Stroke[] | null = null
+let lastErase: StrokePoint | null = null
+const eraserRing = ref<{ x: number; y: number; r: number } | null>(null)
 
 function ctx(): CanvasRenderingContext2D | null {
   return canvas.value?.getContext('2d') ?? null
@@ -95,10 +100,18 @@ function redraw() {
   const el = canvas.value
   if (!context || !el) return
   context.clearRect(0, 0, el.width, el.height)
-  for (const stroke of props.page.strokes) {
-    if (!erased.has(stroke.id)) drawStroke(context, stroke)
-  }
+  for (const stroke of working ?? props.page.strokes) drawStroke(context, stroke)
   if (current) drawStroke(context, current)
+  const ring = eraserRing.value
+  if (ring) {
+    context.save()
+    context.beginPath()
+    context.arc(ring.x * props.pxPerMm, ring.y * props.pxPerMm, ring.r * props.pxPerMm, 0, Math.PI * 2)
+    context.strokeStyle = 'rgba(51,51,76,0.55)'
+    context.lineWidth = 1
+    context.stroke()
+    context.restore()
+  }
 }
 
 function pointFrom(event: PointerEvent): StrokePoint {
@@ -111,12 +124,38 @@ function pointFrom(event: PointerEvent): StrokePoint {
   }
 }
 
+// Split a stroke where the eraser touches it, keeping the runs of points left behind.
+// A stroke the eraser never reaches is returned unchanged.
+function eraseStroke(stroke: Stroke, ex: number, ey: number, r: number): Stroke[] {
+  if (!stroke.points.some((p) => Math.hypot(p.x - ex, p.y - ey) <= r)) return [stroke]
+  const runs: StrokePoint[][] = []
+  let run: StrokePoint[] = []
+  for (const p of stroke.points) {
+    if (Math.hypot(p.x - ex, p.y - ey) <= r) {
+      if (run.length) runs.push(run)
+      run = []
+    } else {
+      run.push(p)
+    }
+  }
+  if (run.length) runs.push(run)
+  return runs.filter((rn) => rn.length >= 2).map((rn) => ({ ...stroke, id: uid('s'), points: rn, fill: undefined }))
+}
+
 function eraseAt(point: StrokePoint) {
   const radius = settings.activeWidth
-  for (const stroke of props.page.strokes) {
-    if (erased.has(stroke.id)) continue
-    if (stroke.points.some((p) => Math.hypot(p.x - point.x, p.y - point.y) <= radius)) erased.add(stroke.id)
+  if (!working) working = props.page.strokes.map((s) => ({ ...s, points: [...s.points] }))
+  // Rub along the path since the last point so a quick swipe erases continuously.
+  const from = lastErase ?? point
+  const dist = Math.hypot(point.x - from.x, point.y - from.y)
+  const steps = Math.max(1, Math.ceil(dist / (radius * 0.6)))
+  for (let i = 1; i <= steps; i++) {
+    const ex = from.x + ((point.x - from.x) * i) / steps
+    const ey = from.y + ((point.y - from.y) * i) / steps
+    working = working.flatMap((s) => eraseStroke(s, ex, ey, radius))
   }
+  lastErase = point
+  eraserRing.value = { x: point.x, y: point.y, r: radius }
   redraw()
 }
 
@@ -151,7 +190,8 @@ function onDown(event: PointerEvent) {
   }
   drawing = true
   if (settings.activeTool === 'eraser') {
-    erased.clear()
+    working = props.page.strokes.map((s) => ({ ...s, points: [...s.points] }))
+    lastErase = null
     eraseAt(point)
     return
   }
@@ -180,10 +220,11 @@ function onUp() {
   if (!drawing) return
   drawing = false
   if (settings.activeTool === 'eraser') {
-    if (erased.size > 0) {
-      documentStore.eraseStrokes(props.pageIndex, new Set(erased))
-      erased.clear()
-    }
+    if (working) documentStore.replaceStrokes(props.pageIndex, working)
+    working = null
+    lastErase = null
+    eraserRing.value = null
+    redraw()
     return
   }
   if (current && current.points.length > 1) documentStore.addStroke(props.pageIndex, current)
@@ -197,7 +238,9 @@ watch(() => props.page.strokes, redraw, { deep: true })
 watch(
   () => props.page.id,
   () => {
-    erased.clear()
+    working = null
+    lastErase = null
+    eraserRing.value = null
     redraw()
   },
 )
