@@ -175,6 +175,15 @@ export interface NoteDocument {
   updatedAt: number
 }
 
+/** One row in the notes library: enough to list and open a note without loading it. */
+export interface LibraryEntry {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  favorite: boolean
+}
+
 export type AttachmentKind = 'image' | 'video' | 'document'
 
 export interface Attachment {

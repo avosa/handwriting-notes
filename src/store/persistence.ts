@@ -1,26 +1,31 @@
-// Continuous local persistence. The document, settings, the API key, and attachment
-// blobs all live in IndexedDB so a crash, refresh, or going offline never loses work.
-// Writes are debounced; the first load hydrates the stores before the app renders.
+// Continuous local persistence. Every note, the library index, the settings, the API
+// key, and attachment blobs live in IndexedDB so a crash, refresh, or going offline
+// never loses work. Each note is stored under its own id; a small index lists them for
+// the home screen. Writes are debounced; the first load hydrates the stores before the
+// app renders.
 import { openDB, type IDBPDatabase } from 'idb'
-import type { NoteDocument, Settings } from '@/types'
+import type { LibraryEntry, NoteDocument, Settings } from '@/types'
 import { useDocument } from './document'
 import { useSettings } from './settings'
+import { useLibrary } from './library'
 
 const DB_NAME = 'handwriting-notes'
 const DB_VERSION = 1
-const DOC_KEY = 'current'
 const SETTINGS_KEY = 'current'
 const API_KEY_KEY = 'anthropic-api-key'
-// The saved document carries the shape it was written with. A document from an earlier
-// shape is ignored rather than rendered, so a stored note can never blank the page.
-const SCHEMA_VERSION = 2
+const LIBRARY_KEY = 'library'
+const CURRENT_ID_KEY = 'current-note-id'
 const VERSION_KEY = 'schema-version'
+// Notes carry the shape they were written with. The library format is version 3; a note
+// from an earlier shape is migrated in, and a malformed note is skipped rather than
+// rendered, so a stored note can never blank the page.
+const SCHEMA_VERSION = 3
 
 interface Stores {
   document: NoteDocument
   settings: Settings
   blobs: Blob
-  meta: string
+  meta: string | LibraryEntry[]
 }
 
 let dbPromise: Promise<IDBPDatabase<Stores>> | null = null
@@ -48,28 +53,44 @@ function isValidDocument(doc: unknown): doc is NoteDocument {
   if (!doc || typeof doc !== 'object') return false
   const pages = (doc as NoteDocument).pages
   if (!Array.isArray(pages)) return false
-  // Every text block must carry runs, the current shape. Anything else is discarded.
   return pages.every((page) =>
     Array.isArray(page.blocks) ? page.blocks.every((b) => b.type !== 'text' || Array.isArray(b.text?.runs)) : false,
   )
 }
 
-export async function loadDocument(): Promise<NoteDocument | undefined> {
-  const database = await db()
-  const version = await database.get('meta', VERSION_KEY)
-  if (version !== String(SCHEMA_VERSION)) return undefined
-  const doc = await database.get('document', DOC_KEY)
+export async function loadNote(id: string): Promise<NoteDocument | undefined> {
+  const doc = await (await db()).get('document', id)
   return isValidDocument(doc) ? doc : undefined
 }
 
-export async function saveDocument(doc: NoteDocument): Promise<void> {
-  const database = await db()
-  await database.put('document', plain(doc), DOC_KEY)
-  await database.put('meta', String(SCHEMA_VERSION), VERSION_KEY)
+export async function saveNote(doc: NoteDocument): Promise<void> {
+  await (await db()).put('document', plain(doc), doc.id)
+}
+
+export async function deleteNote(id: string): Promise<void> {
+  await (await db()).delete('document', id)
+}
+
+export async function loadLibrary(): Promise<LibraryEntry[]> {
+  const list = await (await db()).get('meta', LIBRARY_KEY)
+  return Array.isArray(list) ? (list as LibraryEntry[]) : []
+}
+
+export async function saveLibrary(entries: LibraryEntry[]): Promise<void> {
+  await (await db()).put('meta', plain(entries), LIBRARY_KEY)
+}
+
+export async function loadCurrentId(): Promise<string | undefined> {
+  const id = await (await db()).get('meta', CURRENT_ID_KEY)
+  return typeof id === 'string' ? id : undefined
+}
+
+export async function saveCurrentId(id: string): Promise<void> {
+  await (await db()).put('meta', id, CURRENT_ID_KEY)
 }
 
 export async function loadSettings(): Promise<Settings | undefined> {
-  return (await db()).get('settings', SETTINGS_KEY)
+  return (await db()).get('settings', SETTINGS_KEY) as Promise<Settings | undefined>
 }
 
 export async function saveSettings(settings: Settings): Promise<void> {
@@ -79,23 +100,19 @@ export async function saveSettings(settings: Settings): Promise<void> {
 export async function putBlob(key: string, blob: Blob): Promise<void> {
   await (await db()).put('blobs', blob, key)
 }
-
 export async function getBlob(key: string): Promise<Blob | undefined> {
   return (await db()).get('blobs', key)
 }
-
 export async function deleteBlob(key: string): Promise<void> {
   await (await db()).delete('blobs', key)
 }
 
 export async function loadApiKey(): Promise<string | undefined> {
-  return (await db()).get('meta', API_KEY_KEY)
+  return (await db()).get('meta', API_KEY_KEY) as Promise<string | undefined>
 }
-
 export async function saveApiKey(key: string): Promise<void> {
   await (await db()).put('meta', key, API_KEY_KEY)
 }
-
 export async function clearApiKey(): Promise<void> {
   await (await db()).delete('meta', API_KEY_KEY)
 }
@@ -108,6 +125,23 @@ function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: number): (.
   }
 }
 
+function entryFor(doc: NoteDocument, favorite = false): LibraryEntry {
+  return { id: doc.id, title: doc.title, createdAt: doc.createdAt, updatedAt: doc.updatedAt, favorite }
+}
+
+// Bring a note saved in the earlier single-note format into the library, so upgrading
+// keeps the writer's work.
+async function migrateSingleNote(database: IDBPDatabase<Stores>): Promise<LibraryEntry[]> {
+  const old = await database.get('document', 'current')
+  if (isValidDocument(old)) {
+    await database.put('document', plain(old), old.id)
+    await database.delete('document', 'current')
+    await database.put('meta', old.id, CURRENT_ID_KEY)
+    return [entryFor(old)]
+  }
+  return []
+}
+
 /**
  * Hydrate the stores from disk, then keep saving them as they change. Called once at
  * startup before the app is shown so restored work is on screen immediately.
@@ -115,16 +149,49 @@ function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: number): (.
 export async function installPersistence(): Promise<void> {
   const documentStore = useDocument()
   const settingsStore = useSettings()
-
-  const savedDoc = await loadDocument()
-  if (savedDoc) documentStore.hydrate(savedDoc)
+  const libraryStore = useLibrary()
+  const database = await db()
 
   const savedSettings = await loadSettings()
   if (savedSettings) settingsStore.hydrate(savedSettings)
 
-  const persistDoc = debounce((doc: NoteDocument) => void saveDocument(doc), 400)
-  const persistSettings = debounce((settings: Settings) => void saveSettings(settings), 300)
+  const version = await database.get('meta', VERSION_KEY)
+  let entries: LibraryEntry[]
+  if (version === String(SCHEMA_VERSION)) {
+    entries = await loadLibrary()
+  } else {
+    entries = await migrateSingleNote(database)
+    await database.put('meta', String(SCHEMA_VERSION), VERSION_KEY)
+  }
 
-  documentStore.$subscribe((_mutation, state) => persistDoc(state.doc))
-  settingsStore.$subscribe((_mutation, state) => persistSettings(state))
+  // Open the most recent note, or start a fresh one if the library is empty.
+  let currentId = await loadCurrentId()
+  let openDoc: NoteDocument | undefined
+  if (currentId) openDoc = await loadNote(currentId)
+  if (!openDoc && entries.length) openDoc = await loadNote(entries[0].id)
+  if (!openDoc) {
+    openDoc = documentStore.doc
+    entries = [entryFor(openDoc), ...entries]
+    await saveNote(openDoc)
+  }
+  currentId = openDoc.id
+
+  documentStore.hydrate(openDoc)
+  libraryStore.hydrate(entries, currentId)
+  await saveLibrary(entries)
+  await saveCurrentId(currentId)
+
+  const persistDoc = debounce((doc: NoteDocument) => {
+    void saveNote(doc)
+    libraryStore.touch(doc.id, doc.title, doc.updatedAt)
+  }, 400)
+  const persistSettings = debounce((settings: Settings) => void saveSettings(settings), 300)
+  const persistLibrary = debounce((list: LibraryEntry[]) => void saveLibrary(list), 300)
+
+  documentStore.$subscribe((_m, state) => persistDoc(state.doc))
+  settingsStore.$subscribe((_m, state) => persistSettings(state))
+  libraryStore.$subscribe((_m, state) => {
+    persistLibrary(state.entries)
+    void saveCurrentId(state.currentId)
+  })
 }

@@ -6,6 +6,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Attachment } from './types'
 import { APP_NAME } from './brand'
 import { useDocument } from './store/document'
+import { useLibrary } from './store/library'
 import { useClaude } from './compose/useClaude'
 import NotePage from './editor/NotePage.vue'
 import EditorBar from './editor/EditorBar.vue'
@@ -14,16 +15,23 @@ import ComposeSheet from './compose/ComposeSheet.vue'
 import LiveWriting from './compose/LiveWriting.vue'
 import ApiKeyDialog from './ui/ApiKeyDialog.vue'
 import HandwritingPicker from './tools/HandwritingPicker.vue'
+import HomeScreen from './home/HomeScreen.vue'
 import Icon from './ui/Icon.vue'
 import Popover from './ui/Popover.vue'
 
 const documentStore = useDocument()
+const library = useLibrary()
 const { generating, error: aiError, generate, stop } = useClaude()
 
 const mode = ref<'write' | 'draw'>('write')
 const showKey = ref(false)
 const showCompose = ref(false)
+const showHome = ref(false)
 const exporting = ref<'pdf' | 'docx' | null>(null)
+
+async function newNote() {
+  await library.createNote('blank')
+}
 
 // Start a run and step back so Claude is watched writing onto the page.
 function onSubmit(instruction: string, attachments: Attachment[]) {
@@ -92,6 +100,8 @@ function addPage() {
   <div class="app">
     <header class="topbar">
       <div class="left">
+        <button class="icon-btn" title="All notes" @click="showHome = true"><Icon name="grid" :size="18" /></button>
+        <button class="icon-btn" title="New note" @click="newNote"><Icon name="plus" :size="18" /></button>
         <span class="brand">{{ APP_NAME }}</span>
       </div>
 
@@ -183,6 +193,10 @@ function addPage() {
     <SelectionMenu />
     <ComposeSheet v-if="showCompose" @close="showCompose = false" @needs-key="showKey = true" @submit="onSubmit" />
     <ApiKeyDialog v-if="showKey" @close="showKey = false" />
+
+    <Transition name="home-fade">
+      <HomeScreen v-if="showHome" @close="showHome = false" />
+    </Transition>
   </div>
 </template>
 
@@ -455,6 +469,17 @@ function addPage() {
 .toast-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(-10px);
+}
+.home-fade-enter-active,
+.home-fade-leave-active {
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+.home-fade-enter-from,
+.home-fade-leave-to {
+  opacity: 0;
+  transform: scale(1.01);
 }
 .menu {
   display: flex;
