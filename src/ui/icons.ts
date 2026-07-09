@@ -63,6 +63,14 @@ export const icons: Record<string, string> = {
   arrowLeft: '<path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>',
   sparkleEdit:
     '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/><path d="M19 3l.6 1.4L21 5l-1.4.6L19 7l-.6-1.4L17 5l1.4-.6z"/>',
+  undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h11a6 6 0 0 1 0 12H8"/>',
+  redo: '<path d="M15 14l5-5-5-5"/><path d="M20 9H9a6 6 0 0 0 0 12h7"/>',
+  menu: '<line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/>',
+  sun: '<circle cx="12" cy="12" r="4.5"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4 12H2"/><path d="M22 12h-2"/><path d="M5.6 5.6L4.2 4.2"/><path d="M19.8 19.8l-1.4-1.4"/><path d="M5.6 18.4l-1.4 1.4"/><path d="M19.8 4.2l-1.4 1.4"/>',
+  moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+  device:
+    '<rect x="2" y="4" width="20" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
+  paint: '<path d="M5 16L10 5h1.6L17 16"/><path d="M7 12h8"/>',
 }
 
 export type IconName = keyof typeof icons

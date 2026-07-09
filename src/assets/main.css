@@ -1,8 +1,95 @@
-:root {
+/* Design tokens. Light is the default; [data-theme='dark'] repaints the same surfaces
+   for a calm night look. Components reference these variables rather than raw hex, so a
+   single switch re-themes the whole app. The paper itself stays a warm sheet in both
+   themes — a note is a note — while the desk and chrome around it change. */
+:root,
+:root[data-theme='light'] {
   --ink: #33334c;
   --title: #29297e;
   --heading: #b73b3a;
   --paper-shell: #ece7dc;
+
+  /* The desk behind the pages */
+  --desk-1: #f2ede2;
+  --desk-2: #ece7dc;
+  --desk-3: #e6e0d3;
+
+  /* Chrome surfaces */
+  --surface: #ffffff;
+  --surface-2: #f4f2ee;
+  --surface-sunken: rgba(51, 51, 76, 0.06);
+  --topbar-bg: rgba(255, 255, 255, 0.7);
+  --scrim: rgba(30, 28, 24, 0.32);
+
+  /* Text */
+  --text: #33334c;
+  --text-soft: #6a6a80;
+  --text-muted: #9a9aa8;
+  --brand: #29297e;
+
+  /* Lines */
+  --border: rgba(51, 51, 76, 0.14);
+  --border-subtle: rgba(51, 51, 76, 0.07);
+
+  /* Accent + states */
+  --accent: #4a72b0;
+  --accent-2: #6a4fa0;
+  --accent-grad: linear-gradient(135deg, #4a72b0, #6a4fa0);
+  --accent-wash: rgba(74, 114, 176, 0.08);
+  --accent-wash-2: rgba(74, 114, 176, 0.12);
+  --accent-shadow: rgba(74, 114, 176, 0.35);
+  --danger: #b73b3a;
+  --danger-wash: rgba(183, 59, 58, 0.1);
+
+  /* Elevation. The ring is deliberately strong: menus and colour pickers float over the
+     white paper sheet, so a faint edge would vanish into it. A crisp hairline plus a
+     deep soft shadow keeps every panel readable without tinting the sheet. */
+  --menu-shadow: 0 16px 44px rgba(51, 51, 76, 0.26), 0 2px 8px rgba(51, 51, 76, 0.12), 0 0 0 1px rgba(51, 51, 76, 0.12);
+  --pop-shadow: 0 18px 50px rgba(51, 51, 76, 0.24), 0 2px 8px rgba(51, 51, 76, 0.12), 0 0 0 1px rgba(51, 51, 76, 0.12);
+
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --ink: #e7e7f0;
+  --title: #cdbcff;
+  --heading: #f19a99;
+  --paper-shell: #15151d;
+
+  --desk-1: #1e1e28;
+  --desk-2: #15151d;
+  --desk-3: #101017;
+
+  --surface: #23232f;
+  --surface-2: #2d2d3b;
+  --surface-sunken: rgba(255, 255, 255, 0.07);
+  --topbar-bg: rgba(26, 26, 36, 0.72);
+  --scrim: rgba(0, 0, 0, 0.55);
+
+  --text: #e7e7f0;
+  --text-soft: #b7b7c8;
+  --text-muted: #8f8fa2;
+  --brand: #cdbcff;
+
+  --border: rgba(255, 255, 255, 0.13);
+  --border-subtle: rgba(255, 255, 255, 0.07);
+
+  --accent: #6f95d6;
+  --accent-2: #9a78d4;
+  --accent-grad: linear-gradient(135deg, #6f95d6, #9a78d4);
+  --accent-wash: rgba(120, 150, 210, 0.16);
+  --accent-wash-2: rgba(120, 150, 210, 0.24);
+  --accent-shadow: rgba(20, 20, 30, 0.6);
+  --danger: #e37b7a;
+  --danger-wash: rgba(224, 107, 106, 0.16);
+
+  --menu-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --pop-shadow: 0 20px 54px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+  color-scheme: dark;
+}
+
+:root {
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -19,8 +106,8 @@ body {
 }
 
 body {
-  background: var(--paper-shell);
-  color: var(--ink);
+  background: var(--desk-2);
+  color: var(--text);
   font-family:
     system-ui,
     -apple-system,
@@ -35,4 +122,13 @@ body {
 
 button {
   font-family: inherit;
+}
+
+/* When the whole note is selected, every line and cell is washed with the selection
+   tint so the reach of a whole-note action reads at a glance. */
+.all-selected .editable,
+.all-selected .cell {
+  background: var(--accent-wash-2);
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px var(--accent-wash-2);
 }

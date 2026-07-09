@@ -42,7 +42,11 @@ const rules = computed(() => Array.from({ length: 9 }, (_, i) => 18 + i * 11))
   aspect-ratio: 3 / 4;
   border-radius: 10px;
   overflow: hidden;
-  box-shadow: inset 0 0 0 1px rgba(51, 51, 76, 0.08);
+  /* Paper stays a bright sheet in both themes (its fill comes from the preset); only the
+     frame is themed so the mini-card still reads against a dark desk. */
+  box-shadow:
+    inset 0 0 0 1px rgba(51, 51, 76, 0.08),
+    0 0 0 1px var(--border-subtle);
 }
 .rules {
   position: absolute;

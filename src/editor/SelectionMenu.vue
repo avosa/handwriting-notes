@@ -156,6 +156,9 @@ function cancelAsk() {
   background: #23232e;
   border-radius: 12px;
   box-shadow: 0 8px 26px rgba(0, 0, 0, 0.3);
+  max-width: calc(100vw - 16px);
+  flex-wrap: wrap;
+  justify-content: center;
 }
 button {
   display: inline-flex;
@@ -235,5 +238,18 @@ button:hover {
 .rise-leave-to {
   opacity: 0;
   transform: translate(-50%, -90%);
+}
+
+@media (max-width: 720px) {
+  .selection-menu {
+    max-width: calc(100vw - 12px);
+  }
+  .selection-menu button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .ask {
+    width: min(190px, 44vw);
+  }
 }
 </style>

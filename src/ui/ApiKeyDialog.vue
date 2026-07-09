@@ -143,7 +143,7 @@ function masked(k: string): string {
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(31, 31, 40, 0.42);
+  background: var(--scrim);
   backdrop-filter: blur(2px);
   display: grid;
   place-items: center;
@@ -153,10 +153,10 @@ function masked(k: string): string {
 .card {
   position: relative;
   width: min(440px, 100%);
-  background: #fff;
+  background: var(--surface);
   border-radius: 22px;
   padding: 26px 24px 20px;
-  box-shadow: 0 30px 80px rgba(31, 31, 40, 0.35);
+  box-shadow: var(--pop-shadow);
   animation: pop 0.2s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 @keyframes pop {
@@ -174,13 +174,13 @@ function masked(k: string): string {
   right: 14px;
   border: none;
   background: transparent;
-  color: #9a9aa8;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 4px;
   border-radius: 8px;
 }
 .x:hover {
-  background: rgba(51, 51, 76, 0.08);
+  background: var(--surface-sunken);
 }
 .head {
   text-align: center;
@@ -194,7 +194,7 @@ function masked(k: string): string {
   display: grid;
   place-items: center;
   color: #fff;
-  background: linear-gradient(135deg, #4a72b0, #7e3f8a);
+  background: var(--accent-grad);
 }
 .badge.ok {
   background: linear-gradient(135deg, #3f8f5c, #2e9e8f);
@@ -202,12 +202,12 @@ function masked(k: string): string {
 h2 {
   margin: 0 0 6px;
   font-size: 20px;
-  color: #29297e;
+  color: var(--brand);
 }
 .head p {
   margin: 0;
   font-size: 14px;
-  color: #6a6a80;
+  color: var(--text-soft);
   line-height: 1.5;
 }
 .steps {
@@ -222,7 +222,7 @@ h2 {
   display: flex;
   gap: 12px;
   font-size: 14px;
-  color: #33334c;
+  color: var(--text);
   line-height: 1.45;
 }
 .n {
@@ -230,22 +230,22 @@ h2 {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: rgba(74, 114, 176, 0.14);
-  color: #4a72b0;
+  background: var(--accent-wash-2);
+  color: var(--accent);
   font-weight: 700;
   font-size: 13px;
   display: grid;
   place-items: center;
 }
 .steps a {
-  color: #4a72b0;
+  color: var(--accent);
   text-decoration: none;
 }
 .steps a:hover {
   text-decoration: underline;
 }
 code {
-  background: rgba(51, 51, 76, 0.08);
+  background: var(--surface-sunken);
   padding: 1px 5px;
   border-radius: 5px;
   font-size: 12px;
@@ -277,7 +277,7 @@ code {
   min-width: 0;
   font-family: ui-monospace, monospace;
   font-size: 13px;
-  color: #33334c;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -298,7 +298,7 @@ code {
 .link {
   border: none;
   background: transparent;
-  color: #4a72b0;
+  color: var(--accent);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -311,15 +311,15 @@ code {
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: rgba(51, 51, 76, 0.25);
+  background: var(--text-muted);
 }
 .field {
-  border: 1px solid rgba(51, 51, 76, 0.2);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 4px 12px;
 }
 .field:focus-within {
-  border-color: #4a72b0;
+  border-color: var(--accent);
 }
 .field input {
   width: 100%;
@@ -328,6 +328,8 @@ code {
   font-size: 14px;
   padding: 9px 0;
   font-family: inherit;
+  background: transparent;
+  color: var(--text);
 }
 .actions {
   display: flex;
@@ -340,27 +342,27 @@ code {
 }
 button.ghost,
 button.danger {
-  border: 1px solid rgba(51, 51, 76, 0.18);
+  border: 1px solid var(--border);
   background: transparent;
-  color: #33334c;
+  color: var(--text);
   border-radius: 10px;
   padding: 10px 16px;
   cursor: pointer;
   font-size: 14px;
 }
 button.danger {
-  color: #b73b3a;
-  border-color: rgba(183, 59, 58, 0.3);
+  color: var(--danger);
+  border-color: var(--danger-wash);
 }
 button.danger:hover {
-  background: rgba(183, 59, 58, 0.08);
+  background: var(--danger-wash);
 }
 button.primary {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   border: none;
-  background: #4a72b0;
+  background: var(--accent);
   color: #fff;
   border-radius: 10px;
   padding: 10px 18px;
@@ -375,10 +377,10 @@ button.primary:disabled {
   margin: 12px 0 0;
   text-align: center;
   font-size: 12px;
-  color: #9a9aa8;
+  color: var(--text-muted);
 }
 
-@media (max-width: 560px) {
+@media (max-width: 720px) {
   .backdrop {
     align-items: flex-end;
     padding: 0;
@@ -399,11 +401,21 @@ button.primary:disabled {
     width: 40px;
     height: 4px;
     border-radius: 2px;
-    background: rgba(51, 51, 76, 0.18);
+    background: var(--border);
     margin: -8px auto 14px;
   }
   .actions {
     flex-wrap: wrap;
+    gap: 10px;
+  }
+  button.ghost,
+  button.danger,
+  button.primary,
+  .x {
+    min-height: 44px;
+  }
+  .x {
+    min-width: 44px;
   }
 }
 </style>

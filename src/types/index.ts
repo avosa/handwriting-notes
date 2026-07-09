@@ -215,8 +215,12 @@ export interface ColorScheme {
   penRed: string
 }
 
+export type ThemeChoice = 'system' | 'light' | 'dark'
+
 export interface Settings {
   activeHandwritingId: string
+  /** Which theme the writer prefers; 'system' follows the OS setting. */
+  theme: ThemeChoice
   /** Saved swatches shown first in every colour picker. */
   penColors: string[]
   /** Colours the user recently chose anywhere, most recent first. */

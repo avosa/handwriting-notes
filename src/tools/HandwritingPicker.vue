@@ -46,15 +46,15 @@ const settings = useSettings()
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  border: 1px solid rgba(51, 51, 76, 0.16);
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--surface);
   border-radius: 10px;
   padding: 7px 11px;
   cursor: pointer;
-  color: #33334c;
+  color: var(--text);
 }
 .trigger:hover {
-  background: rgba(74, 114, 176, 0.08);
+  background: var(--accent-wash);
 }
 .name {
   font-size: 15px;
@@ -67,7 +67,7 @@ const settings = useSettings()
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #9a9aa8;
+  color: var(--text-muted);
   padding: 4px 8px 6px;
 }
 .option {
@@ -83,16 +83,16 @@ const settings = useSettings()
   text-align: left;
 }
 .option:hover {
-  background: rgba(74, 114, 176, 0.09);
+  background: var(--accent-wash);
 }
 .option.on {
-  background: rgba(74, 114, 176, 0.12);
+  background: var(--accent-wash-2);
 }
 .meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: #33334c;
+  color: var(--text);
 }
 .label {
   font-size: 13px;
@@ -100,7 +100,7 @@ const settings = useSettings()
 }
 .sample {
   font-size: 21px;
-  color: #4a5568;
+  color: var(--text-soft);
   line-height: 1.2;
 }
 </style>

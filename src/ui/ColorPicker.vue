@@ -200,7 +200,7 @@ const rows = () => pickerRows(settings.penColors, settings.recentColors)
   margin: 0;
   font-size: 12px;
   font-weight: 600;
-  color: #6a6a80;
+  color: var(--text-soft);
 }
 .field {
   position: relative;
@@ -263,7 +263,7 @@ const rows = () => pickerRows(settings.penColors, settings.recentColors)
   width: 30px;
   height: 30px;
   border-radius: 8px;
-  box-shadow: inset 0 0 0 1px rgba(51, 51, 76, 0.2);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 .hexbox {
   display: flex;
@@ -272,8 +272,8 @@ const rows = () => pickerRows(settings.penColors, settings.recentColors)
   flex: 1;
   padding: 6px 9px;
   border-radius: 8px;
-  border: 1px solid rgba(51, 51, 76, 0.18);
-  color: #6a6a80;
+  border: 1px solid var(--border);
+  color: var(--text-soft);
   font-size: 13px;
 }
 .hexbox input {
@@ -281,14 +281,15 @@ const rows = () => pickerRows(settings.penColors, settings.recentColors)
   border: none;
   outline: none;
   font-size: 13px;
-  color: #33334c;
+  color: var(--text);
   text-transform: uppercase;
   font-family: inherit;
+  background: transparent;
 }
 .clear {
   border: none;
   background: transparent;
-  color: #b73b3a;
+  color: var(--danger);
   font-size: 12px;
   cursor: pointer;
 }
@@ -303,7 +304,7 @@ const rows = () => pickerRows(settings.penColors, settings.recentColors)
   border-radius: 6px;
   border: none;
   cursor: pointer;
-  box-shadow: inset 0 0 0 1px rgba(51, 51, 76, 0.14);
+  box-shadow: inset 0 0 0 1px var(--border);
   transition: transform 0.08s ease;
 }
 .swatch:hover {
@@ -311,16 +312,39 @@ const rows = () => pickerRows(settings.penColors, settings.recentColors)
 }
 .swatch.on {
   box-shadow:
-    0 0 0 2px #fff,
-    0 0 0 3.5px #4a72b0;
+    0 0 0 2px var(--surface),
+    0 0 0 3.5px var(--accent);
 }
 .swatch.light {
-  box-shadow: inset 0 0 0 1px rgba(51, 51, 76, 0.3);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 .swatch.add {
   display: grid;
   place-items: center;
-  background: #fff;
-  color: #6a6a80;
+  background: var(--surface-2);
+  color: var(--text-soft);
+}
+
+@media (max-width: 720px) {
+  .picker {
+    width: 100%;
+    max-width: 100%;
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+    gap: 12px;
+  }
+  .field {
+    height: 160px;
+  }
+  .hue {
+    height: 20px;
+    border-radius: 10px;
+  }
+  .swatches {
+    gap: 8px;
+  }
+  .clear {
+    min-height: 44px;
+    padding: 0 8px;
+  }
 }
 </style>
