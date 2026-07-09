@@ -222,10 +222,14 @@ export interface ColorScheme {
 
 export type ThemeChoice = 'system' | 'light' | 'dark'
 
+export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'deepseek'
+
 export interface Settings {
   activeHandwritingId: string
   /** Which theme the writer prefers; 'system' follows the OS setting. */
   theme: ThemeChoice
+  /** Which AI provider drafts and rewrites notes. */
+  activeProvider: ProviderId
   /** Saved swatches shown first in every colour picker. */
   penColors: string[]
   /** Colours the user recently chose anywhere, most recent first. */

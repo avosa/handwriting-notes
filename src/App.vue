@@ -6,7 +6,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Attachment } from './types'
 import { useDocument } from './store/document'
 import { useLibrary } from './store/library'
-import { useClaude } from './compose/useClaude'
+import { useAi } from './compose/useAi'
+import { refreshConnections } from './compose/aiConnection'
 import { useTheme } from './theme/useTheme'
 import NotePage from './editor/NotePage.vue'
 import EditorBar from './editor/EditorBar.vue'
@@ -24,7 +25,7 @@ import Popover from './ui/Popover.vue'
 
 const documentStore = useDocument()
 const library = useLibrary()
-const { generating, error: aiError, generate, stop } = useClaude()
+const { generating, error: aiError, generate, stop } = useAi()
 const { resolved: resolvedTheme } = useTheme()
 
 const mode = ref<'write' | 'draw'>('write')
@@ -145,7 +146,10 @@ function askAiWholeNote() {
   showCompose.value = true
 }
 
-onMounted(fit)
+onMounted(() => {
+  fit()
+  void refreshConnections()
+})
 window.addEventListener('resize', fit)
 window.addEventListener('keydown', onKeydown)
 onBeforeUnmount(() => {
@@ -362,8 +366,12 @@ function addPage() {
       />
     </div>
 
+    <!-- The connect dialog reads as a step in front of the compose panel, not a second
+         modal on top of it: the panel is kept mounted so a draft survives, but hidden while
+         the dialog is open so the two never stack or compete. -->
     <ComposeSheet
       v-if="showCompose"
+      v-show="!showKey"
       :has-content="noteHasContent"
       @close="showCompose = false"
       @needs-key="showKey = true"
