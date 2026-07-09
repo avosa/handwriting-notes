@@ -189,6 +189,8 @@ export interface FreeText {
   y: number
   runs: TextRun[]
   color?: string
+  /** How large the note is drawn, a multiple of the body size; matches a block's scale. */
+  scale?: FontScale
 }
 
 export interface Page {

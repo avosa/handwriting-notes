@@ -116,6 +116,20 @@ describe('free-world placement', () => {
 describe('font size', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
+  it('sizes the free note the caret is in, not a stale block selection', () => {
+    const doc = useDocument()
+    // A paragraph is selected first, then the caret moves into a free note.
+    const para = doc.doc.pages[0].blocks[0].id
+    doc.select(para)
+    const noteId = doc.addNote(0, 20, 30)
+    doc.selectNote(0, noteId)
+    doc.nudgeSelectionFontScale(0.2)
+    // The note grew; the earlier block was left alone.
+    const note = doc.doc.pages[0].notes!.find((n) => n.id === noteId)
+    expect(note!.scale).toBeCloseTo(1.2, 5)
+    expect(doc.locate(para)!.block.scale).toBeUndefined()
+  })
+
   it('nudges a block scale up and down and clamps it', () => {
     const doc = useDocument()
     const id = doc.addTable(null, 2, 1)

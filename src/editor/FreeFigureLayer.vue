@@ -1,9 +1,8 @@
 <script setup lang="ts">
-// Figures lifted out of the writing flow, placed where the writer dropped them and free to
-// be dragged anywhere on the page. Selecting a figure highlights it and reveals a bar to
-// move it, dock it back into the flow, or remove it; its contents stay fully editable. On a
-// touch or pen device a long press anywhere on the figure picks it up and drags it smoothly.
-// In draw mode the layer steps aside so a stroke can cross a figure.
+// Figures that have left the writing flow: each is drawn where it was dropped and can be
+// dragged anywhere on the page. Selecting one highlights it and shows a bar to move, dock,
+// or remove it; its contents stay editable. On a touch or pen device a long press on the
+// figure starts the drag. In draw mode the layer ignores the pointer so a stroke can cross.
 import { computed, ref, onBeforeUnmount, type CSSProperties } from 'vue'
 import type { Block, Page } from '@/types'
 import type { TextMetrics } from './alignment'

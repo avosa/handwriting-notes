@@ -30,7 +30,7 @@ function noteStyle(note: FreeText): CSSProperties {
     minWidth: `${6 * props.pxPerMm}px`,
     maxWidth: `${(props.metrics.left + props.metrics.width - note.x) * props.pxPerMm}px`,
     fontFamily: bodyFontStack(handwriting.value),
-    fontSize: `${props.metrics.fontSize.body * props.pxPerMm}px`,
+    fontSize: `${props.metrics.fontSize.body * props.pxPerMm * (note.scale ?? 1)}px`,
     lineHeight: `${props.metrics.lineHeight * props.pxPerMm}px`,
     color: note.color ?? handwriting.value.palette.ink,
   }
@@ -77,6 +77,7 @@ function updateRuns(noteId: string, runs: TextRun[]) {
       class="note"
       :style="noteStyle(note)"
       @update:model-value="updateRuns(note.id, $event)"
+      @focus="documentStore.selectNote(pageIndex, note.id)"
       @enter="onEnter(note)"
       @empty-backspace="onBackspace(note)"
       @select-all-note="documentStore.selectWholeNote()"

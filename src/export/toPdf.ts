@@ -473,7 +473,7 @@ export async function documentToPdf(doc: NoteDocument): Promise<Uint8Array> {
           pdfPage,
           fonts.body,
           text,
-          mm(metrics.fontSize.body),
+          mm(metrics.fontSize.body * (note.scale ?? 1)),
           mm(note.x),
           mm(note.y - metrics.lineHeight * 0.22),
           color(note.color ?? ink),

@@ -12,6 +12,9 @@ interface DocumentState {
   activePageIndex: number
   /** The block currently being edited, for the contextual formatting bar. */
   selectedBlockId: string | null
+  /** The free note currently being edited, when the caret is in one instead of a block, so
+   *  formatting that acts on a whole line (font size) knows to target the note. */
+  selectedNote: { pageIndex: number; id: string } | null
   /** A block just created that the editor should move the caret into. */
   pendingFocusId: string | null
   /** True while Claude is writing onto the page, so the UI can show it live. */
@@ -44,6 +47,7 @@ export const useDocument = defineStore('document', {
     doc: blankDocument(),
     activePageIndex: 0,
     selectedBlockId: null,
+    selectedNote: null,
     pendingFocusId: null,
     generating: false,
     writingBlockId: null,
@@ -108,6 +112,14 @@ export const useDocument = defineStore('document', {
     select(blockId: string | null) {
       this.allSelected = false
       this.selectedBlockId = blockId
+      // Moving into a block means the caret is no longer in a free note.
+      this.selectedNote = null
+    },
+    // The caret has moved into a free note; block-scoped formatting should target it now.
+    selectNote(pageIndex: number, id: string) {
+      this.allSelected = false
+      this.selectedBlockId = null
+      this.selectedNote = { pageIndex, id }
     },
     locate(blockId: string): BlockLocation | null {
       for (let p = 0; p < this.doc.pages.length; p++) {
@@ -181,9 +193,8 @@ export const useDocument = defineStore('document', {
     setLastPoint(pageIndex: number, x: number, y: number) {
       this.lastPoint = { pageIndex, x, y }
     },
-    // A figure is dropped where the writer last pointed and floats there, free to be
-    // dragged anywhere on its page. With no recent point it lands near the top of the page
-    // being worked on.
+    // Place a figure floating where the writer last pointed, on that page. With no recent
+    // point it lands near the top of the page being worked on.
     placeFigure(block: Block): string {
       const point = this.lastPoint ?? { pageIndex: this.activePageIndex, x: 22, y: 22 }
       const page = this.doc.pages[point.pageIndex] ?? this.doc.pages[this.activePageIndex] ?? this.doc.pages[0]
@@ -327,6 +338,23 @@ export const useDocument = defineStore('document', {
       const loc = this.locate(blockId)
       if (!loc) return
       this.setFontScale(blockId, (loc.block.scale ?? 1) + delta)
+    },
+    setNoteScale(pageIndex: number, noteId: string, scale: number) {
+      const note = this.doc.pages[pageIndex]?.notes?.find((n) => n.id === noteId)
+      if (!note) return
+      note.scale = Math.max(0.6, Math.min(2.4, Math.round(scale * 20) / 20))
+      this.touch()
+    },
+    // Size whatever line the caret is in, be it a block or a free note, so the font-size
+    // dial works on any text anywhere and never silently targets the wrong line.
+    nudgeSelectionFontScale(delta: number) {
+      if (this.selectedNote) {
+        const { pageIndex, id } = this.selectedNote
+        const note = this.doc.pages[pageIndex]?.notes?.find((n) => n.id === id)
+        if (note) this.setNoteScale(pageIndex, id, (note.scale ?? 1) + delta)
+      } else if (this.selectedBlockId) {
+        this.nudgeFontScale(this.selectedBlockId, delta)
+      }
     },
     // Every letter in a diagram is the writer's to change. A named figure is first turned
     // into its concrete scene so its labels become editable in place; then the one being

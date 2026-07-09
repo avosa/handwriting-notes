@@ -83,10 +83,10 @@ onBeforeUnmount(() => document.removeEventListener('selectionchange', onSelectio
 function makeRole(role: TextRole) {
   if (documentStore.selectedBlockId) documentStore.setRole(documentStore.selectedBlockId, role)
 }
-// Size the whole line or figure the selection sits in; the selection is left untouched so
-// the writer can keep nudging up or down and watch it grow.
+// Size whatever line the selection sits in, whether it is a block or a free note; the
+// selection is left untouched so the writer can keep nudging up or down and watch it grow.
 function nudgeSize(delta: number) {
-  if (documentStore.selectedBlockId) documentStore.nudgeFontScale(documentStore.selectedBlockId, delta)
+  documentStore.nudgeSelectionFontScale(delta)
 }
 
 async function startAsk() {
