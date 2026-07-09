@@ -20,26 +20,35 @@ export interface TextMetrics {
 
 // Font sizes are a fraction of the line height so writing fills the rule regardless
 // of the preset's spacing. Titles and headings rise above the body size.
-const BODY_FILL = 0.62
-const HEADING_FILL = 0.82
-const TITLE_FILL = 1.05
+const FILL: Record<TextRole, number> = {
+  title: 1.05,
+  subtitle: 0.66,
+  heading: 0.82,
+  subheading: 0.72,
+  body: 0.62,
+  caption: 0.52,
+}
+
+// Blank rules a role leaves above itself, kept to whole lines so the grid holds.
+const LEAD_IN: Record<TextRole, number> = {
+  title: 0,
+  subtitle: 0,
+  heading: 1,
+  subheading: 1,
+  body: 0,
+  caption: 0,
+}
 
 export function textMetrics(preset: SheetPreset): TextMetrics {
   const lineHeight = preset.rule.spacing * preset.text.leadingRules
+  const fontSize = {} as Record<TextRole, number>
+  for (const role of Object.keys(FILL) as TextRole[]) fontSize[role] = lineHeight * FILL[role]
   return {
     lineHeight,
     left: preset.text.left,
     width: preset.text.right - preset.text.left,
     firstBaseline: preset.rule.topGap,
-    fontSize: {
-      body: lineHeight * BODY_FILL,
-      heading: lineHeight * HEADING_FILL,
-      title: lineHeight * TITLE_FILL,
-    },
-    roleLeadIn: {
-      body: 0,
-      heading: 0.55,
-      title: 0.2,
-    },
+    fontSize,
+    roleLeadIn: { ...LEAD_IN },
   }
 }

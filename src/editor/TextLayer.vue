@@ -1,19 +1,22 @@
 <script setup lang="ts">
-// The writing column: the blocks that flow down a page. Each text block is one line
-// of handwriting per rule, editable in place; diagrams sit inline at a whole number
-// of rules tall so the writing below resumes on a rule. Titles use the header font
-// in title blue, headings the header font in section red, body the body font in ink.
-import { computed, type CSSProperties } from 'vue'
-import type { Block, Page, TextRole } from '@/types'
+// The writing column: everything that flows down a page. Each block renders by type
+// and edits in place. Paragraphs, lists, tables, callouts, and diagrams all sit on
+// the same rule grid. Roles carry the sample look by default (blue title, red
+// heading, navy body), and any of it can be recoloured or re-emphasised freely.
+import { computed, nextTick, ref, watch, type CSSProperties } from 'vue'
+import type { Block, Page, TextRole, TextRun } from '@/types'
 import type { TextMetrics } from './alignment'
 import { getHandwriting, bodyFontStack, headerFontStack } from '@/handwriting/registry'
-import { stripDashes } from '@/ai/noteLint'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
+import EditableText from './EditableText.vue'
+import TableBlock from './TableBlock.vue'
+import CalloutsBlock from './CalloutsBlock.vue'
 import Diagram from '@/diagrams/Diagram.vue'
 
 const props = defineProps<{
   page: Page
+  pageIndex: number
   metrics: TextMetrics
   pxPerMm: number
   editable: boolean
@@ -24,7 +27,7 @@ const settings = useSettings()
 const handwriting = computed(() => getHandwriting(settings.activeHandwritingId))
 
 const lineHeightPx = computed(() => props.metrics.lineHeight * props.pxPerMm)
-const columnStyle = computed(() => ({
+const columnStyle = computed<CSSProperties>(() => ({
   left: `${props.metrics.left * props.pxPerMm}px`,
   top: `${(props.metrics.firstBaseline - props.metrics.lineHeight) * props.pxPerMm}px`,
   width: `${props.metrics.width * props.pxPerMm}px`,
@@ -32,62 +35,172 @@ const columnStyle = computed(() => ({
 
 function roleColor(role: TextRole): string {
   const p = handwriting.value.palette
-  return role === 'title' ? p.title : role === 'heading' ? p.heading : p.ink
+  if (role === 'title') return p.title
+  if (role === 'heading' || role === 'subheading') return p.heading
+  return p.ink
 }
-
 function roleFont(role: TextRole): string {
-  return role === 'body' ? bodyFontStack(handwriting.value) : headerFontStack(handwriting.value)
+  return role === 'title' || role === 'heading' ? headerFontStack(handwriting.value) : bodyFontStack(handwriting.value)
+}
+function defaultAlign(role: TextRole): 'left' | 'center' | 'justify' {
+  return role === 'caption' || role === 'subtitle' ? 'center' : 'left'
 }
 
-function textStyle(block: Extract<Block, { type: 'text' }>): CSSProperties {
+function paragraphStyle(block: Extract<Block, { type: 'text' }>): CSSProperties {
   const t = block.text
   const leadRules = Math.round(props.metrics.roleLeadIn[t.role])
   return {
     fontFamily: roleFont(t.role),
     fontSize: `${props.metrics.fontSize[t.role] * props.pxPerMm}px`,
     lineHeight: `${lineHeightPx.value}px`,
-    color: t.color ?? roleColor(t.role),
-    fontWeight: t.bold ? 700 : 400,
-    textAlign: t.align ?? 'left',
+    color: roleColor(t.role),
+    textAlign: t.align ?? defaultAlign(t.role),
     marginTop: `${leadRules * lineHeightPx.value}px`,
     marginLeft: `${(t.indent ?? 0) * props.pxPerMm}px`,
   }
 }
-
-function diagramStyle(heightRules: number) {
-  return { height: `${heightRules * lineHeightPx.value}px` }
+function listStyle(): CSSProperties {
+  return {
+    fontFamily: bodyFontStack(handwriting.value),
+    fontSize: `${props.metrics.fontSize.body * props.pxPerMm}px`,
+    lineHeight: `${lineHeightPx.value}px`,
+    color: handwriting.value.palette.ink,
+  }
+}
+function captionStyle(): CSSProperties {
+  return {
+    fontFamily: bodyFontStack(handwriting.value),
+    fontSize: `${props.metrics.fontSize.caption * props.pxPerMm}px`,
+    lineHeight: `${lineHeightPx.value}px`,
+    color: handwriting.value.palette.ink,
+    textAlign: 'center',
+  }
 }
 
-// Keep the standing no-dashes rule: strip any hyphen or dash the moment it is typed,
-// then push the cleaned text back to the store.
-function onEdit(blockId: string, event: Event) {
-  const el = event.target as HTMLElement
-  const cleaned = stripDashes(el.innerText)
-  if (cleaned !== el.innerText) el.innerText = cleaned
-  documentStore.updateTextBlock(blockId, { content: cleaned })
+// Focus follows content the writer creates: after adding a line, focus lands on it.
+const editables = ref(new Map<string, InstanceType<typeof EditableText>>())
+function bindEditable(key: string) {
+  return (el: unknown) => {
+    if (el) editables.value.set(key, el as InstanceType<typeof EditableText>)
+    else editables.value.delete(key)
+  }
+}
+const pendingFocus = ref<string | null>(null)
+watch(pendingFocus, async (key) => {
+  if (!key) return
+  await nextTick()
+  editables.value.get(key)?.focus()
+  pendingFocus.value = null
+})
+
+function onFocusBlock(blockId: string) {
+  documentStore.select(blockId)
+}
+
+function onParagraphEnter(block: Extract<Block, { type: 'text' }>) {
+  const nextRole = block.text.role === 'body' || block.text.role === 'caption' ? block.text.role : 'body'
+  const id = documentStore.addParagraphAfter(block.id, nextRole)
+  pendingFocus.value = `text:${id}`
+}
+function onParagraphBackspace(block: Extract<Block, { type: 'text' }>) {
+  const page = props.page
+  const index = page.blocks.findIndex((b) => b.id === block.id)
+  if (page.blocks.length === 1 && props.pageIndex === 0) return
+  const prev = page.blocks[index - 1]
+  documentStore.removeBlock(block.id)
+  if (prev && prev.type === 'text') pendingFocus.value = `text:${prev.id}`
+}
+
+function onListEnter(block: Extract<Block, { type: 'list' }>, itemIndex: number) {
+  block.items.splice(itemIndex + 1, 0, [{ text: '' }])
+  documentStore.touch()
+  pendingFocus.value = `list:${block.id}:${itemIndex + 1}`
+}
+function onListBackspace(block: Extract<Block, { type: 'list' }>, itemIndex: number) {
+  if (block.items.length === 1) {
+    documentStore.removeBlock(block.id)
+    return
+  }
+  block.items.splice(itemIndex, 1)
+  documentStore.touch()
+  pendingFocus.value = `list:${block.id}:${Math.max(0, itemIndex - 1)}`
+}
+
+function diagramFont() {
+  return bodyFontStack(handwriting.value)
+}
+function updateRuns(blockId: string, runs: TextRun[]) {
+  documentStore.setRuns(blockId, runs)
 }
 </script>
 
 <template>
   <div class="text-layer" :style="columnStyle">
     <template v-for="block in page.blocks" :key="block.id">
-      <div
+      <EditableText
         v-if="block.type === 'text'"
-        class="block"
-        :class="{ editable }"
-        :style="textStyle(block)"
-        :contenteditable="editable"
-        spellcheck="false"
-        @input="onEdit(block.id, $event)"
-      >
-        {{ block.text.content }}
+        :ref="bindEditable(`text:${block.id}`)"
+        :model-value="block.text.runs"
+        class="paragraph"
+        :style="paragraphStyle(block)"
+        :placeholder="
+          block.text.role === 'title' ? 'Title' : block.text.role === 'heading' ? 'Heading' : 'Start writing'
+        "
+        @update:model-value="updateRuns(block.id, $event)"
+        @focus="onFocusBlock(block.id)"
+        @enter="onParagraphEnter(block)"
+        @empty-backspace="onParagraphBackspace(block)"
+      />
+
+      <ol v-else-if="block.type === 'list'" class="list" :class="{ bullets: !block.ordered }" :style="listStyle()">
+        <li v-for="(_, i) in block.items" :key="i">
+          <span class="marker">{{ block.ordered ? `${i + 1}.` : '•' }}</span>
+          <EditableText
+            :ref="bindEditable(`list:${block.id}:${i}`)"
+            v-model="block.items[i]"
+            class="li-text"
+            placeholder="List item"
+            @focus="onFocusBlock(block.id)"
+            @enter="onListEnter(block, i)"
+            @empty-backspace="onListBackspace(block, i)"
+          />
+        </li>
+      </ol>
+
+      <div v-else-if="block.type === 'table'" class="table-slot">
+        <div v-if="block.caption" class="caption" :style="captionStyle()">{{ block.caption }}</div>
+        <TableBlock
+          :block="block"
+          :width-mm="metrics.width"
+          :row-height-mm="metrics.lineHeight"
+          :font-stack="bodyFontStack(handwriting)"
+          :ink="handwriting.palette.ink"
+          :editable="editable"
+          @focus="onFocusBlock(block.id)"
+        />
       </div>
-      <div v-else class="diagram-slot" :style="diagramStyle(block.heightRules)">
+
+      <div v-else-if="block.type === 'callouts'" class="callouts-slot">
+        <div v-if="block.caption" class="caption" :style="captionStyle()">{{ block.caption }}</div>
+        <CalloutsBlock
+          :block="block"
+          :font-stack="bodyFontStack(handwriting)"
+          :editable="editable"
+          @focus="onFocusBlock(block.id)"
+        />
+      </div>
+
+      <div
+        v-else-if="block.type === 'diagram'"
+        class="diagram-slot"
+        :style="{ height: `${block.heightRules * lineHeightPx}px` }"
+        @click="onFocusBlock(block.id)"
+      >
         <Diagram
           :spec="block.spec"
           :width-mm="metrics.width"
           :height-mm="block.heightRules * metrics.lineHeight"
-          :font-stack="bodyFontStack(handwriting)"
+          :font-stack="diagramFont()"
         />
       </div>
     </template>
@@ -98,18 +211,31 @@ function onEdit(blockId: string, event: Event) {
 .text-layer {
   position: absolute;
 }
-.block {
-  outline: none;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
+.paragraph {
   cursor: text;
 }
-.block:not(.editable) {
-  cursor: default;
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
-.block.editable:focus {
-  background: rgba(74, 114, 176, 0.06);
-  border-radius: 3px;
+.list li {
+  display: flex;
+  gap: 8px;
+}
+.list .marker {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+.list .li-text {
+  flex: 1;
+}
+.table-slot,
+.callouts-slot {
+  padding: 6px 0;
+}
+.caption {
+  margin-bottom: 2px;
 }
 .diagram-slot {
   width: 100%;
