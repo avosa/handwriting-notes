@@ -182,7 +182,7 @@ function drawDiagram(
   face: Face,
 ) {
   const h = page.getHeight()
-  const rendered = renderDiagram(block.spec)
+  const rendered = renderDiagram(block.spec, hashSeed(block.id))
   const scale = Math.min(colWidth / rendered.width, heightPt / rendered.height)
   const offsetX = (colWidth - rendered.width * scale) / 2
   const offsetY = (heightPt - rendered.height * scale) / 2
@@ -198,7 +198,7 @@ function drawDiagram(
     })
   }
   for (const label of rendered.labels) {
-    const size = label.size * scale
+    const size = label.size * scale * (block.scale ?? 1)
     const width = measure(face, label.text, size)
     let lx = x + offsetX + label.x * scale
     if (label.anchor === 'middle') lx -= width / 2
@@ -230,7 +230,7 @@ function drawTable(
   for (let r = 1; r < rowCount; r++)
     draw(wobbleLine(1, (height / rowCount) * r, colWidth - 1, (height / rowCount) * r, seed + r * 13 + 100))
   const cellW = colWidth / cols
-  const size = rowHeightPt * 0.5
+  const size = rowHeightPt * 0.5 * (block.scale ?? 1)
   const cell = (text: string, ci: number, ri: number) => {
     if (!text) return
     const w = measure(face, text, size)
@@ -258,6 +258,7 @@ function drawCallouts(
   colWidth: number,
   rowHeightPt: number,
   face: Face,
+  fontScale = 1,
 ): number {
   const gap = mm(4)
   const boxWidth = (colWidth - gap * (boxes.length - 1)) / boxes.length
@@ -275,7 +276,7 @@ function drawCallouts(
       borderColor: color(box.color),
       borderWidth: Math.max(scaleW, scaleH) * 0.004,
     })
-    const headSize = rowHeightPt * 0.6
+    const headSize = rowHeightPt * 0.6 * fontScale
     const headText = box.heading.map((r) => r.text).join('')
     const hw = measure(face, headText, headSize)
     drawShaped(
@@ -294,7 +295,7 @@ function drawCallouts(
         page,
         face,
         text,
-        rowHeightPt * 0.55,
+        rowHeightPt * 0.55 * fontScale,
         bx + mm(4),
         topFromTop + rowHeightPt * (2 + li),
         color('#33334C'),
@@ -350,7 +351,7 @@ function layoutBlocks(
     if (block.type === 'text') {
       const t = block.text
       cursor += Math.round(metrics.roleLeadIn[t.role]) * lineH
-      const size = metrics.fontSize[t.role]
+      const size = metrics.fontSize[t.role] * (block.scale ?? 1)
       const face = roleFont(t.role, fonts)
       const ink = roleColor(t.role, handwriting.palette)
       const words = runsToWords(t.runs)
@@ -362,7 +363,7 @@ function layoutBlocks(
         cursor += lineH
       }
     } else if (block.type === 'list') {
-      const size = metrics.fontSize.body
+      const size = metrics.fontSize.body * (block.scale ?? 1)
       const face = fonts.body
       block.items.forEach((item, i) => {
         const marker = block.ordered ? `${i + 1}.` : '•'
@@ -426,7 +427,17 @@ function layoutBlocks(
     } else if (block.type === 'callouts') {
       if (block.caption) cursor += lineH
       const usedPt = pdfPage
-        ? drawCallouts(pdfPage, block.boxes, block.id, mm(left), mm(cursor), mm(colWidth), mm(lineH), fonts.body)
+        ? drawCallouts(
+            pdfPage,
+            block.boxes,
+            block.id,
+            mm(left),
+            mm(cursor),
+            mm(colWidth),
+            mm(lineH),
+            fonts.body,
+            block.scale ?? 1,
+          )
         : (Math.max(...block.boxes.map((b) => b.items.length)) + 2.5) * mm(lineH)
       cursor += usedPt / MM_TO_PT
     } else if (block.type === 'diagram') {
@@ -454,18 +465,19 @@ export async function documentToPdf(doc: NoteDocument): Promise<Uint8Array> {
     drawSheet(pdfPage, preset, heightMm)
     layoutBlocks(page, metrics, fonts, pdfPage, metrics.firstBaseline - metrics.lineHeight)
     drawStrokes(pdfPage, page.strokes)
-    const ink = getHandwriting(useSettings().activeHandwritingId).palette.ink
+    const palette = getHandwriting(useSettings().activeHandwritingId).palette
     for (const note of page.notes ?? []) {
       const text = note.runs.map((r) => r.text).join('')
       if (text.trim()) {
+        const role = note.role ?? 'body'
         drawShaped(
           pdfPage,
-          fonts.body,
+          roleFont(role, fonts),
           text,
-          mm(metrics.fontSize.body),
+          mm(metrics.fontSize[role] * (note.scale ?? 1)),
           mm(note.x),
           mm(note.y - metrics.lineHeight * 0.22),
-          color(note.color ?? ink),
+          color(note.color ?? roleColor(role, palette)),
           false,
         )
       }

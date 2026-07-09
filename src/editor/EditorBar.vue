@@ -121,7 +121,7 @@ function addPage() {
         <div class="group">
           <Popover align="center">
             <template #trigger>
-              <button class="stacked" title="Text colour" @mousedown="rememberSelection">
+              <button class="stacked" title="Text colour" @mousedown.prevent="rememberSelection">
                 <Icon name="textColour" :size="18" />
                 <span class="bar" :style="{ background: settings.activeColor }" />
               </button>
@@ -132,7 +132,7 @@ function addPage() {
           </Popover>
           <Popover align="center">
             <template #trigger>
-              <button class="stacked" title="Highlight" @mousedown="rememberSelection">
+              <button class="stacked" title="Highlight" @mousedown.prevent="rememberSelection">
                 <Icon name="highlighter" :size="18" />
                 <span class="bar" :style="{ background: highlightColour }" />
               </button>

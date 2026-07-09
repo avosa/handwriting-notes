@@ -9,6 +9,7 @@ import type { TextMetrics } from './alignment'
 import { getHandwriting, bodyFontStack, headerFontStack } from '@/handwriting/registry'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
+import { hashSeed } from '@/diagrams/wobble'
 import EditableText from './EditableText.vue'
 import TableBlock from './TableBlock.vue'
 import CalloutsBlock from './CalloutsBlock.vue'
@@ -27,6 +28,8 @@ const settings = useSettings()
 const handwriting = computed(() => getHandwriting(settings.activeHandwritingId))
 
 const lineHeightPx = computed(() => props.metrics.lineHeight * props.pxPerMm)
+// Blocks lifted out to float are drawn by the free figure layer, so the flow skips them.
+const flowBlocks = computed(() => props.page.blocks.filter((b) => !b.float))
 const columnStyle = computed<CSSProperties>(() => ({
   left: `${props.metrics.left * props.pxPerMm}px`,
   top: `${(props.metrics.firstBaseline - props.metrics.lineHeight) * props.pxPerMm}px`,
@@ -51,7 +54,7 @@ function paragraphStyle(block: Extract<Block, { type: 'text' }>): CSSProperties 
   const leadRules = Math.round(props.metrics.roleLeadIn[t.role])
   return {
     fontFamily: roleFont(t.role),
-    fontSize: `${props.metrics.fontSize[t.role] * props.pxPerMm}px`,
+    fontSize: `${props.metrics.fontSize[t.role] * props.pxPerMm * (block.scale ?? 1)}px`,
     lineHeight: `${lineHeightPx.value}px`,
     color: roleColor(t.role),
     textAlign: t.align ?? defaultAlign(t.role),
@@ -59,10 +62,10 @@ function paragraphStyle(block: Extract<Block, { type: 'text' }>): CSSProperties 
     marginLeft: `${(t.indent ?? 0) * props.pxPerMm}px`,
   }
 }
-function listStyle(): CSSProperties {
+function listStyle(block: Extract<Block, { type: 'list' }>): CSSProperties {
   return {
     fontFamily: bodyFontStack(handwriting.value),
-    fontSize: `${props.metrics.fontSize.body * props.pxPerMm}px`,
+    fontSize: `${props.metrics.fontSize.body * props.pxPerMm * (block.scale ?? 1)}px`,
     lineHeight: `${lineHeightPx.value}px`,
     color: handwriting.value.palette.ink,
   }
@@ -163,11 +166,28 @@ function diagramFont() {
 function updateRuns(blockId: string, runs: TextRun[]) {
   documentStore.setRuns(blockId, runs)
 }
+
+// Drag the handle at a diagram's foot to make it taller or shorter, in whole ruled lines.
+function startResize(blockId: string, fromRules: number, event: PointerEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+  const startY = event.clientY
+  const perRule = lineHeightPx.value
+  function onMove(move: PointerEvent) {
+    documentStore.setDiagramHeight(blockId, fromRules + (move.clientY - startY) / perRule)
+  }
+  function onUp() {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+  }
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+}
 </script>
 
 <template>
   <div class="text-layer" :style="columnStyle">
-    <template v-for="block in page.blocks" :key="block.id">
+    <template v-for="block in flowBlocks" :key="block.id">
       <EditableText
         v-if="block.type === 'text'"
         :ref="bindEditable(`text:${block.id}`)"
@@ -182,7 +202,7 @@ function updateRuns(blockId: string, runs: TextRun[]) {
         @select-all-note="documentStore.selectWholeNote()"
       />
 
-      <ol v-else-if="block.type === 'list'" class="list" :class="{ bullets: !block.ordered }" :style="listStyle()">
+      <ol v-else-if="block.type === 'list'" class="list" :class="{ bullets: !block.ordered }" :style="listStyle(block)">
         <li v-for="(_, i) in block.items" :key="i">
           <span class="marker">{{ block.ordered ? `${i + 1}.` : '•' }}</span>
           <EditableText
@@ -206,6 +226,7 @@ function updateRuns(blockId: string, runs: TextRun[]) {
           :row-height-mm="metrics.lineHeight"
           :font-stack="bodyFontStack(handwriting)"
           :ink="handwriting.palette.ink"
+          :scale="block.scale ?? 1"
           :editable="editable"
           @focus="onFocusBlock(block.id)"
         />
@@ -216,6 +237,7 @@ function updateRuns(blockId: string, runs: TextRun[]) {
         <CalloutsBlock
           :block="block"
           :font-stack="bodyFontStack(handwriting)"
+          :scale="block.scale ?? 1"
           :editable="editable"
           @focus="onFocusBlock(block.id)"
         />
@@ -232,7 +254,19 @@ function updateRuns(blockId: string, runs: TextRun[]) {
           :width-mm="metrics.width"
           :height-mm="block.heightRules * metrics.lineHeight"
           :font-stack="diagramFont()"
+          :seed="hashSeed(block.id)"
+          :scale="block.scale ?? 1"
+          :editable="editable"
+          @edit-label="(shapeIndex, text) => documentStore.setDiagramLabel(block.id, shapeIndex, text)"
         />
+        <button
+          v-if="editable"
+          class="resize-handle"
+          title="Drag to resize"
+          @pointerdown="startResize(block.id, block.heightRules, $event)"
+        >
+          <span />
+        </button>
       </div>
     </template>
   </div>
@@ -288,6 +322,36 @@ function updateRuns(blockId: string, runs: TextRun[]) {
   margin-bottom: 2px;
 }
 .diagram-slot {
+  position: relative;
   width: 100%;
+}
+/* A quiet grip at the foot of a figure; it appears on hover and drags the height. */
+.resize-handle {
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  cursor: ns-resize;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.diagram-slot:hover .resize-handle {
+  opacity: 1;
+}
+.resize-handle span {
+  width: 34px;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--accent, #4a72b0);
+  opacity: 0.55;
+}
+.resize-handle:hover span {
+  opacity: 0.9;
 }
 </style>

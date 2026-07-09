@@ -4,6 +4,7 @@
 import { defineStore } from 'pinia'
 import type { Block, CalloutBox, NoteDocument, Stroke, TextRole, TextRun } from '@/types'
 import { blankDocument, blankPage } from '@/content/blankDocument'
+import { toScene } from '@/diagrams/diagramSpec'
 import { uid } from '@/util/id'
 
 interface DocumentState {
@@ -11,6 +12,9 @@ interface DocumentState {
   activePageIndex: number
   /** The block currently being edited, for the contextual formatting bar. */
   selectedBlockId: string | null
+  /** The free note currently being edited, when the caret is in one instead of a block, so
+   *  formatting that acts on a whole line (font size) knows to target the note. */
+  selectedNote: { pageIndex: number; id: string } | null
   /** A block just created that the editor should move the caret into. */
   pendingFocusId: string | null
   /** True while Claude is writing onto the page, so the UI can show it live. */
@@ -23,6 +27,8 @@ interface DocumentState {
   future: string[]
   /** True when the whole note is selected, so an action can apply to all of it. */
   allSelected: boolean
+  /** Where the writer last pointed on a page, so an inserted figure lands there. */
+  lastPoint: { pageIndex: number; x: number; y: number } | null
 }
 
 // The state the history compares against; kept out of the reactive store since it is a
@@ -41,12 +47,14 @@ export const useDocument = defineStore('document', {
     doc: blankDocument(),
     activePageIndex: 0,
     selectedBlockId: null,
+    selectedNote: null,
     pendingFocusId: null,
     generating: false,
     writingBlockId: null,
     past: [],
     future: [],
     allSelected: false,
+    lastPoint: null,
   }),
   getters: {
     canUndo: (state) => state.past.length > 0,
@@ -104,6 +112,14 @@ export const useDocument = defineStore('document', {
     select(blockId: string | null) {
       this.allSelected = false
       this.selectedBlockId = blockId
+      // Moving into a block means the caret is no longer in a free note.
+      this.selectedNote = null
+    },
+    // The caret has moved into a free note; block-scoped formatting should target it now.
+    selectNote(pageIndex: number, id: string) {
+      this.allSelected = false
+      this.selectedBlockId = null
+      this.selectedNote = { pageIndex, id }
     },
     locate(blockId: string): BlockLocation | null {
       for (let p = 0; p < this.doc.pages.length; p++) {
@@ -126,6 +142,19 @@ export const useDocument = defineStore('document', {
         at.block.text.role = role
         this.touch()
       }
+    },
+    setNoteRole(pageIndex: number, noteId: string, role: TextRole) {
+      const note = this.doc.pages[pageIndex]?.notes?.find((n) => n.id === noteId)
+      if (note) {
+        note.role = role
+        this.touch()
+      }
+    },
+    // Make whatever line the caret is in a title, heading, or body, whether it is a block or
+    // a free note, so the role controls work on any text anywhere.
+    setSelectionRole(role: TextRole) {
+      if (this.selectedNote) this.setNoteRole(this.selectedNote.pageIndex, this.selectedNote.id, role)
+      else if (this.selectedBlockId) this.setRole(this.selectedBlockId, role)
     },
     setAlign(blockId: string, align: 'left' | 'center' | 'justify') {
       const at = this.locate(blockId)
@@ -173,18 +202,188 @@ export const useDocument = defineStore('document', {
       this.pendingFocusId = id
       return id
     },
-    addTable(blockId: string | null, columns = 3, bodyRows = 2): string {
+    // Remember where the writer last pointed, so the next inserted figure lands there.
+    setLastPoint(pageIndex: number, x: number, y: number) {
+      this.lastPoint = { pageIndex, x, y }
+    },
+    // Place a figure floating where the writer last pointed, on that page. With no recent
+    // point it lands near the top of the page being worked on.
+    placeFigure(block: Block): string {
+      const point = this.lastPoint ?? { pageIndex: this.activePageIndex, x: 22, y: 22 }
+      const page = this.doc.pages[point.pageIndex] ?? this.doc.pages[this.activePageIndex] ?? this.doc.pages[0]
+      const width = block.type === 'diagram' ? 92 : block.type === 'callouts' ? 130 : 84
+      block.float = { x: Math.max(2, point.x), y: Math.max(2, point.y), width }
+      page.blocks.push(block)
+      this.touch()
+      this.select(block.id)
+      return block.id
+    },
+    addTable(_blockId: string | null, columns = 3, bodyRows = 2): string {
       const header = Array.from({ length: columns }, (_, i) => (i === 0 ? 'p' : i === columns - 1 ? 'result' : 'q'))
       const rows = Array.from({ length: bodyRows }, () => Array.from({ length: columns }, () => ''))
-      return this.insertAfter(blockId, { id: uid('b'), type: 'table', header, rows })
+      return this.placeFigure({ id: uid('b'), type: 'table', header, rows })
     },
-    addCallouts(blockId: string | null, boxes: CalloutBox[], caption?: string): string {
-      const id = this.insertAfter(blockId, { id: uid('b'), type: 'callouts', boxes, caption })
-      this.pendingFocusId = id
-      return id
+    addCallouts(_blockId: string | null, boxes: CalloutBox[], caption?: string): string {
+      return this.placeFigure({ id: uid('b'), type: 'callouts', boxes, caption })
     },
-    addDiagram(blockId: string | null, block: Extract<Block, { type: 'diagram' }>): string {
-      return this.insertAfter(blockId, { ...block, id: uid('b') })
+    addDiagram(_blockId: string | null, block: Extract<Block, { type: 'diagram' }>): string {
+      return this.placeFigure({ ...block, id: uid('b') })
+    },
+    // Drag a floating figure across its page; docking drops it back into the writing flow,
+    // and popping a flowing figure out lifts it to float where the writer last pointed.
+    moveFloat(blockId: string, x: number, y: number) {
+      const loc = this.locate(blockId)
+      if (!loc || !loc.block.float) return
+      loc.block.float.x = Math.max(0, x)
+      loc.block.float.y = Math.max(0, y)
+      this.touch()
+    },
+    setFloatWidth(blockId: string, width: number) {
+      const loc = this.locate(blockId)
+      if (!loc || !loc.block.float) return
+      loc.block.float.width = Math.max(24, Math.min(190, width))
+      this.touch()
+    },
+    dockFigure(blockId: string) {
+      const loc = this.locate(blockId)
+      if (loc?.block.float) {
+        delete loc.block.float
+        this.touch()
+      }
+    },
+    popOutFigure(blockId: string) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.float) return
+      const point = this.lastPoint ?? { x: 24, y: 24 }
+      const width = loc.block.type === 'diagram' ? 92 : loc.block.type === 'callouts' ? 130 : 84
+      loc.block.float = { x: point.x, y: point.y, width }
+      this.touch()
+    },
+
+    // A table grows and shrinks after it is placed. A column adds an empty cell to the
+    // header and to every row; a row adds a full width of empty cells. The header and at
+    // least one body row are kept so the grid never collapses to nothing.
+    addTableColumn(blockId: string, at?: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'table') return
+      const table = loc.block
+      const index = at ?? table.header.length
+      table.header.splice(index, 0, '')
+      table.rows.forEach((row) => row.splice(index, 0, ''))
+      this.touch()
+    },
+    removeTableColumn(blockId: string, index: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'table' || loc.block.header.length <= 1) return
+      loc.block.header.splice(index, 1)
+      loc.block.rows.forEach((row) => row.splice(index, 1))
+      this.touch()
+    },
+    addTableRow(blockId: string, at?: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'table') return
+      const table = loc.block
+      const index = at ?? table.rows.length
+      table.rows.splice(
+        index,
+        0,
+        Array.from({ length: table.header.length }, () => ''),
+      )
+      this.touch()
+    },
+    removeTableRow(blockId: string, index: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'table' || loc.block.rows.length <= 1) return
+      loc.block.rows.splice(index, 1)
+      this.touch()
+    },
+
+    // Callout boxes are added and removed as a set, and each box's lines the same way.
+    addCalloutBox(blockId: string, at?: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'callouts') return
+      const boxes = loc.block.boxes
+      const palette = ['#4A72B0', '#C8792E', '#3F8F5C', '#B73B3A']
+      boxes.splice(at ?? boxes.length, 0, {
+        color: palette[boxes.length % palette.length],
+        heading: [{ text: '' }],
+        items: [[{ text: '' }]],
+      })
+      this.touch()
+    },
+    removeCalloutBox(blockId: string, index: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'callouts' || loc.block.boxes.length <= 1) return
+      loc.block.boxes.splice(index, 1)
+      this.touch()
+    },
+    addCalloutItem(blockId: string, boxIndex: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'callouts') return
+      loc.block.boxes[boxIndex]?.items.push([{ text: '' }])
+      this.touch()
+    },
+    removeCalloutItem(blockId: string, boxIndex: number, itemIndex: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'callouts') return
+      const box = loc.block.boxes[boxIndex]
+      if (!box || box.items.length <= 1) return
+      box.items.splice(itemIndex, 1)
+      this.touch()
+    },
+
+    // A diagram is resized by the number of ruled lines it spans, kept within sane bounds.
+    setDiagramHeight(blockId: string, heightRules: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'diagram') return
+      loc.block.heightRules = Math.max(4, Math.min(40, Math.round(heightRules)))
+      this.touch()
+    },
+    // How large a block's writing is drawn. One dial covers every kind of block: a
+    // paragraph, a list, a table's cells, a callout's lines, or a diagram's letters.
+    setFontScale(blockId: string, scale: number) {
+      const loc = this.locate(blockId)
+      if (!loc) return
+      loc.block.scale = Math.max(0.6, Math.min(2.4, Math.round(scale * 20) / 20))
+      this.touch()
+    },
+    nudgeFontScale(blockId: string, delta: number) {
+      const loc = this.locate(blockId)
+      if (!loc) return
+      this.setFontScale(blockId, (loc.block.scale ?? 1) + delta)
+    },
+    setNoteScale(pageIndex: number, noteId: string, scale: number) {
+      const note = this.doc.pages[pageIndex]?.notes?.find((n) => n.id === noteId)
+      if (!note) return
+      note.scale = Math.max(0.6, Math.min(2.4, Math.round(scale * 20) / 20))
+      this.touch()
+    },
+    // Size whatever line the caret is in, be it a block or a free note, so the font-size
+    // dial works on any text anywhere and never silently targets the wrong line.
+    nudgeSelectionFontScale(delta: number) {
+      if (this.selectedNote) {
+        const { pageIndex, id } = this.selectedNote
+        const note = this.doc.pages[pageIndex]?.notes?.find((n) => n.id === id)
+        if (note) this.setNoteScale(pageIndex, id, (note.scale ?? 1) + delta)
+      } else if (this.selectedBlockId) {
+        this.nudgeFontScale(this.selectedBlockId, delta)
+      }
+    },
+    // Every letter in a diagram is the writer's to change. A named figure is first turned
+    // into its concrete scene so its labels become editable in place; then the one being
+    // typed is set. The rest of the drawing is untouched, and its seed stays with the
+    // block, so the hand-drawn shapes do not shift while a label is edited.
+    setDiagramLabel(blockId: string, shapeIndex: number, text: string) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'diagram') return
+      if (loc.block.spec.kind !== 'scene') {
+        loc.block.spec = { kind: 'scene', scene: toScene(loc.block.spec) }
+      }
+      const shape = loc.block.spec.scene.shapes[shapeIndex]
+      if (shape && shape.type === 'label') {
+        shape.text = text
+        this.touch()
+      }
     },
     /** Split the page after a block so the rest continues on a fresh page. */
     breakPageAt(blockId: string): number {

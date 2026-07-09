@@ -19,6 +19,7 @@ import type { Block, NoteDocument, Page, TextRole, TextRun } from '@/types'
 import { getPreset, ruleYs, type SheetPreset } from '@/paper/sheetSpec'
 import { getHandwriting } from '@/handwriting/registry'
 import { renderDiagram } from '@/diagrams/render'
+import { hashSeed } from '@/diagrams/wobble'
 import { useSettings } from '@/store/settings'
 import { triggerDownload } from './toPdf'
 
@@ -75,8 +76,8 @@ function sheetSvg(preset: SheetPreset): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${preset.width} ${preset.height}"><rect width="${preset.width}" height="${preset.height}" fill="${preset.background}"/>${rules}<line x1="${preset.margin.left}" y1="0" x2="${preset.margin.left}" y2="${preset.height}" stroke="${preset.margin.color}" stroke-width="0.4"/></svg>`
 }
 
-function diagramSvg(spec: Extract<Block, { type: 'diagram' }>['spec'], fontFamily: string): string {
-  const d = renderDiagram(spec)
+function diagramSvg(block: Extract<Block, { type: 'diagram' }>, fontFamily: string, fontScale = 1): string {
+  const d = renderDiagram(block.spec, hashSeed(block.id))
   const paths = d.paths
     .map(
       (p) =>
@@ -86,7 +87,7 @@ function diagramSvg(spec: Extract<Block, { type: 'diagram' }>['spec'], fontFamil
   const labels = d.labels
     .map(
       (l) =>
-        `<text x="${l.x}" y="${l.y}" fill="${l.color}" font-size="${l.size}" text-anchor="${l.anchor}" font-family="${fontFamily}">${escapeXml(l.text)}</text>`,
+        `<text x="${l.x}" y="${l.y}" fill="${l.color}" font-size="${l.size * fontScale}" text-anchor="${l.anchor}" font-family="${fontFamily}">${escapeXml(l.text)}</text>`,
     )
     .join('')
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${d.width} ${d.height}">${paths}${labels}</svg>`
@@ -124,6 +125,9 @@ async function blockToChildren(
 ): Promise<(Paragraph | Table)[]> {
   const colWidthMm = preset.text.right - preset.text.left
   const lineTwip = twip(preset.rule.spacing * preset.text.leadingRules)
+  // The block's font-size dial scales its writing on the exported page too.
+  const s = block.scale ?? 1
+  const sized = (base: number) => Math.round(base * s)
 
   if (block.type === 'text') {
     const t = block.text
@@ -131,7 +135,12 @@ async function blockToChildren(
       new Paragraph({
         alignment: alignment(t.align, t.role),
         spacing: { line: lineTwip, lineRule: 'exact', before: 0, after: 0 },
-        children: runs(t.runs, fontFor(t.role, bodyFont, headerFont), ROLE_SIZE[t.role], roleColor(t.role, palette)),
+        children: runs(
+          t.runs,
+          fontFor(t.role, bodyFont, headerFont),
+          sized(ROLE_SIZE[t.role]),
+          roleColor(t.role, palette),
+        ),
       }),
     ]
   }
@@ -142,7 +151,7 @@ async function blockToChildren(
           spacing: { line: lineTwip, lineRule: 'exact' },
           bullet: block.ordered ? undefined : { level: 0 },
           numbering: block.ordered ? { reference: 'ordered', level: 0 } : undefined,
-          children: runs(item, bodyFont, ROLE_SIZE.body, palette.ink),
+          children: runs(item, bodyFont, sized(ROLE_SIZE.body), palette.ink),
           ...(block.ordered ? { text: `${i + 1}.` } : {}),
         }),
     )
@@ -160,7 +169,7 @@ async function blockToChildren(
                     new DocxTextRun({
                       text: c,
                       font: bodyFont,
-                      size: ROLE_SIZE.body,
+                      size: sized(ROLE_SIZE.body),
                       bold: head,
                       color: palette.ink.replace('#', ''),
                     }),
@@ -198,9 +207,11 @@ async function blockToChildren(
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: runs(box.heading, bodyFont, ROLE_SIZE.body, box.color),
+                children: runs(box.heading, bodyFont, sized(ROLE_SIZE.body), box.color),
               }),
-              ...box.items.map((it) => new Paragraph({ children: runs(it, bodyFont, ROLE_SIZE.body, palette.ink) })),
+              ...box.items.map(
+                (it) => new Paragraph({ children: runs(it, bodyFont, sized(ROLE_SIZE.body), palette.ink) }),
+              ),
             ],
           }),
       ),
@@ -225,7 +236,7 @@ async function blockToChildren(
   }
   // diagram
   const heightMm = block.heightRules * preset.rule.spacing * preset.text.leadingRules
-  const png = await svgToPng(diagramSvg(block.spec, bodyFont), Math.round(colWidthMm * 4), Math.round(heightMm * 4))
+  const png = await svgToPng(diagramSvg(block, bodyFont, s), Math.round(colWidthMm * 4), Math.round(heightMm * 4))
   return [
     new Paragraph({
       children: [
