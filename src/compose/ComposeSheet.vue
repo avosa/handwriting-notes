@@ -5,8 +5,11 @@
 // on a wide screen or a bottom sheet on a phone.
 import { computed, ref } from 'vue'
 import type { Attachment } from '@/types'
-import { loadApiKey } from '@/store/persistence'
+import { loadApiKey, putBlob } from '@/store/persistence'
+import { uid } from '@/util/id'
 import Attachments from './Attachments.vue'
+import VoiceRecorder from './VoiceRecorder.vue'
+import type { Recording } from './useVoiceRecorder'
 import Icon from '@/ui/Icon.vue'
 
 const props = defineProps<{ hasContent: boolean }>()
@@ -18,8 +21,47 @@ const emit = defineEmits<{
 
 const instruction = ref('')
 const attachments = ref<Attachment[]>([])
+const voiceError = ref('')
 // Start on the current note when there is something to work on, otherwise a fresh page.
 const mode = ref<'new' | 'current'>(props.hasContent ? 'current' : 'new')
+
+// A finished voice note joins the other attachments and carries its own transcript, so
+// the spoken words reach the model even though the audio itself is not model readable.
+// When the live recogniser heard nothing, the note is transcribed on the device instead,
+// filling the chip in once it is ready.
+let voiceCount = 0
+async function onVoiceAttach(recording: Recording) {
+  const blobRef = uid('blob')
+  await putBlob(blobRef, recording.blob)
+  voiceCount += 1
+  const seconds = Math.round(recording.durationMs / 1000)
+  const spoken = recording.transcript.trim()
+  attachments.value = [
+    ...attachments.value,
+    {
+      id: uid('att'),
+      kind: 'audio',
+      name: voiceCount > 1 ? `Voice note ${voiceCount}` : 'Voice note',
+      mime: recording.mime,
+      size: recording.blob.size,
+      blobRef,
+      transcript: spoken,
+      durationMs: seconds * 1000,
+      transcribing: !spoken,
+    },
+  ]
+  if (spoken) return
+
+  const stored = attachments.value[attachments.value.length - 1]
+  try {
+    const { transcribeAudio } = await import('@/ai/transcribe')
+    stored.transcript = await transcribeAudio(recording.blob)
+  } catch {
+    // If the on-device model cannot run, the note is left for the writer to type in.
+  } finally {
+    stored.transcribing = false
+  }
+}
 
 const examples = computed(() =>
   mode.value === 'current'
@@ -37,14 +79,20 @@ const examples = computed(() =>
       ],
 )
 
+const canSend = computed(() => instruction.value.trim().length > 0 || attachments.value.length > 0)
+
 // Hand the request to the app and step aside, so the page is watched as Claude writes.
+// A voice note or file on its own is enough; if nothing was typed, a plain instruction
+// stands in so the attachments have something to act on.
 async function send() {
-  if (!instruction.value.trim()) return
+  if (!canSend.value) return
   if (!(await loadApiKey())) {
     emit('needs-key')
     return
   }
-  emit('submit', instruction.value.trim(), attachments.value, mode.value === 'current')
+  const typed = instruction.value.trim()
+  const command = typed || 'Take neat notes from the attached voice note and files.'
+  emit('submit', command, attachments.value, mode.value === 'current')
   emit('close')
 }
 </script>
@@ -80,11 +128,14 @@ async function send() {
       />
       <Attachments v-model="attachments" />
 
+      <div class="voice-row">
+        <VoiceRecorder @attach="onVoiceAttach" @error="voiceError = $event" />
+      </div>
+      <p v-if="voiceError" class="error"><Icon name="close" :size="14" /> {{ voiceError }}</p>
+
       <footer>
         <span class="note"><Icon name="key" :size="14" /> Free to use. Generating needs your Claude key.</span>
-        <button class="send" :disabled="!instruction.trim()" @click="send">
-          <Icon name="wand" :size="16" />Write notes
-        </button>
+        <button class="send" :disabled="!canSend" @click="send"><Icon name="wand" :size="16" />Write notes</button>
       </footer>
     </div>
   </div>
@@ -222,6 +273,10 @@ h2 {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-wash-2);
+}
+.voice-row {
+  display: flex;
+  margin-top: 8px;
 }
 .error {
   display: flex;

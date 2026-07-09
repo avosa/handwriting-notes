@@ -184,7 +184,7 @@ export interface LibraryEntry {
   favorite: boolean
 }
 
-export type AttachmentKind = 'image' | 'video' | 'document'
+export type AttachmentKind = 'image' | 'video' | 'document' | 'audio'
 
 export interface Attachment {
   id: string
@@ -194,8 +194,13 @@ export interface Attachment {
   size: number
   /** Key of the blob held in IndexedDB. */
   blobRef: string
-  /** Optional pasted transcript, used for video since raw video is not model readable. */
+  /** Transcript text. Pasted for video, spoken-and-recognised for audio, since neither
+   *  is readable by the model as raw bytes. */
   transcript?: string
+  /** Length in milliseconds, for audio and video. */
+  durationMs?: number
+  /** True while a voice note is being transcribed on the device. */
+  transcribing?: boolean
 }
 
 export interface Handwriting {
