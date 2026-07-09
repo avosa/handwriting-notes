@@ -24,7 +24,7 @@ describe('provider registry', () => {
     expect(reads).toEqual({
       anthropic: { images: true, pdf: true, docs: false },
       openai: { images: true, pdf: true, docs: true },
-      gemini: { images: true, pdf: true, docs: false },
+      gemini: { images: true, pdf: true, docs: true },
       deepseek: { images: false, pdf: false, docs: false },
     })
   })
