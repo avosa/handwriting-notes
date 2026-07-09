@@ -167,10 +167,9 @@ export function useAi() {
     phase.value = 'thinking'
     controller = new AbortController()
     const signal = controller.signal
-    // Working on the current note rewrites it in place so a correction replaces what was
-    // there; a brand new note fills from its first line. The context is only present in the
-    // first case, so it doubles as the signal to revise.
-    const pageIndex = documentStore.beginAiPage(Boolean(context))
+    // The writing is added to the note, never wiping what is already there: a blank note
+    // fills from its first line, and a note with content continues on a fresh sheet.
+    const pageIndex = documentStore.beginAiPage()
     const streamer = new BlockStreamer()
     let wroteAnything = false
 
@@ -202,7 +201,7 @@ export function useAi() {
     try {
       const palette = getHandwriting(settings.activeHandwritingId).palette
       const prompt = context
-        ? `You are revising my existing notes. Apply my instruction and return the COMPLETE updated notes: keep everything that should stay, correct exactly what I ask, reproduce any tables and figures that belong, and do not simply continue from where the notes end.\n\nMY CURRENT NOTES:\n\n${context}\n\n---\n\nMY INSTRUCTION:\n\n${instruction}`
+        ? `Here are my current notes. Build on them as I ask, adding new material that follows on from what is there. Do not repeat lines that already exist.\n\nMY CURRENT NOTES:\n\n${context}\n\n---\n\nMY INSTRUCTION:\n\n${instruction}`
         : instruction
       const request = { system: systemPrompt(palette), prompt, attachments, maxTokens: 8000 }
       for await (const text of provider.stream(request, key, signal)) {

@@ -520,30 +520,14 @@ export const useDocument = defineStore('document', {
     },
 
     // The AI writing live: dropping blocks onto the page as they arrive and keeping the caret
-    // on the newest one so the writing is seen happening. Revising takes the note the writer
-    // has and rewrites it in place, so a correction they ask for replaces what was there
-    // rather than being added after it; the previous state is kept for undo. Otherwise a
-    // blank page is written into directly, and a page that already holds writing continues on
-    // a fresh sheet after it.
-    beginAiPage(replace = false): number {
+    // on the newest one so the writing is seen happening. A blank page is written into
+    // directly, so a new note fills from its first line; a page that already holds writing
+    // continues on a fresh sheet after it, so nothing already on the page is disturbed.
+    beginAiPage(): number {
       this.generating = true
       this.writingBlockId = null
       this.aiTool = null
       this.aiInsertAt = 0
-      if (replace) {
-        // Keep the note exactly as it stands as an undo point, so a rewrite the writer does
-        // not like is one undo away, then clear it for the corrected version.
-        const snapshot = JSON.stringify(this.doc)
-        this.past.push(snapshot)
-        if (this.past.length > HISTORY_LIMIT) this.past.shift()
-        this.future = []
-        baseline = snapshot
-        const preset = (this.doc.pages[0] ?? blankPage(0)).presetId
-        this.doc.pages = [{ id: uid('p'), index: 0, presetId: preset, blocks: [], strokes: [] }]
-        this.activePageIndex = 0
-        this.touch()
-        return 0
-      }
       const current = this.doc.pages[this.activePageIndex] ?? this.doc.pages[0]
       const currentIsBlank =
         (current.strokes?.length ?? 0) === 0 &&

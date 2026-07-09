@@ -56,33 +56,26 @@ describe('document store', () => {
     expect(doc.selectedBlockId).toBe('b2')
   })
 
-  it('rewrites the note in place when revising, and undo restores the original', () => {
+  it('adds to the note without wiping what the writer already has', () => {
     const doc = useDocument()
     const first = doc.doc.pages[0].blocks[0].id
-    doc.setRuns(first, [{ text: 'Original messy note' }])
-    doc.addParagraphAfter(first, 'body')
+    doc.setRuns(first, [{ text: 'Original note the writer keeps' }])
     const plain = () =>
       doc.doc.pages
         .flatMap((p) => p.blocks)
         .map((b) => (b.type === 'text' ? b.text.runs.map((r) => r.text).join('') : ''))
         .join(' ')
 
-    const pageIndex = doc.beginAiPage(true) // revise: clears the note for a full rewrite
-    expect(pageIndex).toBe(0)
-    expect(doc.doc.pages).toHaveLength(1)
-    expect(doc.doc.pages[0].blocks).toHaveLength(0)
-    doc.appendAiBlock(0, {
-      id: 'r1',
+    doc.beginAiPage()
+    doc.appendAiBlock(1, {
+      id: 'a1',
       type: 'text',
-      text: { id: 't', role: 'body', runs: [{ text: 'Corrected note' }] },
+      text: { id: 't', role: 'body', runs: [{ text: 'Added by the AI' }] },
     })
     doc.endAi()
-    // The corrected note replaced the original rather than being added after it.
-    expect(plain()).toContain('Corrected note')
-    expect(plain()).not.toContain('Original messy note')
-    // One undo brings the original note back.
-    doc.undo()
-    expect(plain()).toContain('Original messy note')
+    // Both the original and the added writing are present; nothing was wiped.
+    expect(plain()).toContain('Original note the writer keeps')
+    expect(plain()).toContain('Added by the AI')
   })
 
   it('restores a blank line when a run on the only page produced nothing', () => {
