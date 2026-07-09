@@ -4,10 +4,10 @@
 // adapts from a wide desktop down to a phone, keeping every tool within reach.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Attachment } from './types'
-import { APP_NAME, APP_SHORT } from './brand'
 import { useDocument } from './store/document'
 import { useLibrary } from './store/library'
 import { useClaude } from './compose/useClaude'
+import { useTheme } from './theme/useTheme'
 import NotePage from './editor/NotePage.vue'
 import EditorBar from './editor/EditorBar.vue'
 import SelectionMenu from './editor/SelectionMenu.vue'
@@ -16,6 +16,8 @@ import ComposeSheet from './compose/ComposeSheet.vue'
 import LiveWriting from './compose/LiveWriting.vue'
 import ApiKeyDialog from './ui/ApiKeyDialog.vue'
 import HandwritingPicker from './tools/HandwritingPicker.vue'
+import ThemeSwitch from './ui/ThemeSwitch.vue'
+import NavDrawer from './ui/NavDrawer.vue'
 import HomeScreen from './home/HomeScreen.vue'
 import Icon from './ui/Icon.vue'
 import Popover from './ui/Popover.vue'
@@ -23,15 +25,40 @@ import Popover from './ui/Popover.vue'
 const documentStore = useDocument()
 const library = useLibrary()
 const { generating, error: aiError, generate, stop } = useClaude()
+const { resolved: resolvedTheme } = useTheme()
 
 const mode = ref<'write' | 'draw'>('write')
 const showKey = ref(false)
 const showCompose = ref(false)
 const showHome = ref(false)
+const drawerOpen = ref(false)
 const exporting = ref<'pdf' | 'docx' | null>(null)
 
 async function newNote() {
   await library.createNote('blank')
+}
+
+// Drawer actions close the menu first, then run — so the page eases back before a sheet
+// or dialog takes over the screen.
+function drawerHome() {
+  drawerOpen.value = false
+  showHome.value = true
+}
+function drawerNew() {
+  drawerOpen.value = false
+  void newNote()
+}
+function drawerKey() {
+  drawerOpen.value = false
+  showKey.value = true
+}
+function drawerCompose() {
+  drawerOpen.value = false
+  showCompose.value = true
+}
+function drawerSave(kind: 'pdf' | 'docx') {
+  drawerOpen.value = false
+  void saveAs(kind)
 }
 
 // Start a run and step back so Claude is watched writing onto the page. When working on
@@ -88,7 +115,13 @@ function fit() {
 
 // Undo and redo with the usual keys. Real inputs keep their own undo; the handwriting
 // blocks are contenteditable, so those use the note's history instead.
+const themeIcon = computed(() => (resolvedTheme.value === 'dark' ? 'moon' : 'sun'))
+
 function onKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && drawerOpen.value) {
+    drawerOpen.value = false
+    return
+  }
   if (event.key === 'Escape' && documentStore.allSelected) {
     documentStore.clearWholeNote()
     return
@@ -137,120 +170,184 @@ function addPage() {
 </script>
 
 <template>
-  <div class="app">
-    <header class="topbar">
-      <div class="left">
-        <button class="icon-btn" title="All notes" @click="showHome = true"><Icon name="grid" :size="18" /></button>
-        <button class="icon-btn" title="New note" @click="newNote"><Icon name="plus" :size="18" /></button>
-        <button
-          class="icon-btn hide-mobile"
-          title="Undo"
-          :disabled="!documentStore.canUndo"
-          @click="documentStore.undo()"
-        >
-          <Icon name="undo" :size="18" />
-        </button>
-        <button
-          class="icon-btn hide-mobile"
-          title="Redo"
-          :disabled="!documentStore.canRedo"
-          @click="documentStore.redo()"
-        >
-          <Icon name="redo" :size="18" />
-        </button>
-        <span class="brand full">{{ APP_NAME }}</span>
-        <span class="brand short">{{ APP_SHORT }}</span>
-      </div>
-
-      <div class="center">
-        <input v-model="title" class="doc-title" spellcheck="false" aria-label="Document title" />
-        <span class="pages">{{ pageCount }} {{ pageCount === 1 ? 'page' : 'pages' }}</span>
-      </div>
-
-      <div class="right">
-        <HandwritingPicker class="hide-mobile" />
-        <Popover align="right">
-          <template #trigger>
-            <button class="chip" :disabled="exporting !== null">
-              <Icon name="download" :size="18" /><span class="chip-text">{{ exporting ? 'Saving…' : 'Save' }}</span>
-            </button>
-          </template>
-          <template #default>
-            <div class="menu">
-              <button class="menu-item" @click="saveAs('pdf')">
-                <Icon name="file" :size="18" /><span>PDF document</span>
-              </button>
-              <button class="menu-item" @click="saveAs('docx')">
-                <Icon name="file" :size="18" /><span>Word document</span>
-              </button>
-            </div>
-          </template>
-        </Popover>
-        <button class="icon-btn" title="Claude API key" @click="showKey = true"><Icon name="key" :size="18" /></button>
-        <button class="chip primary" @click="showCompose = true">
-          <Icon name="wand" :size="18" /><span class="chip-text">Write with AI</span>
-        </button>
-      </div>
-    </header>
-
-    <main class="stack" :class="{ 'all-selected': documentStore.allSelected }">
-      <div
-        v-for="(page, i) in documentStore.doc.pages"
-        :key="page.id"
-        class="page-wrap"
-        @contextmenu="openPageMenu(i, $event)"
-      >
-        <NotePage :page="page" :page-index="i" :width-px="pageWidth" :mode="mode" />
-        <div class="page-num">
-          <span>Page {{ i + 1 }} of {{ pageCount }}</span>
-          <button class="page-more" title="Page actions" @click="openPageMenu(i, $event)">
-            <Icon name="dots" :size="16" />
-          </button>
-        </div>
-      </div>
-      <button class="add-page" @click="addPage"><Icon name="pageAdd" :size="18" /> Add page</button>
-    </main>
-
-    <Transition name="fade">
-      <div v-if="pageMenu" class="page-menu-scrim" @click="closePageMenu" @contextmenu.prevent="closePageMenu">
-        <div class="page-menu" :style="{ left: `${pageMenu.x}px`, top: `${pageMenu.y}px` }" @click.stop>
-          <button @click="pageAction((i) => documentStore.setActivePage(documentStore.addPageAfter(i)))">
-            <Icon name="pageAdd" :size="17" /><span>Add page after</span>
-          </button>
-          <button @click="pageAction((i) => documentStore.setActivePage(documentStore.duplicatePage(i)))">
-            <Icon name="copy" :size="17" /><span>Duplicate page</span>
-          </button>
-          <template v-if="pageCount > 1">
-            <div class="sep" />
-            <button class="danger" @click="pageAction((i) => documentStore.deletePage(i))">
-              <Icon name="trash" :size="17" /><span>Delete page</span>
-            </button>
-          </template>
-        </div>
-      </div>
+  <div class="app-root">
+    <Transition name="scrim">
+      <div v-if="drawerOpen" class="drawer-scrim hide-desktop" @click="drawerOpen = false" />
     </Transition>
+    <aside class="drawer hide-desktop" :class="{ open: drawerOpen }">
+      <NavDrawer
+        :exporting="exporting"
+        @home="drawerHome"
+        @new="drawerNew"
+        @save-pdf="drawerSave('pdf')"
+        @save-docx="drawerSave('docx')"
+        @api-key="drawerKey"
+        @compose="drawerCompose"
+      />
+    </aside>
 
-    <div class="dock-wrap">
-      <EditorBar :mode="mode" @update:mode="mode = $event" />
+    <div class="app surface" :class="{ pushed: drawerOpen }">
+      <header class="topbar">
+        <div class="left">
+          <button class="icon-btn hamburger hide-desktop" title="Menu" @click="drawerOpen = true">
+            <Icon name="menu" :size="20" />
+          </button>
+          <button class="icon-btn hide-mobile" title="All notes" @click="showHome = true">
+            <Icon name="grid" :size="18" />
+          </button>
+          <button class="icon-btn hide-mobile" title="New note" @click="newNote">
+            <Icon name="plus" :size="18" />
+          </button>
+          <button
+            class="icon-btn hide-mobile"
+            title="Undo"
+            :disabled="!documentStore.canUndo"
+            @click="documentStore.undo()"
+          >
+            <Icon name="undo" :size="18" />
+          </button>
+          <button
+            class="icon-btn hide-mobile"
+            title="Redo"
+            :disabled="!documentStore.canRedo"
+            @click="documentStore.redo()"
+          >
+            <Icon name="redo" :size="18" />
+          </button>
+        </div>
+
+        <div class="center">
+          <input v-model="title" class="doc-title" spellcheck="false" aria-label="Document title" />
+          <span class="pages">{{ pageCount }} {{ pageCount === 1 ? 'page' : 'pages' }}</span>
+        </div>
+
+        <div class="right">
+          <button
+            class="icon-btn hide-desktop"
+            title="Undo"
+            :disabled="!documentStore.canUndo"
+            @click="documentStore.undo()"
+          >
+            <Icon name="undo" :size="18" />
+          </button>
+          <button
+            class="icon-btn hide-desktop"
+            title="Redo"
+            :disabled="!documentStore.canRedo"
+            @click="documentStore.redo()"
+          >
+            <Icon name="redo" :size="18" />
+          </button>
+          <HandwritingPicker class="hide-mobile" />
+          <Popover align="right" class="hide-mobile">
+            <template #trigger>
+              <button class="chip" :disabled="exporting !== null">
+                <Icon name="download" :size="18" /><span class="chip-text">{{ exporting ? 'Saving…' : 'Save' }}</span>
+              </button>
+            </template>
+            <template #default>
+              <div class="menu">
+                <button class="menu-item" @click="saveAs('pdf')">
+                  <Icon name="file" :size="18" /><span>PDF document</span>
+                </button>
+                <button class="menu-item" @click="saveAs('docx')">
+                  <Icon name="file" :size="18" /><span>Word document</span>
+                </button>
+              </div>
+            </template>
+          </Popover>
+          <Popover align="right" class="hide-mobile">
+            <template #trigger>
+              <button class="icon-btn" title="Appearance"><Icon :name="themeIcon" :size="18" /></button>
+            </template>
+            <template #default>
+              <div class="theme-menu">
+                <div class="theme-menu-label">Appearance</div>
+                <ThemeSwitch />
+              </div>
+            </template>
+          </Popover>
+          <button class="icon-btn hide-mobile" title="Claude API key" @click="showKey = true">
+            <Icon name="key" :size="18" />
+          </button>
+          <button class="chip primary" title="Write with AI" @click="showCompose = true">
+            <Icon name="wand" :size="18" /><span class="chip-text">Write with AI</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="stack" :class="{ 'all-selected': documentStore.allSelected }">
+        <div
+          v-for="(page, i) in documentStore.doc.pages"
+          :key="page.id"
+          class="page-wrap"
+          @contextmenu="openPageMenu(i, $event)"
+        >
+          <NotePage :page="page" :page-index="i" :width-px="pageWidth" :mode="mode" />
+          <div class="page-num">
+            <span>Page {{ i + 1 }} of {{ pageCount }}</span>
+            <button class="page-more" title="Page actions" @click="openPageMenu(i, $event)">
+              <Icon name="dots" :size="16" />
+            </button>
+          </div>
+        </div>
+        <button class="add-page" @click="addPage"><Icon name="pageAdd" :size="18" /> Add page</button>
+      </main>
+
+      <Transition name="fade">
+        <div v-if="pageMenu" class="page-menu-scrim" @click="closePageMenu" @contextmenu.prevent="closePageMenu">
+          <div class="page-menu" :style="{ left: `${pageMenu.x}px`, top: `${pageMenu.y}px` }" @click.stop>
+            <button @click="pageAction((i) => documentStore.setActivePage(documentStore.addPageAfter(i)))">
+              <Icon name="pageAdd" :size="17" /><span>Add page after</span>
+            </button>
+            <button @click="pageAction((i) => documentStore.setActivePage(documentStore.duplicatePage(i)))">
+              <Icon name="copy" :size="17" /><span>Duplicate page</span>
+            </button>
+            <template v-if="pageCount > 1">
+              <div class="sep" />
+              <button class="danger" @click="pageAction((i) => documentStore.deletePage(i))">
+                <Icon name="trash" :size="17" /><span>Delete page</span>
+              </button>
+            </template>
+          </div>
+        </div>
+      </Transition>
+
+      <div class="dock-wrap">
+        <EditorBar :mode="mode" @update:mode="mode = $event" />
+      </div>
+
+      <Transition name="live-pop">
+        <div v-if="generating" class="live-wrap">
+          <LiveWriting @stop="stop" />
+        </div>
+      </Transition>
+
+      <Transition name="toast">
+        <div v-if="aiError" class="toast" @click="aiError = null">
+          <Icon name="close" :size="15" />
+          <span>{{ aiError }}</span>
+        </div>
+      </Transition>
+
+      <SelectionMenu />
+      <Transition name="toast">
+        <WholeNoteBar
+          v-if="documentStore.allSelected"
+          @ask-ai="askAiWholeNote"
+          @clear="documentStore.clearWholeNote()"
+        />
+      </Transition>
+
+      <!-- While the menu is open the pushed page is a tap target that closes it. -->
+      <button
+        v-if="drawerOpen"
+        class="surface-backdrop hide-desktop"
+        aria-label="Close menu"
+        @click="drawerOpen = false"
+      />
     </div>
 
-    <Transition name="live-pop">
-      <div v-if="generating" class="live-wrap">
-        <LiveWriting @stop="stop" />
-      </div>
-    </Transition>
-
-    <Transition name="toast">
-      <div v-if="aiError" class="toast" @click="aiError = null">
-        <Icon name="close" :size="15" />
-        <span>{{ aiError }}</span>
-      </div>
-    </Transition>
-
-    <SelectionMenu />
-    <Transition name="toast">
-      <WholeNoteBar v-if="documentStore.allSelected" @ask-ai="askAiWholeNote" @clear="documentStore.clearWholeNote()" />
-    </Transition>
     <ComposeSheet
       v-if="showCompose"
       :has-content="noteHasContent"
@@ -267,12 +364,52 @@ function addPage() {
 </template>
 
 <style scoped>
-.app {
+.app-root {
+  position: relative;
+  height: 100%;
+  overflow-x: clip;
+  background: var(--desk-3);
+  --drawer-w: min(84vw, 320px);
+}
+.drawer {
+  position: fixed;
+  inset-block: 0;
+  left: 0;
+  width: var(--drawer-w);
+  z-index: 70;
+  transform: translateX(-100%);
+  transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+.drawer.open {
+  transform: translateX(0);
+  box-shadow: 10px 0 40px rgba(0, 0, 0, 0.32);
+}
+.drawer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 65;
+  background: var(--scrim);
+}
+.surface-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  border: none;
+  background: transparent;
+}
+.app,
+.surface {
+  position: relative;
   height: 100%;
   display: flex;
   flex-direction: column;
   background:
-    radial-gradient(1200px 600px at 50% -10%, #f2ede2, transparent), linear-gradient(180deg, #ece7dc, #e6e0d3);
+    radial-gradient(1200px 600px at 50% -10%, var(--desk-1), transparent),
+    linear-gradient(180deg, var(--desk-2), var(--desk-3));
+  transition:
+    transform 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    border-radius 0.32s ease;
 }
 .topbar {
   display: grid;
@@ -281,9 +418,9 @@ function addPage() {
   gap: 12px;
   padding: 10px 18px;
   padding-top: max(10px, env(safe-area-inset-top));
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--topbar-bg);
   backdrop-filter: blur(18px) saturate(1.4);
-  border-bottom: 1px solid rgba(51, 51, 76, 0.07);
+  border-bottom: 1px solid var(--border-subtle);
   z-index: 30;
 }
 .left {
@@ -291,23 +428,18 @@ function addPage() {
   align-items: center;
   gap: 9px;
 }
-.mark {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  color: #fff;
-  background: linear-gradient(135deg, #4a72b0, #6a4fa0);
+.logo {
+  flex-shrink: 0;
+}
+.hamburger {
+  border: none;
+  background: transparent;
 }
 .brand {
   font-weight: 700;
-  color: #29297e;
+  color: var(--brand);
   font-size: 15px;
   white-space: nowrap;
-}
-.brand.short {
-  display: none;
 }
 .center {
   display: flex;
@@ -320,7 +452,7 @@ function addPage() {
   background: transparent;
   font-size: 15px;
   font-weight: 600;
-  color: #33334c;
+  color: var(--text);
   font-family: inherit;
   text-align: center;
   max-width: 44vw;
@@ -329,11 +461,11 @@ function addPage() {
 }
 .doc-title:focus {
   outline: none;
-  background: rgba(51, 51, 76, 0.06);
+  background: var(--surface-sunken);
 }
 .pages {
   font-size: 11px;
-  color: #9a9aa8;
+  color: var(--text-muted);
 }
 .right {
   display: flex;
@@ -345,23 +477,23 @@ function addPage() {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  border: 1px solid rgba(51, 51, 76, 0.14);
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--surface);
   border-radius: 10px;
   padding: 8px 13px;
   cursor: pointer;
-  color: #33334c;
+  color: var(--text);
   font-size: 14px;
   white-space: nowrap;
 }
 .chip:hover {
-  background: rgba(74, 114, 176, 0.08);
+  background: var(--accent-wash);
 }
 .chip.primary {
   border: none;
   color: #fff;
-  background: linear-gradient(135deg, #4a72b0, #6a4fa0);
-  box-shadow: 0 3px 12px rgba(74, 114, 176, 0.35);
+  background: var(--accent-grad);
+  box-shadow: 0 3px 12px var(--accent-shadow);
 }
 .chip:disabled {
   opacity: 0.55;
@@ -369,22 +501,33 @@ function addPage() {
 }
 .icon-btn {
   display: inline-flex;
-  border: 1px solid rgba(51, 51, 76, 0.14);
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--surface);
   border-radius: 10px;
   padding: 8px;
   cursor: pointer;
-  color: #33334c;
+  color: var(--text);
 }
 .icon-btn:hover {
-  background: rgba(74, 114, 176, 0.08);
+  background: var(--accent-wash);
 }
 .icon-btn:disabled {
   opacity: 0.35;
   cursor: default;
 }
 .icon-btn:disabled:hover {
-  background: #fff;
+  background: var(--surface);
+}
+.theme-menu {
+  padding: 10px;
+  min-width: 240px;
+}
+.theme-menu-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 2px 4px 8px;
 }
 .stack {
   flex: 1;
@@ -408,21 +551,21 @@ function addPage() {
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: #9a9aa8;
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 .page-more {
   display: inline-flex;
   border: none;
   background: transparent;
-  color: #9a9aa8;
+  color: var(--text-muted);
   border-radius: 7px;
   padding: 3px;
   cursor: pointer;
 }
 .page-more:hover {
-  background: rgba(51, 51, 76, 0.08);
-  color: #33334c;
+  background: var(--surface-sunken);
+  color: var(--text);
 }
 .page-menu-scrim {
   position: fixed;
@@ -433,12 +576,11 @@ function addPage() {
   position: fixed;
   transform: translate(-6px, 6px);
   min-width: 190px;
-  background: #fff;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 13px;
   padding: 6px;
-  box-shadow:
-    0 14px 44px rgba(51, 51, 76, 0.24),
-    0 0 0 1px rgba(51, 51, 76, 0.06);
+  box-shadow: var(--menu-shadow);
 }
 .page-menu button {
   display: flex;
@@ -450,22 +592,22 @@ function addPage() {
   border-radius: 9px;
   padding: 10px 11px;
   cursor: pointer;
-  color: #33334c;
+  color: var(--text);
   font-size: 14px;
   text-align: left;
 }
 .page-menu button:hover {
-  background: rgba(74, 114, 176, 0.1);
+  background: var(--accent-wash-2);
 }
 .page-menu button.danger {
-  color: #b73b3a;
+  color: var(--danger);
 }
 .page-menu button.danger:hover {
-  background: rgba(183, 59, 58, 0.1);
+  background: var(--danger-wash);
 }
 .page-menu .sep {
   height: 1px;
-  background: rgba(51, 51, 76, 0.1);
+  background: var(--border);
   margin: 5px 8px;
 }
 .fade-enter-active,
@@ -480,17 +622,17 @@ function addPage() {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  border: 1px dashed rgba(51, 51, 76, 0.28);
-  background: rgba(255, 255, 255, 0.35);
+  border: 1px dashed var(--border);
+  background: color-mix(in srgb, var(--surface) 35%, transparent);
   border-radius: 12px;
   padding: 13px 22px;
-  color: #6a6a80;
+  color: var(--text-soft);
   cursor: pointer;
   font-size: 14px;
 }
 .add-page:hover {
-  background: rgba(255, 255, 255, 0.7);
-  color: #33334c;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  color: var(--text);
 }
 .dock-wrap {
   position: fixed;
@@ -527,13 +669,21 @@ function addPage() {
   gap: 8px;
   max-width: min(560px, 92vw);
   padding: 11px 16px;
-  background: #b73b3a;
+  background: var(--danger);
   color: #fff;
   border-radius: 12px;
   box-shadow: 0 12px 34px rgba(183, 59, 58, 0.35);
   font-size: 13px;
   cursor: pointer;
   z-index: 90;
+}
+.scrim-enter-active,
+.scrim-leave-active {
+  transition: opacity 0.28s ease;
+}
+.scrim-enter-from,
+.scrim-leave-to {
+  opacity: 0;
 }
 .toast-enter-active,
 .toast-leave-active {
@@ -572,22 +722,25 @@ function addPage() {
   border-radius: 10px;
   padding: 10px 11px;
   cursor: pointer;
-  color: #33334c;
+  color: var(--text);
   font-size: 14px;
   text-align: left;
 }
 .menu-item:hover {
-  background: rgba(74, 114, 176, 0.1);
+  background: var(--accent-wash-2);
+}
+
+/* The drawer and its toggle belong to the phone; the desktop keeps its full top bar. */
+@media (min-width: 721px) {
+  .hide-desktop {
+    display: none !important;
+  }
 }
 
 @media (max-width: 720px) {
-  .brand.full,
   .chip-text,
   .hide-mobile {
     display: none;
-  }
-  .brand.short {
-    display: inline;
   }
   .chip,
   .icon-btn {
@@ -596,13 +749,27 @@ function addPage() {
   .topbar {
     padding: 8px 12px;
     gap: 8px;
+    grid-template-columns: auto 1fr auto;
+  }
+  .left {
+    gap: 4px;
   }
   .doc-title {
-    max-width: 40vw;
+    max-width: 46vw;
   }
   .stack {
     padding: 16px 8px 150px;
     gap: 22px;
+  }
+  /* Push-drawer: the whole page eases aside and shrinks to a card as the menu slides
+     in over the desk behind it. The transform makes the surface the containing block
+     for its fixed dock and bars, so they ride along as one motion. */
+  .surface.pushed {
+    transform: translateX(var(--drawer-w)) scale(0.94);
+    transform-origin: left center;
+    border-radius: 22px;
+    overflow: hidden;
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
   }
 }
 </style>
