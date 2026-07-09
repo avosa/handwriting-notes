@@ -240,6 +240,25 @@ function updateRuns(blockId: string, runs: TextRun[]) {
 .text-layer {
   position: absolute;
 }
+/* Each line eases in as it is placed, so a note settles onto the page gently and, while
+   Claude writes, every fresh line is seen arriving. */
+@keyframes line-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.paragraph,
+.list,
+.table-slot,
+.callouts-slot,
+.diagram-slot {
+  animation: line-in 0.3s ease both;
+}
 .paragraph {
   cursor: text;
 }

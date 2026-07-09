@@ -6,15 +6,17 @@
 import { ref } from 'vue'
 import type { Attachment } from '@/types'
 import { loadApiKey } from '@/store/persistence'
-import { useClaude } from './useClaude'
 import Attachments from './Attachments.vue'
 import Icon from '@/ui/Icon.vue'
 
-const emit = defineEmits<{ (e: 'close'): void; (e: 'needs-key'): void }>()
+const emit = defineEmits<{
+  (e: 'close'): void
+  (e: 'needs-key'): void
+  (e: 'submit', instruction: string, attachments: Attachment[]): void
+}>()
 
 const instruction = ref('')
 const attachments = ref<Attachment[]>([])
-const { generating, error, generate } = useClaude()
 
 const examples = [
   'Take neat notes on the attached reading',
@@ -23,18 +25,15 @@ const examples = [
   'Make a truth table for AND, OR, and NOT',
 ]
 
+// Hand the request to the app and step aside, so the page is watched as Claude writes.
 async function send() {
-  if (!instruction.value.trim() || generating.value) return
+  if (!instruction.value.trim()) return
   if (!(await loadApiKey())) {
     emit('needs-key')
     return
   }
-  const ok = await generate(instruction.value.trim(), attachments.value)
-  if (ok) {
-    instruction.value = ''
-    attachments.value = []
-    emit('close')
-  }
+  emit('submit', instruction.value.trim(), attachments.value)
+  emit('close')
 }
 </script>
 
@@ -64,12 +63,10 @@ async function send() {
       />
       <Attachments v-model="attachments" />
 
-      <p v-if="error" class="error"><Icon name="close" :size="14" /> {{ error }}</p>
-
       <footer>
         <span class="note"><Icon name="key" :size="14" /> Free to use. Generating needs your Claude key.</span>
-        <button class="send" :disabled="generating || !instruction.trim()" @click="send">
-          <Icon name="wand" :size="16" />{{ generating ? 'Writing…' : 'Write notes' }}
+        <button class="send" :disabled="!instruction.trim()" @click="send">
+          <Icon name="wand" :size="16" />Write notes
         </button>
       </footer>
     </div>

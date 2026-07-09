@@ -2,24 +2,41 @@
 // The application shell. A calm top bar holds the document title and the main actions;
 // the pages sit on a soft desk; the tools float in a dock at the bottom. The layout
 // adapts from a wide desktop down to a phone, keeping every tool within reach.
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { Attachment } from './types'
 import { APP_NAME } from './brand'
 import { useDocument } from './store/document'
+import { useClaude } from './compose/useClaude'
 import NotePage from './editor/NotePage.vue'
 import EditorBar from './editor/EditorBar.vue'
 import SelectionMenu from './editor/SelectionMenu.vue'
 import ComposeSheet from './compose/ComposeSheet.vue'
+import LiveWriting from './compose/LiveWriting.vue'
 import ApiKeyDialog from './ui/ApiKeyDialog.vue'
 import HandwritingPicker from './tools/HandwritingPicker.vue'
 import Icon from './ui/Icon.vue'
 import Popover from './ui/Popover.vue'
 
 const documentStore = useDocument()
+const { generating, error: aiError, generate, stop } = useClaude()
 
 const mode = ref<'write' | 'draw'>('write')
 const showKey = ref(false)
 const showCompose = ref(false)
 const exporting = ref<'pdf' | 'docx' | null>(null)
+
+// Start a run and step back so Claude is watched writing onto the page.
+function onSubmit(instruction: string, attachments: Attachment[]) {
+  void generate(instruction, attachments)
+}
+
+// Follow the writing: keep the newest line Claude adds in view.
+watch(
+  () => documentStore.writingBlockId,
+  () => {
+    requestAnimationFrame(() => document.querySelector('.stack')?.scrollTo({ top: 1e9, behavior: 'smooth' }))
+  },
+)
 
 const pageCount = computed(() => documentStore.doc.pages.length)
 
@@ -150,8 +167,21 @@ function addPage() {
       <EditorBar :mode="mode" @update:mode="mode = $event" />
     </div>
 
+    <Transition name="live-pop">
+      <div v-if="generating" class="live-wrap">
+        <LiveWriting @stop="stop" />
+      </div>
+    </Transition>
+
+    <Transition name="toast">
+      <div v-if="aiError" class="toast" @click="aiError = null">
+        <Icon name="close" :size="15" />
+        <span>{{ aiError }}</span>
+      </div>
+    </Transition>
+
     <SelectionMenu />
-    <ComposeSheet v-if="showCompose" @close="showCompose = false" @needs-key="showKey = true" />
+    <ComposeSheet v-if="showCompose" @close="showCompose = false" @needs-key="showKey = true" @submit="onSubmit" />
     <ApiKeyDialog v-if="showKey" @close="showKey = false" />
   </div>
 </template>
@@ -378,6 +408,53 @@ function addPage() {
   bottom: max(18px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
   z-index: 40;
+}
+.live-wrap {
+  position: fixed;
+  left: 50%;
+  bottom: calc(max(18px, env(safe-area-inset-bottom)) + 78px);
+  transform: translateX(-50%);
+  z-index: 45;
+}
+.live-pop-enter-active,
+.live-pop-leave-active {
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+.live-pop-enter-from,
+.live-pop-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(10px);
+}
+.toast {
+  position: fixed;
+  top: calc(max(10px, env(safe-area-inset-top)) + 60px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(560px, 92vw);
+  padding: 11px 16px;
+  background: #b73b3a;
+  color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 12px 34px rgba(183, 59, 58, 0.35);
+  font-size: 13px;
+  cursor: pointer;
+  z-index: 90;
+}
+.toast-enter-active,
+.toast-leave-active {
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-10px);
 }
 .menu {
   display: flex;

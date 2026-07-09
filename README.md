@@ -36,8 +36,9 @@ Open the printed URL and start writing.
 - **Draw by hand.** Pencil, fine pen, marker, highlighter, and an eraser, with
   adjustable width and any colour. Tap the fill tool inside a shape you drew to colour
   it in.
-- **Write with AI.** Describe the note you want, attach photos, a PDF, or a video with
-  its transcript, and Claude drafts it onto new pages using the same tools you have.
+- **Write with AI, live.** Describe the note you want, attach photos, a PDF, or a video
+  with its transcript, and watch Claude write it onto a fresh page in real time, line by
+  line, using the same tools you have. Stop any time, then keep editing what it wrote.
   This needs your own Anthropic key, entered from the key button.
 - **Nothing is lost.** Text, drawings, settings, and attachments save to the browser
   and come back after a refresh or going offline.
