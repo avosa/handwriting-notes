@@ -94,7 +94,7 @@ async function send() {
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(31, 31, 40, 0.4);
+  background: var(--scrim);
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
@@ -104,10 +104,10 @@ async function send() {
 }
 .card {
   width: min(560px, 100%);
-  background: #fff;
+  background: var(--surface);
   border-radius: 22px;
   padding: 22px;
-  box-shadow: 0 30px 90px rgba(31, 31, 40, 0.4);
+  box-shadow: var(--pop-shadow);
   animation: pop 0.2s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 @keyframes pop {
@@ -133,7 +133,7 @@ header {
   display: grid;
   place-items: center;
   color: #fff;
-  background: linear-gradient(135deg, #4a72b0, #7e3f8a);
+  background: var(--accent-grad);
 }
 .titles {
   flex: 1;
@@ -141,29 +141,29 @@ header {
 h2 {
   margin: 0 0 3px;
   font-size: 19px;
-  color: #29297e;
+  color: var(--brand);
 }
 .titles p {
   margin: 0;
   font-size: 13px;
-  color: #6a6a80;
+  color: var(--text-soft);
   line-height: 1.5;
 }
 .x {
   border: none;
   background: transparent;
-  color: #9a9aa8;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 4px;
   border-radius: 8px;
 }
 .x:hover {
-  background: rgba(51, 51, 76, 0.07);
+  background: var(--surface-sunken);
 }
 .mode {
   display: flex;
   gap: 3px;
-  background: rgba(51, 51, 76, 0.06);
+  background: var(--surface-sunken);
   border-radius: 11px;
   padding: 3px;
   margin-bottom: 14px;
@@ -175,14 +175,14 @@ h2 {
   border-radius: 9px;
   padding: 9px;
   cursor: pointer;
-  color: #6a6a80;
+  color: var(--text-soft);
   font-size: 13px;
   font-weight: 500;
 }
 .mode button.on {
-  background: #fff;
-  color: #29297e;
-  box-shadow: 0 1px 4px rgba(51, 51, 76, 0.14);
+  background: var(--surface);
+  color: var(--brand);
+  box-shadow: 0 1px 4px var(--border);
 }
 .examples {
   display: flex;
@@ -191,9 +191,9 @@ h2 {
   margin-bottom: 12px;
 }
 .example {
-  border: 1px solid rgba(74, 114, 176, 0.25);
-  background: rgba(74, 114, 176, 0.06);
-  color: #3a5a8a;
+  border: 1px solid var(--accent-wash-2);
+  background: var(--accent-wash);
+  color: var(--accent);
   border-radius: 999px;
   padding: 7px 13px;
   font-size: 12.5px;
@@ -201,30 +201,34 @@ h2 {
   transition: background 0.12s ease;
 }
 .example:hover {
-  background: rgba(74, 114, 176, 0.14);
+  background: var(--accent-wash-2);
 }
 .field {
   width: 100%;
   resize: none;
   padding: 13px;
   border-radius: 13px;
-  border: 1px solid rgba(51, 51, 76, 0.18);
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
   font-family: inherit;
   font-size: 14px;
-  color: #33334c;
+  color: var(--text);
   margin-bottom: 8px;
+}
+.field::placeholder {
+  color: var(--text-muted);
 }
 .field:focus {
   outline: none;
-  border-color: #4a72b0;
-  box-shadow: 0 0 0 3px rgba(74, 114, 176, 0.12);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-wash-2);
 }
 .error {
   display: flex;
   align-items: center;
   gap: 5px;
   margin: 8px 0 0;
-  color: #b73b3a;
+  color: var(--danger);
   font-size: 12.5px;
 }
 footer {
@@ -239,7 +243,7 @@ footer {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #9a9aa8;
+  color: var(--text-muted);
 }
 .send {
   display: inline-flex;
@@ -248,12 +252,12 @@ footer {
   border: none;
   border-radius: 12px;
   padding: 12px 20px;
-  background: linear-gradient(135deg, #4a72b0, #6a4fa0);
+  background: var(--accent-grad);
   color: #fff;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(74, 114, 176, 0.35);
+  box-shadow: 0 4px 14px var(--accent-shadow);
 }
 .send:disabled {
   opacity: 0.5;
@@ -261,15 +265,19 @@ footer {
   box-shadow: none;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 720px) {
   .backdrop {
     align-items: flex-end;
+    justify-content: stretch;
     padding: 0;
   }
   .card {
     width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     border-radius: 22px 22px 0 0;
-    padding-bottom: calc(22px + env(safe-area-inset-bottom));
+    padding: 18px 18px calc(20px + env(safe-area-inset-bottom));
     animation: rise 0.24s ease;
   }
   @keyframes rise {
@@ -282,8 +290,41 @@ footer {
     width: 40px;
     height: 4px;
     border-radius: 2px;
-    background: rgba(51, 51, 76, 0.18);
-    margin: -8px auto 14px;
+    background: var(--border);
+    margin: 0 auto 14px;
+  }
+  header {
+    margin-bottom: 14px;
+  }
+  /* Stack the mode toggle so long labels wrap cleanly instead of overflowing. */
+  .mode {
+    flex-wrap: wrap;
+  }
+  .mode button {
+    flex: 1 1 45%;
+    padding: 11px;
+    font-size: 14px;
+  }
+  .example {
+    padding: 9px 14px;
+    font-size: 13.5px;
+  }
+  .field {
+    font-size: 16px;
+    padding: 14px;
+    min-height: 96px;
+  }
+  /* Full-width, thumb-reachable footer: note above, big submit below. */
+  footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .send {
+    width: 100%;
+    justify-content: center;
+    padding: 15px 20px;
+    font-size: 15px;
   }
 }
 </style>

@@ -244,13 +244,11 @@ function addPage() {
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.97);
+  background: var(--surface);
   backdrop-filter: blur(16px) saturate(1.3);
-  border: 1px solid rgba(51, 51, 76, 0.08);
+  border: 1px solid var(--border);
   border-radius: 18px;
-  box-shadow:
-    0 14px 40px rgba(51, 51, 76, 0.18),
-    0 2px 6px rgba(51, 51, 76, 0.08);
+  box-shadow: var(--menu-shadow);
   max-width: calc(100vw - 20px);
   overflow-x: auto;
   scrollbar-width: none;
@@ -266,7 +264,7 @@ function addPage() {
 .switch {
   display: flex;
   gap: 2px;
-  background: rgba(51, 51, 76, 0.06);
+  background: var(--surface-sunken);
   border-radius: 12px;
   padding: 3px;
   flex-shrink: 0;
@@ -280,20 +278,20 @@ function addPage() {
   border-radius: 9px;
   padding: 8px 12px;
   cursor: pointer;
-  color: #6a6a80;
+  color: var(--text-soft);
   font-size: 13px;
   font-weight: 500;
 }
 .switch button.on {
-  background: #fff;
-  color: #29297e;
+  background: var(--surface);
+  color: var(--brand);
   box-shadow: 0 1px 4px rgba(51, 51, 76, 0.14);
 }
 
 .divider {
   width: 1px;
   align-self: stretch;
-  background: rgba(51, 51, 76, 0.1);
+  background: var(--border);
   margin: 4px 2px;
   flex-shrink: 0;
 }
@@ -314,7 +312,7 @@ function addPage() {
 }
 
 .dock button {
-  color: #33334c;
+  color: var(--text);
 }
 .controls button,
 .draw-controls .ink {
@@ -333,7 +331,7 @@ function addPage() {
 }
 .controls button:hover,
 .draw-controls .ink:hover {
-  background: rgba(74, 114, 176, 0.12);
+  background: var(--accent-wash-2);
 }
 .stacked {
   flex-direction: column;
@@ -343,7 +341,7 @@ function addPage() {
   width: 18px;
   height: 3px;
   border-radius: 2px;
-  box-shadow: inset 0 0 0 1px rgba(51, 51, 76, 0.12);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 .pill {
   padding: 9px 13px !important;
@@ -355,11 +353,11 @@ function addPage() {
   font-weight: 500;
 }
 .pill.accent {
-  background: rgba(74, 114, 176, 0.12);
-  color: #29297e;
+  background: var(--accent-wash-2);
+  color: var(--brand);
 }
 .ghost {
-  color: #6a6a80;
+  color: var(--text-soft);
 }
 
 .tray {
@@ -380,22 +378,22 @@ function addPage() {
   transition: background 0.12s ease;
 }
 .slot:hover {
-  background: rgba(74, 114, 176, 0.08);
+  background: var(--accent-wash);
 }
 .slot.picked {
-  background: linear-gradient(to top, rgba(74, 114, 176, 0.16), transparent);
+  background: linear-gradient(to top, var(--accent-wash-2), transparent);
 }
 
 .width {
   width: 96px;
-  accent-color: #4a72b0;
+  accent-color: var(--accent);
 }
 .ink-dot {
   width: 24px;
   height: 24px;
   border-radius: 50%;
   box-shadow:
-    inset 0 0 0 1px rgba(51, 51, 76, 0.22),
+    inset 0 0 0 1px var(--border),
     0 1px 3px rgba(51, 51, 76, 0.2);
 }
 
@@ -420,23 +418,23 @@ function addPage() {
   padding: 10px 11px;
   width: 100%;
   cursor: pointer;
-  color: #33334c;
+  color: var(--text);
   font-size: 14px;
   text-align: left;
 }
 .menu-item:hover {
-  background: rgba(74, 114, 176, 0.1);
+  background: var(--accent-wash-2);
 }
 .menu-divider {
   height: 1px;
-  background: rgba(51, 51, 76, 0.1);
+  background: var(--border);
   margin: 5px 8px;
 }
 .menu-label {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #9a9aa8;
+  color: var(--text-muted);
   padding: 5px 11px 2px;
 }
 
@@ -450,6 +448,19 @@ function addPage() {
   }
   .pill-text {
     display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .dock {
+    max-width: calc(100vw - 16px);
+    margin-bottom: env(safe-area-inset-bottom, 0);
+  }
+  .controls button,
+  .draw-controls .ink,
+  .switch button {
+    min-width: 40px;
+    min-height: 40px;
   }
 }
 </style>

@@ -159,7 +159,8 @@ function commitRename(id: string) {
   display: flex;
   flex-direction: column;
   background:
-    radial-gradient(1200px 700px at 50% -10%, #f3eee3, transparent), linear-gradient(180deg, #ece7dc, #e6e0d3);
+    radial-gradient(1200px 600px at 50% -10%, var(--desk-1), transparent),
+    linear-gradient(180deg, var(--desk-2), var(--desk-3));
 }
 .bar {
   display: flex;
@@ -167,24 +168,24 @@ function commitRename(id: string) {
   gap: 14px;
   padding: 12px 20px;
   padding-top: max(12px, env(safe-area-inset-top));
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--topbar-bg);
   backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(51, 51, 76, 0.07);
+  border-bottom: 1px solid var(--border-subtle);
 }
 .back {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  border: 1px solid rgba(51, 51, 76, 0.16);
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--surface);
   border-radius: 10px;
   padding: 8px 13px;
   cursor: pointer;
-  color: #33334c;
+  color: var(--text);
   font-size: 14px;
 }
 .back:hover {
-  background: rgba(74, 114, 176, 0.08);
+  background: var(--accent-wash);
 }
 .search {
   display: flex;
@@ -194,17 +195,21 @@ function commitRename(id: string) {
   max-width: 340px;
   padding: 8px 12px;
   border-radius: 10px;
-  background: #fff;
-  border: 1px solid rgba(51, 51, 76, 0.14);
-  color: #9a9aa8;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
 }
 .search input {
   border: none;
   outline: none;
   width: 100%;
   font-size: 14px;
-  color: #33334c;
+  color: var(--text);
   font-family: inherit;
+  background: transparent;
+}
+.search input::placeholder {
+  color: var(--text-muted);
 }
 .scroll {
   flex: 1;
@@ -214,14 +219,14 @@ function commitRename(id: string) {
 h1 {
   margin: 6px 0 22px;
   font-size: 26px;
-  color: #29297e;
+  color: var(--brand);
 }
 h2 {
   margin: 0 0 12px;
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #9a9aa8;
+  color: var(--text-muted);
 }
 .templates {
   display: grid;
@@ -241,11 +246,13 @@ h2 {
 .tpaper {
   aspect-ratio: 3 / 4;
   border-radius: 10px;
-  background: #fff;
+  background: var(--surface);
   display: grid;
   place-items: center;
-  color: #4a72b0;
-  box-shadow: 0 4px 16px rgba(51, 51, 76, 0.1);
+  color: var(--accent);
+  box-shadow:
+    0 4px 16px rgba(51, 51, 76, 0.1),
+    0 0 0 1px var(--border-subtle);
   transition:
     transform 0.12s ease,
     box-shadow 0.12s ease;
@@ -253,23 +260,25 @@ h2 {
 }
 .template:hover .tpaper {
   transform: translateY(-3px);
-  box-shadow: 0 10px 26px rgba(51, 51, 76, 0.18);
+  box-shadow:
+    0 10px 26px rgba(51, 51, 76, 0.18),
+    0 0 0 1px var(--border-subtle);
 }
 .tname {
   font-size: 14px;
   font-weight: 600;
-  color: #33334c;
+  color: var(--text);
   margin-top: 4px;
 }
 .thint {
   font-size: 12px;
-  color: #9a9aa8;
+  color: var(--text-muted);
 }
 .tabs {
   display: flex;
   gap: 4px;
   margin-bottom: 16px;
-  border-bottom: 1px solid rgba(51, 51, 76, 0.1);
+  border-bottom: 1px solid var(--border);
 }
 .tabs button {
   display: inline-flex;
@@ -279,15 +288,15 @@ h2 {
   background: transparent;
   padding: 9px 12px;
   cursor: pointer;
-  color: #6a6a80;
+  color: var(--text-soft);
   font-size: 15px;
   font-weight: 500;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
 }
 .tabs button.on {
-  color: #29297e;
-  border-bottom-color: #4a72b0;
+  color: var(--brand);
+  border-bottom-color: var(--accent);
 }
 .grid {
   display: grid;
@@ -305,34 +314,39 @@ h2 {
   padding: 0;
   cursor: pointer;
   border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(51, 51, 76, 0.1);
+  box-shadow:
+    0 4px 16px rgba(51, 51, 76, 0.1),
+    0 0 0 1px var(--border-subtle);
   transition:
     transform 0.12s ease,
     box-shadow 0.12s ease;
 }
 .open:hover {
   transform: translateY(-3px);
-  box-shadow: 0 10px 26px rgba(51, 51, 76, 0.18);
+  box-shadow:
+    0 10px 26px rgba(51, 51, 76, 0.18),
+    0 0 0 1px var(--border-subtle);
 }
 .card.current .open {
   box-shadow:
-    0 0 0 2px #4a72b0,
-    0 6px 18px rgba(74, 114, 176, 0.28);
+    0 0 0 2px var(--accent),
+    0 6px 18px var(--accent-shadow);
 }
 .fav {
   position: absolute;
   top: 8px;
   right: 8px;
   border: none;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--surface);
   backdrop-filter: blur(4px);
   border-radius: 50%;
   width: 28px;
   height: 28px;
   display: grid;
   place-items: center;
-  color: #9a9aa8;
+  color: var(--text-muted);
   cursor: pointer;
+  box-shadow: 0 0 0 1px var(--border-subtle);
 }
 .fav.on {
   color: #e8b22c;
@@ -354,7 +368,7 @@ h2 {
   text-align: left;
   font-size: 14px;
   font-weight: 600;
-  color: #33334c;
+  color: var(--text);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -363,12 +377,13 @@ h2 {
 .rename {
   flex: 1;
   min-width: 0;
-  border: 1px solid #4a72b0;
+  border: 1px solid var(--accent);
   border-radius: 6px;
   padding: 3px 6px;
   font-size: 14px;
   font-weight: 600;
-  color: #33334c;
+  color: var(--text);
+  background: var(--surface);
   font-family: inherit;
   outline: none;
 }
@@ -376,18 +391,18 @@ h2 {
   flex-shrink: 0;
   border: none;
   background: transparent;
-  color: #9a9aa8;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 3px;
   border-radius: 7px;
 }
 .more:hover {
-  background: rgba(51, 51, 76, 0.08);
-  color: #33334c;
+  background: var(--surface-sunken);
+  color: var(--text);
 }
 .date {
   font-size: 12px;
-  color: #9a9aa8;
+  color: var(--text-muted);
 }
 .menu {
   display: flex;
@@ -404,22 +419,22 @@ h2 {
   border-radius: 9px;
   padding: 9px 10px;
   cursor: pointer;
-  color: #33334c;
+  color: var(--text);
   font-size: 14px;
   text-align: left;
 }
 .menu-item:hover {
-  background: rgba(74, 114, 176, 0.1);
+  background: var(--accent-wash-2);
 }
 .menu-item.danger {
-  color: #b73b3a;
+  color: var(--danger);
 }
 .menu-item.danger:hover {
-  background: rgba(183, 59, 58, 0.1);
+  background: var(--danger-wash);
 }
 .sep {
   height: 1px;
-  background: rgba(51, 51, 76, 0.1);
+  background: var(--border);
   margin: 5px 8px;
 }
 .empty {
@@ -428,19 +443,85 @@ h2 {
   align-items: center;
   gap: 10px;
   padding: 60px 20px;
-  color: #9a9aa8;
+  color: var(--text-muted);
 }
 .empty p {
   margin: 0;
   font-size: 14px;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 720px) {
+  .bar {
+    gap: 10px;
+    padding: 10px 14px;
+    padding-top: max(10px, env(safe-area-inset-top));
+  }
+  .back {
+    /* Icon-only, but keep it a comfortable tap target. */
+    padding: 10px 12px;
+  }
   .back span {
     display: none;
   }
+  .search {
+    max-width: none;
+    padding: 10px 12px;
+  }
+  .search input {
+    font-size: 16px;
+  }
   .scroll {
-    padding: 18px 14px 60px;
+    padding: 18px 16px calc(60px + env(safe-area-inset-bottom));
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+  h1 {
+    margin: 4px 0 18px;
+    font-size: 22px;
+  }
+  /* Templates scroll horizontally rather than cramming into a clipped grid. */
+  .templates {
+    display: flex;
+    grid-template-columns: none;
+    gap: 12px;
+    margin-bottom: 28px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 6px;
+    margin-left: -2px;
+    margin-right: -2px;
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+  .template {
+    flex: 0 0 132px;
+    scroll-snap-align: start;
+  }
+  .tabs button {
+    flex: 1;
+    justify-content: center;
+    font-size: 15px;
+    padding: 11px 8px;
+  }
+  /* Two roomy columns that fill the width with proper gutters. */
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+  .fav {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+@media (max-width: 420px) {
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  .template {
+    flex-basis: 150px;
   }
 }
 </style>

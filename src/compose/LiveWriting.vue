@@ -24,11 +24,13 @@ const emit = defineEmits<{ (e: 'stop'): void }>()
   align-items: center;
   gap: 10px;
   padding: 8px 10px 8px 8px;
+  /* An intentionally dark glass pill in both themes so it floats over bright paper. */
   background: rgba(31, 31, 40, 0.92);
   backdrop-filter: blur(10px);
   border-radius: 999px;
-  box-shadow: 0 10px 30px rgba(31, 31, 40, 0.32);
+  box-shadow: var(--pop-shadow);
   color: #fff;
+  max-width: min(92vw, 420px);
 }
 .orb {
   position: relative;
@@ -37,14 +39,15 @@ const emit = defineEmits<{ (e: 'stop'): void }>()
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #4a72b0, #7e3f8a);
+  background: var(--accent-grad);
   color: #fff;
+  flex-shrink: 0;
 }
 .pulse {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: linear-gradient(135deg, #4a72b0, #7e3f8a);
+  background: var(--accent-grad);
   animation: pulse 1.4s ease-out infinite;
 }
 @keyframes pulse {
@@ -103,5 +106,12 @@ const emit = defineEmits<{ (e: 'stop'): void }>()
 }
 .stop:hover {
   background: rgba(255, 255, 255, 0.26);
+}
+
+@media (max-width: 720px) {
+  .stop {
+    padding: 8px 16px;
+    font-size: 14px;
+  }
 }
 </style>
