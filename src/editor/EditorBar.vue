@@ -223,16 +223,20 @@ function addPage() {
           title="Width"
           @input="settings.setWidth(Number(($event.target as HTMLInputElement).value))"
         />
-        <Popover align="center">
-          <template #trigger>
-            <button class="ink" title="Ink colour">
-              <span class="ink-dot" :style="{ background: settings.activeColor }" />
-            </button>
-          </template>
-          <template #default>
-            <ColorPicker :model-value="settings.activeColor" @update:model-value="settings.selectColor" />
-          </template>
-        </Popover>
+        <!-- The ink colour has no meaning while erasing, so it dissolves away when the
+             eraser is picked up and pops back cutely for any inking tool. -->
+        <Transition name="dissolve">
+          <Popover v-if="settings.activeTool !== 'eraser'" align="center">
+            <template #trigger>
+              <button class="ink" title="Ink colour">
+                <span class="ink-dot" :style="{ background: settings.activeColor }" />
+              </button>
+            </template>
+            <template #default>
+              <ColorPicker :model-value="settings.activeColor" @update:model-value="settings.selectColor" />
+            </template>
+          </Popover>
+        </Transition>
       </div>
     </template>
   </div>
@@ -395,6 +399,31 @@ function addPage() {
   box-shadow:
     inset 0 0 0 1px var(--border),
     0 1px 3px rgba(51, 51, 76, 0.2);
+}
+
+/* The ink colour decomposes when the eraser is chosen and springs back for any other
+   tool — a small, deliberate flourish so the change is felt, not just seen. */
+.dissolve-enter-active {
+  transition:
+    opacity 0.24s ease,
+    transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+    filter 0.24s ease;
+}
+.dissolve-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease,
+    filter 0.18s ease;
+}
+.dissolve-enter-from {
+  opacity: 0;
+  transform: scale(0.3) rotate(-14deg);
+  filter: blur(3px);
+}
+.dissolve-leave-to {
+  opacity: 0;
+  transform: scale(0.3) rotate(10deg);
+  filter: blur(3px);
 }
 
 .menu {
