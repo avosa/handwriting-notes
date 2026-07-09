@@ -76,14 +76,20 @@ defineExpose({
 
 <style scoped>
 .editable {
+  position: relative;
   outline: none;
   white-space: pre-wrap;
   overflow-wrap: break-word;
   min-height: 1em;
   cursor: text;
 }
+/* The hint is absolutely placed so it never pushes the caret; the caret rests at the
+   start of the line, and the hint sits behind it. */
 .editable.empty::before {
   content: attr(data-placeholder);
+  position: absolute;
+  left: 0;
+  top: 0;
   color: rgba(51, 51, 76, 0.32);
   pointer-events: none;
 }

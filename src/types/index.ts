@@ -145,12 +145,26 @@ export type Block =
   | { id: string; type: 'callouts'; boxes: CalloutBox[]; caption?: string }
   | { id: string; type: 'diagram'; spec: DiagramSpec; heightRules: number }
 
+/**
+ * A line of writing placed anywhere on the page, the way you would jot a note beside a
+ * figure. It sits at a position in millimetres with no box around it, just handwriting.
+ */
+export interface FreeText {
+  id: string
+  x: number
+  y: number
+  runs: TextRun[]
+  color?: string
+}
+
 export interface Page {
   id: string
   index: number
   presetId: string
   blocks: Block[]
   strokes: Stroke[]
+  /** Free notes placed anywhere on the page, over and around the flowing content. */
+  notes?: FreeText[]
 }
 
 export interface NoteDocument {

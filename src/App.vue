@@ -136,10 +136,12 @@ function addPage() {
           <button @click="pageAction((i) => documentStore.setActivePage(documentStore.duplicatePage(i)))">
             <Icon name="copy" :size="17" /><span>Duplicate page</span>
           </button>
-          <div class="sep" />
-          <button class="danger" @click="pageAction((i) => documentStore.deletePage(i))">
-            <Icon name="trash" :size="17" /><span>Delete page</span>
-          </button>
+          <template v-if="pageCount > 1">
+            <div class="sep" />
+            <button class="danger" @click="pageAction((i) => documentStore.deletePage(i))">
+              <Icon name="trash" :size="17" /><span>Delete page</span>
+            </button>
+          </template>
         </div>
       </div>
     </Transition>

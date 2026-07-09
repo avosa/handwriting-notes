@@ -6,11 +6,12 @@
 // and the ink all line up exactly.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Page } from '@/types'
-import { getPreset } from '@/paper/sheetSpec'
+import { getPreset, ruleYsForHeight } from '@/paper/sheetSpec'
 import { textMetrics } from './alignment'
 import { useDocument } from '@/store/document'
 import Sheet from '@/paper/Sheet.vue'
 import TextLayer from './TextLayer.vue'
+import FreeTextLayer from './FreeTextLayer.vue'
 import InkLayer from './InkLayer.vue'
 
 const props = defineProps<{
@@ -22,19 +23,21 @@ const props = defineProps<{
 
 const documentStore = useDocument()
 
-// Clicking or tapping the blank part of the page starts a line there, so a writer can
-// point at where they want to write instead of pressing Enter to reach it.
+// Clicking or tapping a blank part of the page starts writing right there, snapped to
+// the nearest ruled line, so a writer can annotate a figure or jot in a margin instead
+// of being confined to the flowing column.
 function onPageClick(event: MouseEvent) {
   if (props.mode !== 'write') return
   const target = event.target as HTMLElement
-  if (target.closest('.editable, .cell, .diagram-slot, .table-slot, .callouts-slot')) return
-  const blocks = props.page.blocks
-  const last = blocks[blocks.length - 1]
-  if (last && last.type === 'text' && last.text.runs.every((r) => r.text === '')) {
-    documentStore.requestFocus(last.id)
-  } else {
-    documentStore.addParagraphAfter(last ? last.id : null, 'body')
-  }
+  if (target.closest('.editable, .cell')) return
+  const rect = root.value?.getBoundingClientRect()
+  if (!rect) return
+  const p = preset.value
+  const xMm = Math.min(Math.max((event.clientX - rect.left) / pxPerMm.value, p.text.left), p.text.right - 6)
+  const clickYMm = (event.clientY - rect.top) / pxPerMm.value
+  const rules = ruleYsForHeight(p, heightMm.value)
+  const line = rules.reduce((best, y) => (Math.abs(y - clickYMm) < Math.abs(best - clickYMm) ? y : best), rules[0])
+  documentStore.addNote(props.pageIndex, xMm, line)
 }
 
 const preset = computed(() => getPreset(props.page.presetId))
@@ -83,6 +86,13 @@ onBeforeUnmount(() => observer?.disconnect())
       :metrics="metrics"
       :px-per-mm="pxPerMm"
       :editable="mode === 'write'"
+    />
+    <FreeTextLayer
+      v-if="mode === 'write'"
+      :page="page"
+      :page-index="pageIndex"
+      :metrics="metrics"
+      :px-per-mm="pxPerMm"
     />
     <InkLayer
       class="layer"
