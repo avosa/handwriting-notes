@@ -21,6 +21,8 @@ interface DocumentState {
   past: string[]
   /** Undone states, for redo. */
   future: string[]
+  /** True when the whole note is selected, so an action can apply to all of it. */
+  allSelected: boolean
 }
 
 // The state the history compares against; kept out of the reactive store since it is a
@@ -44,6 +46,7 @@ export const useDocument = defineStore('document', {
     writingBlockId: null,
     past: [],
     future: [],
+    allSelected: false,
   }),
   getters: {
     canUndo: (state) => state.past.length > 0,
@@ -66,7 +69,40 @@ export const useDocument = defineStore('document', {
       this.doc.title = title
       this.touch()
     },
+    // Every run of text in the note, so an action can touch the whole thing at once.
+    allRunArrays(): TextRun[][] {
+      const arrays: TextRun[][] = []
+      for (const page of this.doc.pages) {
+        for (const block of page.blocks) {
+          if (block.type === 'text') arrays.push(block.text.runs)
+          else if (block.type === 'list') arrays.push(...block.items)
+          else if (block.type === 'callouts') for (const box of block.boxes) arrays.push(box.heading, ...box.items)
+        }
+        for (const note of page.notes ?? []) arrays.push(note.runs)
+      }
+      return arrays
+    },
+    selectWholeNote() {
+      this.allSelected = true
+    },
+    clearWholeNote() {
+      this.allSelected = false
+    },
+    // Apply an emphasis across the whole note, turning it off if every run already has it.
+    applyMarkToAll(mark: 'bold' | 'italic' | 'underline') {
+      const arrays = this.allRunArrays()
+      const runs = arrays.flat().filter((r) => r.text.trim())
+      if (!runs.length) return
+      const turnOff = runs.every((r) => r[mark])
+      for (const array of arrays) for (const run of array) run[mark] = turnOff ? undefined : true
+      this.touch()
+    },
+    setColorForAll(color: string) {
+      for (const array of this.allRunArrays()) for (const run of array) run.color = color
+      this.touch()
+    },
     select(blockId: string | null) {
+      this.allSelected = false
       this.selectedBlockId = blockId
     },
     locate(blockId: string): BlockLocation | null {

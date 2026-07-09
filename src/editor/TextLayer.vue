@@ -179,6 +179,7 @@ function updateRuns(blockId: string, runs: TextRun[]) {
         @focus="onFocusBlock(block.id)"
         @enter="onParagraphEnter(block)"
         @empty-backspace="onParagraphBackspace(block)"
+        @select-all-note="documentStore.selectWholeNote()"
       />
 
       <ol v-else-if="block.type === 'list'" class="list" :class="{ bullets: !block.ordered }" :style="listStyle()">
@@ -192,6 +193,7 @@ function updateRuns(blockId: string, runs: TextRun[]) {
             @focus="onFocusBlock(block.id)"
             @enter="onListEnter(block, i)"
             @empty-backspace="onListBackspace(block, i)"
+            @select-all-note="documentStore.selectWholeNote()"
           />
         </li>
       </ol>

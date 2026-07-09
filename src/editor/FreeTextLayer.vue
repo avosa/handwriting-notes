@@ -78,6 +78,7 @@ function updateRuns(noteId: string, runs: TextRun[]) {
       @update:model-value="updateRuns(note.id, $event)"
       @enter="onEnter(note)"
       @empty-backspace="onBackspace(note)"
+      @select-all-note="documentStore.selectWholeNote()"
     />
   </div>
 </template>

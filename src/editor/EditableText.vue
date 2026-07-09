@@ -14,6 +14,7 @@ const emit = defineEmits<{
   (e: 'empty-backspace'): void
   (e: 'focus'): void
   (e: 'blur'): void
+  (e: 'select-all-note'): void
 }>()
 
 const el = ref<HTMLElement | null>(null)
@@ -52,10 +53,14 @@ function selectAll() {
 }
 
 function onKeydown(event: KeyboardEvent) {
-  // Select the whole line reliably, even across the runs' nested spans.
+  // Select the whole line; a second press, when the line is already fully selected,
+  // reaches for the whole note instead.
   if ((event.key === 'a' || event.key === 'A') && (event.metaKey || event.ctrlKey)) {
     event.preventDefault()
-    selectAll()
+    const full = plainText(model.value).length
+    const selected = window.getSelection()?.toString().length ?? 0
+    if (full > 0 && selected >= full) emit('select-all-note')
+    else selectAll()
     return
   }
   if (event.key === 'Enter' && !event.shiftKey) {

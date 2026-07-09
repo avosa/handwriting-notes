@@ -36,3 +36,12 @@ body {
 button {
   font-family: inherit;
 }
+
+/* When the whole note is selected, every line and cell is washed with the selection
+   tint so the reach of a whole-note action reads at a glance. */
+.all-selected .editable,
+.all-selected .cell {
+  background: rgba(74, 114, 176, 0.2);
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(74, 114, 176, 0.12);
+}

@@ -11,6 +11,7 @@ import { useClaude } from './compose/useClaude'
 import NotePage from './editor/NotePage.vue'
 import EditorBar from './editor/EditorBar.vue'
 import SelectionMenu from './editor/SelectionMenu.vue'
+import WholeNoteBar from './editor/WholeNoteBar.vue'
 import ComposeSheet from './compose/ComposeSheet.vue'
 import LiveWriting from './compose/LiveWriting.vue'
 import ApiKeyDialog from './ui/ApiKeyDialog.vue'
@@ -88,6 +89,10 @@ function fit() {
 // Undo and redo with the usual keys. Real inputs keep their own undo; the handwriting
 // blocks are contenteditable, so those use the note's history instead.
 function onKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && documentStore.allSelected) {
+    documentStore.clearWholeNote()
+    return
+  }
   const meta = event.metaKey || event.ctrlKey
   if (!meta || (event.key.toLowerCase() !== 'z' && event.key.toLowerCase() !== 'y')) return
   const tag = (document.activeElement as HTMLElement | null)?.tagName
@@ -96,6 +101,11 @@ function onKeydown(event: KeyboardEvent) {
   const redo = event.key.toLowerCase() === 'y' || (event.key.toLowerCase() === 'z' && event.shiftKey)
   if (redo) documentStore.redo()
   else documentStore.undo()
+}
+
+function askAiWholeNote() {
+  documentStore.clearWholeNote()
+  showCompose.value = true
 }
 
 onMounted(fit)
@@ -183,7 +193,7 @@ function addPage() {
       </div>
     </header>
 
-    <main class="stack">
+    <main class="stack" :class="{ 'all-selected': documentStore.allSelected }">
       <div
         v-for="(page, i) in documentStore.doc.pages"
         :key="page.id"
@@ -238,6 +248,9 @@ function addPage() {
     </Transition>
 
     <SelectionMenu />
+    <Transition name="toast">
+      <WholeNoteBar v-if="documentStore.allSelected" @ask-ai="askAiWholeNote" @clear="documentStore.clearWholeNote()" />
+    </Transition>
     <ComposeSheet
       v-if="showCompose"
       :has-content="noteHasContent"
