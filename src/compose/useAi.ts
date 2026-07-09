@@ -10,6 +10,10 @@ import { BlockStreamer } from '@/ai/blockStreamer'
 import { stripDashes } from '@/ai/noteLint'
 import { systemPrompt } from '@/ai/systemPrompt'
 import { getProvider } from '@/ai/providers'
+import { parseEdits, isEditReply, type EditOp } from '@/ai/editOps'
+import { commonPrefixLength } from '@/util/textDiff'
+import { plainText } from '@/ui/richText'
+import { uid } from '@/util/id'
 import { loadApiKey } from '@/store/persistence'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
@@ -55,6 +59,18 @@ export function slicedRuns(runs: TextRun[], n: number): TextRun[] {
 
 function runLength(runs: TextRun[]): number {
   return runs.reduce((sum, r) => sum + r.text.length, 0)
+}
+
+// Lift the JSON object out of a reply, ignoring any stray text around it.
+function parseJson(raw: string): unknown {
+  const start = raw.indexOf('{')
+  const end = raw.lastIndexOf('}')
+  if (start === -1 || end <= start) return null
+  try {
+    return JSON.parse(raw.slice(start, end + 1))
+  } catch {
+    return null
+  }
 }
 
 type DocStore = ReturnType<typeof useDocument>
@@ -126,6 +142,117 @@ function toolFor(block: Block, prevRole: string): string | null {
   return block.type
 }
 
+// The pace the eraser rubs a line out at, from the first character that changed rather than
+// the whole line, slow enough to watch the rubbing happen.
+const ERASE_CHARS_PER_TICK = 3
+const ERASE_TICK_MS = 26
+// The beat where the AI picks up the eraser and brings it to the line before rubbing, so a
+// correction reads as a deliberate act even when only a few characters are wrong.
+const ERASE_BEAT_MS = 460
+
+// Correct a line the way a person would: rub out from the first character that changed to the
+// end, then write the corrected words back in their place. The unchanged start is left alone,
+// so only what was wrong is erased. The ghost cursor holds the eraser while it rubs out and
+// the pen while it writes.
+async function eraseAndRewrite(
+  store: DocStore,
+  blockId: string,
+  oldRuns: TextRun[],
+  newRuns: TextRun[],
+  signal: AbortSignal,
+) {
+  store.setWritingBlock(blockId)
+  const oldText = plainText(oldRuns)
+  const newText = plainText(newRuns)
+  const keep = commonPrefixLength(oldText, newText)
+
+  if (oldText.length > keep) {
+    store.setAiTool('eraser')
+    await sleep(ERASE_BEAT_MS)
+    for (let n = oldText.length - ERASE_CHARS_PER_TICK; n > keep; n -= ERASE_CHARS_PER_TICK) {
+      if (signal.aborted) return
+      store.setRuns(blockId, slicedRuns(oldRuns, n))
+      await sleep(ERASE_TICK_MS)
+    }
+    store.setRuns(blockId, slicedRuns(newRuns, keep))
+  }
+
+  store.setAiTool(null)
+  if (newText.length > keep) {
+    for (let n = keep + TYPE_CHARS_PER_TICK; n < newText.length; n += TYPE_CHARS_PER_TICK) {
+      if (signal.aborted) return
+      store.setRuns(blockId, slicedRuns(newRuns, n))
+      await sleep(TYPE_TICK_MS)
+    }
+  }
+  store.setRuns(blockId, newRuns)
+}
+
+// Rub a whole block out before it is removed, so a deletion is seen happening rather than the
+// line just vanishing.
+async function eraseBlock(store: DocStore, blockId: string, block: Block, signal: AbortSignal) {
+  store.setWritingBlock(blockId)
+  store.setAiTool('eraser')
+  await sleep(ERASE_BEAT_MS)
+  if (block.type === 'text') {
+    const runs = block.text.runs
+    const total = runLength(runs)
+    for (let n = total; n > 0; n -= ERASE_CHARS_PER_TICK) {
+      if (signal.aborted) return
+      store.setRuns(blockId, slicedRuns(runs, Math.max(0, n)))
+      await sleep(ERASE_TICK_MS)
+    }
+  } else if (!signal.aborted) {
+    await sleep(FIGURE_BEAT_MS)
+  }
+  store.setAiTool(null)
+}
+
+// Write a fresh block into a chosen spot, typed in the same as any new line, so an added line
+// reads as being written where it belongs.
+async function typeInsertedBlock(store: DocStore, afterId: string, block: Block, signal: AbortSignal): Promise<string> {
+  if (block.type === 'text') {
+    const id = store.insertAfter(afterId, { ...block, id: uid('b'), text: { ...block.text, runs: [{ text: '' }] } })
+    store.setWritingBlock(id)
+    await typeRuns(store, id, block.text.runs, signal)
+    return id
+  }
+  if (block.type === 'list') {
+    const id = store.insertAfter(afterId, { ...block, id: uid('b'), items: [[{ text: '' }]] })
+    store.setWritingBlock(id)
+    await typeList(store, id, block.items, signal)
+    return id
+  }
+  const id = store.insertAfter(afterId, { ...block, id: uid('b') })
+  store.setWritingBlock(id)
+  if (!signal.aborted) await sleep(block.type === 'diagram' ? DIAGRAM_DRAW_MS : FIGURE_BEAT_MS)
+  return id
+}
+
+// Act out each correction the model asked for, on the exact line it named, leaving every
+// other line untouched.
+async function applyEdits(store: DocStore, edits: EditOp[], signal: AbortSignal) {
+  for (const edit of edits) {
+    if (signal.aborted) return
+    if (edit.op === 'replace') {
+      const loc = store.locate(edit.id)
+      if (loc?.block.type === 'text') await eraseAndRewrite(store, edit.id, loc.block.text.runs, edit.runs, signal)
+    } else if (edit.op === 'delete') {
+      const loc = store.locate(edit.id)
+      if (loc) {
+        await eraseBlock(store, edit.id, loc.block, signal)
+        store.removeBlock(edit.id)
+      }
+    } else if (edit.op === 'insertAfter') {
+      let afterId = edit.id
+      for (const block of edit.blocks) {
+        if (signal.aborted) return
+        afterId = await typeInsertedBlock(store, afterId, block, signal)
+      }
+    }
+  }
+}
+
 const REWRITE_SYSTEM =
   'Rewrite the one line of notes the user gives, following their instruction. Reply with only the rewritten line, no quotes and no preamble. Never use a hyphen or dash as punctuation.'
 
@@ -154,6 +281,47 @@ export function useAi() {
     controller?.abort()
   }
 
+  // Work on the note that is open: correct the lines that need it in place and add any new
+  // ones where they belong, acting each change out so it is seen being made and never wiping
+  // what is already there. The whole reply is read before anything moves, so a change only
+  // lands once the model has decided all of them.
+  async function reviseNote(
+    instruction: string,
+    attachments: Attachment[],
+    context: string,
+    provider: ReturnType<typeof getProvider>,
+    key: string,
+  ): Promise<boolean> {
+    generating.value = true
+    phase.value = 'thinking'
+    controller = new AbortController()
+    const signal = controller.signal
+    documentStore.beginAiEdit()
+    try {
+      const palette = getHandwriting(settings.activeHandwritingId).palette
+      const prompt = `Work on my current notes below. Each editable line is tagged with its id in square brackets. Reply with ONLY a JSON object of edits, no prose:\n{ "edits": [ Edit, ... ] }\nAn Edit is one of:\n{ "op": "replace", "id": string, "content": Run[] | string }   // rewrite that one line, keeping what is right\n{ "op": "delete", "id": string }                               // remove that line\n{ "op": "insertAfter", "id": string, "blocks": Block[] }        // add new lines after that one\nChange only what I ask. To clear a stray highlight, replace the line with the same words and no highlight. Do not touch lines that are already correct.\n\nMY CURRENT NOTES:\n\n${context}\n\n---\n\nMY INSTRUCTION:\n\n${instruction}`
+      const request = { system: systemPrompt(palette), prompt, attachments, maxTokens: 8000 }
+      let raw = ''
+      for await (const text of provider.stream(request, key, signal)) raw += text
+      phase.value = 'writing'
+      const parsed = parseJson(raw)
+      if (!isEditReply(parsed)) throw new Error(`${provider.name} did not return any changes to make.`)
+      const edits = parseEdits(parsed)
+      if (!edits.length) throw new Error(`${provider.name} did not return any changes to make.`)
+      await applyEdits(documentStore, edits, signal)
+      return true
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return true
+      error.value = reason(e, provider.name, 'The notes could not be changed.')
+      return false
+    } finally {
+      documentStore.endAi()
+      generating.value = false
+      phase.value = null
+      controller = null
+    }
+  }
+
   async function generate(instruction: string, attachments: Attachment[], context?: string): Promise<boolean> {
     error.value = null
     const provider = getProvider(settings.activeProvider)
@@ -162,6 +330,10 @@ export function useAi() {
       error.value = `Add your ${provider.vendor} API key first, using the key button.`
       return false
     }
+
+    // Working on the current note goes through the editor, which corrects lines in place and
+    // adds new ones without disturbing the rest. A brand new note streams straight onto a page.
+    if (context) return reviseNote(instruction, attachments, context, provider, key)
 
     generating.value = true
     phase.value = 'thinking'
@@ -260,5 +432,25 @@ export function useAi() {
     }
   }
 
-  return { generating, phase, providerName, error, generate, stop, rewriteLine, refining }
+  // Fix one line the writer picked, in place, with the same eraser and pen a whole note
+  // correction uses. Only a paragraph is animated this way; the caller drops other kinds of
+  // line back in as before.
+  async function refineBlock(blockId: string, instruction: string): Promise<boolean> {
+    const loc = documentStore.locate(blockId)
+    if (!loc || loc.block.type !== 'text') return false
+    const oldRuns = loc.block.text.runs
+    const newText = await rewriteLine(plainText(oldRuns), instruction)
+    if (newText === null) return false
+    controller = new AbortController()
+    documentStore.beginAiEdit()
+    try {
+      await eraseAndRewrite(documentStore, blockId, oldRuns, [{ text: newText }], controller.signal)
+      return true
+    } finally {
+      documentStore.endAi()
+      controller = null
+    }
+  }
+
+  return { generating, phase, providerName, error, generate, stop, rewriteLine, refineBlock, refining }
 }

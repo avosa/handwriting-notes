@@ -70,8 +70,8 @@ function drawerSave(kind: 'pdf' | 'docx') {
 async function onSubmit(instruction: string, attachments: Attachment[], useCurrent: boolean) {
   let context: string | undefined
   if (useCurrent) {
-    const { noteToText } = await import('./ai/noteContext')
-    context = noteToText(documentStore.doc)
+    const { noteToAddressableText } = await import('./ai/noteContext')
+    context = noteToAddressableText(documentStore.doc)
   } else if (noteHasContent.value) {
     await newNote()
   }

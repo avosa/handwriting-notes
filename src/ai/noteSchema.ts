@@ -19,7 +19,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 // A run may arrive as a plain string or as a marked object; normalise either, and
 // clean dashes out of generated prose.
-function adoptRuns(value: unknown): TextRun[] {
+export function adoptRuns(value: unknown): TextRun[] {
   if (typeof value === 'string') return [{ text: stripDashes(value) }]
   if (Array.isArray(value)) {
     const runs = value

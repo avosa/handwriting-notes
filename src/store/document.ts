@@ -519,6 +519,24 @@ export const useDocument = defineStore('document', {
       this.touch()
     },
 
+    // The AI correcting the note in place: nothing on the page is cleared. The note as it
+    // stands is kept as an undo point, so any change the writer dislikes is one undo away,
+    // then the edits are acted out on the exact lines that need them.
+    beginAiEdit() {
+      this.generating = true
+      this.writingBlockId = null
+      this.aiTool = null
+      const snapshot = JSON.stringify(this.doc)
+      this.past.push(snapshot)
+      if (this.past.length > HISTORY_LIMIT) this.past.shift()
+      this.future = []
+      baseline = snapshot
+    },
+    // The line the AI is working on right now, so the ghost cursor and caret sit on it while
+    // it is erased and rewritten.
+    setWritingBlock(blockId: string | null) {
+      this.writingBlockId = blockId
+    },
     // The AI writing live: dropping blocks onto the page as they arrive and keeping the caret
     // on the newest one so the writing is seen happening. A blank page is written into
     // directly, so a new note fills from its first line; a page that already holds writing

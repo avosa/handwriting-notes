@@ -14,7 +14,7 @@ import ColorPicker from '@/ui/ColorPicker.vue'
 
 const documentStore = useDocument()
 const settings = useSettings()
-const { rewriteLine, refining, error } = useAi()
+const { rewriteLine, refineBlock, refining, error } = useAi()
 
 const visible = ref(false)
 const x = ref(0)
@@ -101,6 +101,20 @@ async function startAsk() {
 }
 async function sendAsk() {
   if (!askText.value.trim() || refining.value) return
+
+  // A whole paragraph is corrected in place, erased and rewritten so the change is seen being
+  // made. A list item, table cell, or free note drops the reply straight back into its line.
+  const blockId = documentStore.selectedBlockId
+  if (!asking.value) return
+  if (blockId && documentStore.selectedBlock?.type === 'text') {
+    const ok = await refineBlock(blockId, askText.value.trim())
+    if (!ok) return
+    asking.value = false
+    visible.value = false
+    litOff()
+    return
+  }
+
   if (!litLine) {
     error.value = 'Select a line first.'
     return
@@ -109,8 +123,6 @@ async function sendAsk() {
   const rewritten = await rewriteLine(original, askText.value.trim())
   if (rewritten === null) return // The error is shown in the bar; the line stays lit.
 
-  // Drop the reply straight into the same editable and let it sync to the note, so this
-  // works the same whether the line is a paragraph, a list item, a cell, or a free note.
   litLine.textContent = rewritten
   litLine.dispatchEvent(new InputEvent('input', { bubbles: true }))
   asking.value = false

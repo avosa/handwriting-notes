@@ -3,7 +3,7 @@
 // beside the line being typed, then glides up to the real toolbar and presses a control
 // before the AI uses it, so choosing a heading or opening the insert menu is seen happening
 // the way a person would do it. It only shows during a run and never takes the pointer.
-import { ref, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useDocument } from '@/store/document'
 
 const store = useDocument()
@@ -11,9 +11,11 @@ const x = ref(0)
 const y = ref(0)
 const visible = ref(false)
 const clicking = ref(false)
+// Holding the eraser: the cursor swaps to a rubber and stays on the line it is rubbing out.
+const erasing = computed(() => store.aiTool === 'eraser')
 
-// Role controls all live under one pill; inserts under another. Everything else rests by the
-// writing line, so the cursor always has somewhere sensible to be.
+// Role controls all live under one pill; inserts under another. The eraser and everything
+// else rest by the line being worked on, so the cursor always has somewhere sensible to be.
 const ROLE_TOOLS = new Set(['title', 'subtitle', 'heading', 'subheading', 'caption', 'body'])
 function selectorFor(tool: string): string {
   return ROLE_TOOLS.has(tool) ? '[data-ai-tool="role"]' : '[data-ai-tool="insert"]'
@@ -53,7 +55,8 @@ let clickTimer: ReturnType<typeof setTimeout> | undefined
 watch(
   () => store.aiTool,
   (tool) => {
-    if (tool) {
+    // The eraser stays on the line it is rubbing out; a dock tool is glided to and pressed.
+    if (tool && tool !== 'eraser') {
       moveToSelector(selectorFor(tool))
       clicking.value = false
       requestAnimationFrame(() => {
@@ -86,9 +89,23 @@ watch(
 <template>
   <Teleport to="body">
     <Transition name="ghost-fade">
-      <div v-if="visible" class="ai-cursor" :style="{ transform: `translate(${x}px, ${y}px)` }">
+      <div v-if="visible" class="ai-cursor" :class="{ erasing }" :style="{ transform: `translate(${x}px, ${y}px)` }">
         <span class="ripple" :class="{ on: clicking }" />
-        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+        <svg v-if="erasing" viewBox="0 0 24 24" width="27" height="27" aria-hidden="true">
+          <rect
+            x="2.5"
+            y="12"
+            width="15"
+            height="8"
+            rx="1.6"
+            transform="rotate(-42 10 16)"
+            fill="#f4b8c4"
+            stroke="#33334c"
+            stroke-width="1.4"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <svg v-else viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
           <path
             d="M4 2 L4 20 L9 15 L12.5 22 L15 21 L11.5 14 L18 14 Z"
             fill="#33334c"
@@ -124,6 +141,19 @@ watch(
   transform: translate(-50%, -50%);
   background: var(--accent, #4a72b0);
   opacity: 0;
+}
+/* While the eraser is out it rubs back and forth, the way a hand works a rubber. */
+.ai-cursor.erasing svg {
+  animation: rub 0.26s ease-in-out infinite;
+}
+@keyframes rub {
+  0%,
+  100% {
+    transform: translateX(-1px);
+  }
+  50% {
+    transform: translateX(3px);
+  }
 }
 .ripple.on {
   animation: ai-ripple 0.44s ease-out;
