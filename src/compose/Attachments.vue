@@ -6,6 +6,7 @@ import { ref } from 'vue'
 import type { Attachment, AttachmentKind } from '@/types'
 import { putBlob, deleteBlob } from '@/store/persistence'
 import { uid } from '@/util/id'
+import Icon from '@/ui/Icon.vue'
 
 const attachments = defineModel<Attachment[]>({ required: true })
 const dragging = ref(false)
@@ -44,7 +45,7 @@ async function remove(att: Attachment) {
   attachments.value = attachments.value.filter((a) => a.id !== att.id)
 }
 
-const glyph: Record<AttachmentKind, string> = { image: '🖼️', video: '🎬', document: '📄' }
+const glyph: Record<AttachmentKind, string> = { image: 'image', video: 'video', document: 'file' }
 </script>
 
 <template>
@@ -55,7 +56,7 @@ const glyph: Record<AttachmentKind, string> = { image: '🖼️', video: '🎬',
     @dragleave.prevent="dragging = false"
     @drop.prevent="onDrop"
   >
-    <button class="add" title="Attach files" @click="fileInput?.click()">＋ attach</button>
+    <button class="add" title="Attach files" @click="fileInput?.click()"><Icon name="plus" :size="15" /> Attach</button>
     <input
       ref="fileInput"
       class="hidden"
@@ -66,7 +67,7 @@ const glyph: Record<AttachmentKind, string> = { image: '🖼️', video: '🎬',
     />
 
     <div v-for="att in attachments" :key="att.id" class="chip">
-      <span class="glyph">{{ glyph[att.kind] }}</span>
+      <Icon :name="glyph[att.kind]" :size="16" />
       <div class="body">
         <span class="name" :title="att.name">{{ att.name }}</span>
         <textarea
@@ -77,7 +78,7 @@ const glyph: Record<AttachmentKind, string> = { image: '🖼️', video: '🎬',
           placeholder="Paste a transcript (optional)"
         />
       </div>
-      <button class="remove" title="Remove" @click="remove(att)">×</button>
+      <button class="remove" title="Remove" @click="remove(att)"><Icon name="close" :size="14" /></button>
     </div>
   </div>
 </template>
