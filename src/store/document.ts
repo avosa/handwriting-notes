@@ -200,6 +200,12 @@ export const useDocument = defineStore('document', {
       page.strokes = page.strokes.filter((s) => !ids.has(s.id))
       this.touch()
     },
+    replaceStrokes(pageIndex: number, strokes: Stroke[]) {
+      const page = this.doc.pages[pageIndex]
+      if (!page) return
+      page.strokes = strokes
+      this.touch()
+    },
     fillStroke(pageIndex: number, strokeId: string, color: string) {
       const stroke = this.doc.pages[pageIndex]?.strokes.find((s) => s.id === strokeId)
       if (stroke) {

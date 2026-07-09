@@ -12,6 +12,7 @@ const emit = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>()
 const key = ref('')
 const original = ref('')
 const replacing = ref(false)
+const show = ref(false)
 
 const connected = computed(() => !!original.value)
 
@@ -89,9 +90,15 @@ function masked(k: string): string {
       </ol>
 
       <div v-if="connected && !replacing" class="status">
-        <span class="dot" />
-        <span class="masked">{{ masked(original) }}</span>
-        <button class="replace" @click="startReplace">Replace</button>
+        <div class="status-top">
+          <span class="dot" />
+          <span class="masked" :class="{ full: show }">{{ show ? original : masked(original) }}</span>
+        </div>
+        <div class="status-actions">
+          <button class="link" @click="show = !show">{{ show ? 'Hide' : 'Show' }}</button>
+          <span class="dot-sep" />
+          <button class="link" @click="startReplace">Replace</button>
+        </div>
       </div>
 
       <div v-else class="field">
@@ -245,13 +252,17 @@ code {
 }
 .status {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
   padding: 12px 14px;
   border-radius: 12px;
   background: rgba(63, 143, 92, 0.08);
   border: 1px solid rgba(63, 143, 92, 0.2);
-  min-width: 0;
+}
+.status-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 .dot {
   flex-shrink: 0;
@@ -271,19 +282,36 @@ code {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.replace {
-  flex-shrink: 0;
+/* When the full key is shown it wraps within the box instead of overflowing. */
+.masked.full {
+  white-space: normal;
+  overflow: visible;
+  word-break: break-all;
+  line-height: 1.5;
+}
+.status-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 19px;
+}
+.link {
   border: none;
   background: transparent;
   color: #4a72b0;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 7px;
+  padding: 0;
 }
-.replace:hover {
-  background: rgba(74, 114, 176, 0.12);
+.link:hover {
+  text-decoration: underline;
+}
+.dot-sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(51, 51, 76, 0.25);
 }
 .field {
   border: 1px solid rgba(51, 51, 76, 0.2);
