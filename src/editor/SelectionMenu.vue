@@ -14,18 +14,38 @@ import ColorPicker from '@/ui/ColorPicker.vue'
 
 const documentStore = useDocument()
 const settings = useSettings()
-const { refine, refining } = useClaude()
+const { refine, refining, error } = useClaude()
 
 const visible = ref(false)
 const x = ref(0)
 const y = ref(0)
 
 // The ask input keeps the menu open while the writer types, holding onto the line it
-// was opened for even though typing collapses the text selection.
+// was opened for even though moving focus to the input collapses the text selection.
+// The line it will rewrite stays lit the whole time so the target is never in doubt.
 const asking = ref(false)
 const askText = ref('')
 const askBlockId = ref<string | null>(null)
 const askInput = ref<HTMLInputElement | null>(null)
+let litLine: HTMLElement | null = null
+
+function editableAround(node: Node | null): HTMLElement | null {
+  let el = node instanceof Element ? node : (node?.parentElement ?? null)
+  while (el) {
+    if (el.classList?.contains('editable') || el.classList?.contains('cell')) return el as HTMLElement
+    el = el.parentElement
+  }
+  return null
+}
+function litOn(el: HTMLElement | null) {
+  litLine?.classList.remove('ai-asking')
+  litLine = el
+  litLine?.classList.add('ai-asking')
+}
+function litOff() {
+  litLine?.classList.remove('ai-asking')
+  litLine = null
+}
 
 function insideEditor(node: Node | null): boolean {
   let el = node instanceof Element ? node : node?.parentElement
@@ -64,23 +84,32 @@ function makeRole(role: TextRole) {
 }
 
 async function startAsk() {
+  // Capture the line before focus leaves it, and keep it lit while the writer types.
+  const selection = window.getSelection()
+  litOn(editableAround(selection?.anchorNode ?? null))
   askBlockId.value = documentStore.selectedBlockId
   asking.value = true
   askText.value = ''
+  error.value = null
   await nextTick()
   askInput.value?.focus()
 }
 async function sendAsk() {
-  if (!askText.value.trim() || !askBlockId.value) return
+  if (!askText.value.trim() || !askBlockId.value || refining.value) return
   const ok = await refine(askBlockId.value, askText.value.trim())
   if (ok) {
     asking.value = false
     visible.value = false
+    litOff()
   }
+  // On failure the error stays shown in the bar and the line stays lit, so another try
+  // or adding a key can follow without losing the target.
 }
 function cancelAsk() {
   asking.value = false
   visible.value = false
+  error.value = null
+  litOff()
 }
 </script>
 
@@ -139,6 +168,7 @@ function cancelAsk() {
           {{ refining ? '…' : 'Go' }}
         </button>
         <button class="go ghost" @click="cancelAsk"><Icon name="close" :size="15" /></button>
+        <span v-if="error" class="ask-error">{{ error }}</span>
       </template>
     </div>
   </Transition>
@@ -227,6 +257,13 @@ button:hover {
 .go:disabled {
   opacity: 0.5;
   cursor: default;
+}
+.ask-error {
+  flex-basis: 100%;
+  text-align: center;
+  color: #ff9d9b;
+  font-size: 12px;
+  padding: 2px 4px 0;
 }
 .rise-enter-active,
 .rise-leave-active {
