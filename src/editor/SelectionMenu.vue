@@ -14,7 +14,7 @@ import ColorPicker from '@/ui/ColorPicker.vue'
 
 const documentStore = useDocument()
 const settings = useSettings()
-const { refine, refining, error } = useClaude()
+const { rewriteLine, refining, error } = useClaude()
 
 const visible = ref(false)
 const x = ref(0)
@@ -25,8 +25,9 @@ const y = ref(0)
 // The line it will rewrite stays lit the whole time so the target is never in doubt.
 const asking = ref(false)
 const askText = ref('')
-const askBlockId = ref<string | null>(null)
 const askInput = ref<HTMLInputElement | null>(null)
+// The exact line to rewrite, captured as its editable element so the reply can drop back
+// into whatever it is: a paragraph, a list item, a table cell, or a free note.
 let litLine: HTMLElement | null = null
 
 function editableAround(node: Node | null): HTMLElement | null {
@@ -87,7 +88,6 @@ async function startAsk() {
   // Capture the line before focus leaves it, and keep it lit while the writer types.
   const selection = window.getSelection()
   litOn(editableAround(selection?.anchorNode ?? null))
-  askBlockId.value = documentStore.selectedBlockId
   asking.value = true
   askText.value = ''
   error.value = null
@@ -95,15 +95,22 @@ async function startAsk() {
   askInput.value?.focus()
 }
 async function sendAsk() {
-  if (!askText.value.trim() || !askBlockId.value || refining.value) return
-  const ok = await refine(askBlockId.value, askText.value.trim())
-  if (ok) {
-    asking.value = false
-    visible.value = false
-    litOff()
+  if (!askText.value.trim() || refining.value) return
+  if (!litLine) {
+    error.value = 'Select a line first.'
+    return
   }
-  // On failure the error stays shown in the bar and the line stays lit, so another try
-  // or adding a key can follow without losing the target.
+  const original = litLine.textContent ?? ''
+  const rewritten = await rewriteLine(original, askText.value.trim())
+  if (rewritten === null) return // The error is shown in the bar; the line stays lit.
+
+  // Drop the reply straight into the same editable and let it sync to the note, so this
+  // works the same whether the line is a paragraph, a list item, a cell, or a free note.
+  litLine.textContent = rewritten
+  litLine.dispatchEvent(new InputEvent('input', { bubbles: true }))
+  asking.value = false
+  visible.value = false
+  litOff()
 }
 function cancelAsk() {
   asking.value = false
@@ -164,8 +171,9 @@ function cancelAsk() {
           @keydown.enter.prevent="sendAsk"
           @keydown.esc="cancelAsk"
         />
-        <button class="go" :disabled="!askText.trim() || !!refining" @click="sendAsk">
-          {{ refining ? '…' : 'Go' }}
+        <button class="go" :class="{ busy: refining }" :disabled="!askText.trim() || refining" @click="sendAsk">
+          <span v-if="refining" class="spinner" />
+          <span v-else>Go</span>
         </button>
         <button class="go ghost" @click="cancelAsk"><Icon name="close" :size="15" /></button>
         <span v-if="error" class="ask-error">{{ error }}</span>
@@ -212,9 +220,17 @@ button:hover {
   font-size: 13px;
   font-weight: 500;
   background: linear-gradient(135deg, #4a72b0, #7e3f8a);
+  transition:
+    transform 0.1s ease,
+    filter 0.12s ease;
 }
 .ai:hover {
   filter: brightness(1.08);
+}
+/* A quick press-in so a tap plainly registers before the AI answers. */
+.ai:active,
+.go:active:not(:disabled) {
+  transform: scale(0.9);
 }
 .word {
   font-size: 13px;
@@ -245,18 +261,43 @@ button:hover {
   color: rgba(255, 255, 255, 0.5);
 }
 .go {
-  min-width: auto;
+  min-width: 44px;
   font-size: 13px;
-  font-weight: 500;
-  padding: 7px 12px;
+  font-weight: 600;
+  padding: 7px 14px;
+  background: linear-gradient(135deg, #4a72b0, #7e3f8a);
+  transition:
+    transform 0.1s ease,
+    filter 0.12s ease;
+}
+.go:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+.go.busy {
   background: rgba(255, 255, 255, 0.16);
 }
 .go.ghost {
+  min-width: auto;
   padding: 7px 8px;
+  background: rgba(255, 255, 255, 0.12);
 }
 .go:disabled {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: default;
+}
+.spinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .ask-error {
   flex-basis: 100%;

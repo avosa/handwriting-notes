@@ -115,21 +115,24 @@ export function useClaude() {
     }
   }
 
-  // Rewrite one line in place, the way you would ask someone to fix or shorten a
-  // sentence. The reply is plain text, so it drops straight back into the line.
-  const refining = ref<string | null>(null)
-  async function refine(blockId: string, instruction: string): Promise<boolean> {
+  // Rewrite one line of notes, the way you would ask someone to fix or shorten a
+  // sentence. The reply is plain text; the caller drops it back into whichever line it
+  // came from, so this works for a paragraph, a list item, a table cell, or a note
+  // jotted anywhere on the page, not just one kind of block.
+  const refining = ref(false)
+  async function rewriteLine(original: string, instruction: string): Promise<string | null> {
     error.value = null
+    if (!original.trim()) {
+      error.value = 'Select a line with some words first.'
+      return null
+    }
     const key = await loadApiKey()
     if (!key) {
       error.value = 'Add your Anthropic API key first, using the key button.'
-      return false
+      return null
     }
-    const at = documentStore.locate(blockId)
-    if (!at || at.block.type !== 'text') return false
-    const original = at.block.text.runs.map((r) => r.text).join('')
 
-    refining.value = blockId
+    refining.value = true
     try {
       const response = await fetch(ENDPOINT, {
         method: 'POST',
@@ -147,22 +150,23 @@ export function useClaude() {
           messages: [{ role: 'user', content: `Instruction: ${instruction}\n\nLine: ${original}` }],
         }),
       })
-      if (!response.ok) throw new Error(`Anthropic returned ${response.status}.`)
+      if (!response.ok)
+        throw new Error(`Anthropic returned ${response.status}. ${(await response.text()).slice(0, 160)}`)
       const data = (await response.json()) as { content: { type: string; text?: string }[] }
       const text = data.content
         .filter((b) => b.type === 'text')
         .map((b) => b.text ?? '')
         .join('')
         .trim()
-      if (text) documentStore.setRuns(blockId, [{ text: stripDashes(text) }])
-      return true
+      if (!text) throw new Error('Claude returned an empty line.')
+      return stripDashes(text)
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'That line could not be rewritten.'
-      return false
+      return null
     } finally {
-      refining.value = null
+      refining.value = false
     }
   }
 
-  return { generating, error, generate, stop, refine, refining }
+  return { generating, error, generate, stop, rewriteLine, refining }
 }
