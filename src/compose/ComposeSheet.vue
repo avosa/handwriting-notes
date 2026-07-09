@@ -1,7 +1,8 @@
 <script setup lang="ts">
-// The AI compose panel. Writing here is free to try, but generating notes calls Claude
-// with the writer's own key, so if none is connected it points them to add one. The
-// panel rises from the bottom like a native sheet and closes once notes come back.
+// The AI compose panel. Writing is free to try, but generating notes calls Claude with
+// the writer's own key, so if none is connected it points them to add one. It offers a
+// few example prompts to start from, accepts attachments, and rises as a centred card
+// on a wide screen or a bottom sheet on a phone.
 import { ref } from 'vue'
 import type { Attachment } from '@/types'
 import { loadApiKey } from '@/store/persistence'
@@ -14,6 +15,13 @@ const emit = defineEmits<{ (e: 'close'): void; (e: 'needs-key'): void }>()
 const instruction = ref('')
 const attachments = ref<Attachment[]>([])
 const { generating, error, generate } = useClaude()
+
+const examples = [
+  'Take neat notes on the attached reading',
+  'Explain sets and Venn diagrams with a diagram',
+  'Summarise this into headings and bullet points',
+  'Make a truth table for AND, OR, and NOT',
+]
 
 async function send() {
   if (!instruction.value.trim() || generating.value) return
@@ -32,35 +40,38 @@ async function send() {
 
 <template>
   <div class="backdrop" @click.self="emit('close')">
-    <div class="sheet">
-      <div class="handle" />
-      <div class="head">
-        <div class="title"><Icon name="wand" :size="18" /> Write with AI</div>
-        <button class="x" @click="emit('close')"><Icon name="close" :size="18" /></button>
+    <div class="card">
+      <div class="grip" />
+      <header>
+        <div class="badge"><Icon name="wand" :size="20" /></div>
+        <div class="titles">
+          <h2>Write with AI</h2>
+          <p>Describe the notes you want. Claude drafts them onto new pages using the same tools you have.</p>
+        </div>
+        <button class="x" title="Close" @click="emit('close')"><Icon name="close" :size="18" /></button>
+      </header>
+
+      <div class="examples">
+        <button v-for="ex in examples" :key="ex" class="example" @click="instruction = ex">{{ ex }}</button>
       </div>
-      <p class="hint">
-        Describe the notes you want, or attach photos, a PDF, or a video with its transcript. Claude drafts them onto
-        new pages using the same tools you have here.
-      </p>
 
       <textarea
         v-model="instruction"
         class="field"
         rows="3"
-        placeholder="Take notes on this. Summarise the attached reading. Make a table for..."
+        placeholder="Take notes on this, summarise the reading, make a table for…"
         @keydown.enter.exact.prevent="send"
       />
       <Attachments v-model="attachments" />
 
-      <p v-if="error" class="error">{{ error }}</p>
+      <p v-if="error" class="error"><Icon name="close" :size="14" /> {{ error }}</p>
 
-      <div class="row">
-        <span class="note">Free to use. Generating needs your Claude API key.</span>
+      <footer>
+        <span class="note"><Icon name="key" :size="14" /> Free to use. Generating needs your Claude key.</span>
         <button class="send" :disabled="generating || !instruction.trim()" @click="send">
-          <Icon name="wand" :size="16" />
-          {{ generating ? 'Writing…' : 'Write notes' }}
+          <Icon name="wand" :size="16" />{{ generating ? 'Writing…' : 'Write notes' }}
         </button>
-      </div>
+      </footer>
     </div>
   </div>
 </template>
@@ -69,44 +80,60 @@ async function send() {
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(31, 31, 40, 0.36);
+  background: rgba(31, 31, 40, 0.4);
+  backdrop-filter: blur(2px);
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   z-index: 75;
+  padding: 16px;
 }
-.sheet {
-  width: min(640px, 100%);
+.card {
+  width: min(560px, 100%);
   background: #fff;
-  border-radius: 22px 22px 0 0;
-  padding: 12px 20px calc(20px + env(safe-area-inset-bottom));
-  box-shadow: 0 -14px 50px rgba(31, 31, 40, 0.28);
-  animation: rise 0.2s ease;
+  border-radius: 22px;
+  padding: 22px;
+  box-shadow: 0 30px 90px rgba(31, 31, 40, 0.4);
+  animation: pop 0.2s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
-@keyframes rise {
+@keyframes pop {
   from {
-    transform: translateY(30px);
-    opacity: 0.6;
+    transform: scale(0.96) translateY(10px);
+    opacity: 0;
   }
 }
-.handle {
-  width: 40px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(51, 51, 76, 0.18);
-  margin: 2px auto 12px;
+.grip {
+  display: none;
 }
-.head {
+header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
 }
-.title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
+.badge {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, #4a72b0, #7e3f8a);
+}
+.titles {
+  flex: 1;
+}
+h2 {
+  margin: 0 0 3px;
+  font-size: 19px;
   color: #29297e;
+}
+.titles p {
+  margin: 0;
+  font-size: 13px;
+  color: #6a6a80;
+  line-height: 1.5;
 }
 .x {
   border: none;
@@ -114,40 +141,65 @@ async function send() {
   color: #9a9aa8;
   cursor: pointer;
   padding: 4px;
+  border-radius: 8px;
 }
-.hint {
-  margin: 8px 0 12px;
-  font-size: 13px;
-  color: #6a6a80;
-  line-height: 1.5;
+.x:hover {
+  background: rgba(51, 51, 76, 0.07);
+}
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+.example {
+  border: 1px solid rgba(74, 114, 176, 0.25);
+  background: rgba(74, 114, 176, 0.06);
+  color: #3a5a8a;
+  border-radius: 999px;
+  padding: 7px 13px;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.example:hover {
+  background: rgba(74, 114, 176, 0.14);
 }
 .field {
   width: 100%;
   resize: none;
-  padding: 12px;
-  border-radius: 12px;
+  padding: 13px;
+  border-radius: 13px;
   border: 1px solid rgba(51, 51, 76, 0.18);
   font-family: inherit;
   font-size: 14px;
   color: #33334c;
+  margin-bottom: 8px;
 }
 .field:focus {
   outline: none;
   border-color: #4a72b0;
+  box-shadow: 0 0 0 3px rgba(74, 114, 176, 0.12);
 }
 .error {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   margin: 8px 0 0;
   color: #b73b3a;
-  font-size: 12px;
+  font-size: 12.5px;
 }
-.row {
+footer {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 12px;
+  margin-top: 16px;
 }
 .note {
   flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: #9a9aa8;
 }
@@ -156,15 +208,44 @@ async function send() {
   align-items: center;
   gap: 7px;
   border: none;
-  border-radius: 11px;
-  padding: 11px 18px;
+  border-radius: 12px;
+  padding: 12px 20px;
   background: linear-gradient(135deg, #4a72b0, #6a4fa0);
   color: #fff;
   font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
+  box-shadow: 0 4px 14px rgba(74, 114, 176, 0.35);
 }
 .send:disabled {
   opacity: 0.5;
   cursor: default;
+  box-shadow: none;
+}
+
+@media (max-width: 640px) {
+  .backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .card {
+    width: 100%;
+    border-radius: 22px 22px 0 0;
+    padding-bottom: calc(22px + env(safe-area-inset-bottom));
+    animation: rise 0.24s ease;
+  }
+  @keyframes rise {
+    from {
+      transform: translateY(100%);
+    }
+  }
+  .grip {
+    display: block;
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(51, 51, 76, 0.18);
+    margin: -8px auto 14px;
+  }
 }
 </style>

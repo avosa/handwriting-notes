@@ -7,7 +7,7 @@ import fontkit from '@pdf-lib/fontkit'
 import type { Block, CalloutBox, NoteDocument, Page, Stroke, TextRole, TextRun } from '@/types'
 import { getPreset, ptToMm, ruleYsForHeight, type SheetPreset } from '@/paper/sheetSpec'
 import { textMetrics, type TextMetrics } from '@/editor/alignment'
-import { getHandwriting } from '@/handwriting/registry'
+import { fontFiles, getHandwriting } from '@/handwriting/registry'
 import { renderDiagram } from '@/diagrams/render'
 import { rect as wobbleRect, line as wobbleLine, hashSeed } from '@/diagrams/wobble'
 import { penProfile } from '@/tools/penTypes'
@@ -441,9 +441,10 @@ function layoutBlocks(
 export async function documentToPdf(doc: NoteDocument): Promise<Uint8Array> {
   const pdf = await PDFDocument.create()
   pdf.registerFontkit(fontkit)
+  const hand = getHandwriting(useSettings().activeHandwritingId)
   const fonts: Fonts = {
-    body: await loadFace(pdf, '/fonts/caveat.ttf'),
-    header: await loadFace(pdf, '/fonts/indie-flower.ttf'),
+    body: await loadFace(pdf, fontFiles[hand.bodyFont] ?? '/fonts/kalam.ttf'),
+    header: await loadFace(pdf, fontFiles[hand.headerFont] ?? '/fonts/kalam.ttf'),
   }
   for (const page of doc.pages) {
     const preset = getPreset(page.presetId)

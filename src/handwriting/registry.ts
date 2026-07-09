@@ -1,6 +1,6 @@
-// Available handwritings. A handwriting pairs a body font with a header font and a
-// starting colour scheme. One casual style ships now; more, including uploaded ones,
-// slot in later without touching the rest of the app.
+// The handwritings a writer can choose. Each pairs a body font with a header font and
+// a starting colour scheme, and names the font files the PDF exporter embeds. A new
+// hand is one more entry here; nothing else changes.
 import type { ColorScheme, Handwriting } from '@/types'
 
 // The math set symbols the notes use are absent from the handwriting fonts, so the
@@ -25,20 +25,26 @@ export function headerFontStack(handwriting: Handwriting): string {
   return `'${handwriting.headerFont}', ${MATH_FALLBACK}`
 }
 
-const casual: Handwriting = {
-  id: 'casual',
-  name: 'Casual',
-  bodyFont: 'Caveat',
-  headerFont: 'Indie Flower',
-  palette: notePalette,
+const order: Handwriting[] = [
+  { id: 'everyday', name: 'Everyday', bodyFont: 'Kalam', headerFont: 'Kalam', palette: notePalette },
+  { id: 'neat', name: 'Neat', bodyFont: 'Handlee', headerFont: 'Handlee', palette: notePalette },
+  { id: 'print', name: 'Print', bodyFont: 'Patrick Hand', headerFont: 'Patrick Hand', palette: notePalette },
+  { id: 'notebook', name: 'Notebook', bodyFont: 'Caveat', headerFont: 'Indie Flower', palette: notePalette },
+]
+
+// The font files the exporter embeds for each family, so a PDF carries the writing.
+export const fontFiles: Record<string, string> = {
+  Kalam: '/fonts/kalam.ttf',
+  Handlee: '/fonts/handlee.ttf',
+  'Patrick Hand': '/fonts/patrickhand.ttf',
+  Caveat: '/fonts/caveat.ttf',
+  'Indie Flower': '/fonts/indie-flower.ttf',
 }
 
-export const handwritings: Record<string, Handwriting> = {
-  [casual.id]: casual,
-}
-
-export const defaultHandwritingId = casual.id
+export const handwritingList = order
+export const handwritings: Record<string, Handwriting> = Object.fromEntries(order.map((h) => [h.id, h]))
+export const defaultHandwritingId = order[0].id
 
 export function getHandwriting(id: string): Handwriting {
-  return handwritings[id] ?? casual
+  return handwritings[id] ?? order[0]
 }

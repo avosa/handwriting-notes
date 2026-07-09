@@ -1,15 +1,30 @@
-/* Both handwriting fonts are served from the app itself, never a CDN. */
+/* Every handwriting is served from the app itself, never a CDN. */
+@font-face {
+  font-family: 'Kalam';
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/kalam.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Handlee';
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/handlee.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Patrick Hand';
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/patrickhand.woff2') format('woff2');
+}
 @font-face {
   font-family: 'Caveat';
-  font-style: normal;
   font-weight: 400 700;
   font-display: swap;
   src: url('/fonts/caveat.woff2') format('woff2');
 }
-
 @font-face {
   font-family: 'Indie Flower';
-  font-style: normal;
   font-weight: 400;
   font-display: swap;
   src: url('/fonts/indie-flower.woff2') format('woff2');

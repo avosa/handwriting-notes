@@ -93,6 +93,20 @@ watch(pendingFocus, async (key) => {
   pendingFocus.value = null
 })
 
+// A block inserted from the tool bar asks the editor to place the caret in it.
+watch(
+  () => documentStore.pendingFocusId,
+  async (id) => {
+    if (!id) return
+    await nextTick()
+    const target = editables.value.get(`text:${id}`) ?? editables.value.get(`list:${id}:0`)
+    if (target) {
+      target.focus()
+      documentStore.clearPendingFocus()
+    }
+  },
+)
+
 function onFocusBlock(blockId: string) {
   documentStore.select(blockId)
 }
