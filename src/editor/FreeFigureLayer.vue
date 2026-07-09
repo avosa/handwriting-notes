@@ -176,6 +176,8 @@ function diagramHeightPx(block: Extract<Block, { type: 'diagram' }>): number {
           <Icon name="dots" :size="15" /> Move
         </button>
         <span class="spacer" />
+        <button class="act text" title="Smaller text" @click="documentStore.nudgeFontScale(block.id, -0.1)">A−</button>
+        <button class="act text" title="Larger text" @click="documentStore.nudgeFontScale(block.id, 0.1)">A+</button>
         <button class="act" title="Dock into the writing" @click="documentStore.dockFigure(block.id)">
           <Icon name="pageBreak" :size="14" />
         </button>
@@ -191,6 +193,7 @@ function diagramHeightPx(block: Extract<Block, { type: 'diagram' }>): number {
         :row-height-mm="metrics.lineHeight"
         :font-stack="bodyFontStack(handwriting)"
         :ink="handwriting.palette.ink"
+        :scale="block.scale ?? 1"
         :editable="mode === 'write'"
         @focus="documentStore.select(block.id)"
       />
@@ -198,6 +201,7 @@ function diagramHeightPx(block: Extract<Block, { type: 'diagram' }>): number {
         v-else-if="block.type === 'callouts'"
         :block="block"
         :font-stack="bodyFontStack(handwriting)"
+        :scale="block.scale ?? 1"
         :editable="mode === 'write'"
         @focus="documentStore.select(block.id)"
       />
@@ -213,6 +217,7 @@ function diagramHeightPx(block: Extract<Block, { type: 'diagram' }>): number {
           :height-mm="block.heightRules * metrics.lineHeight"
           :font-stack="bodyFontStack(handwriting)"
           :seed="hashSeed(block.id)"
+          :scale="block.scale ?? 1"
           :editable="mode === 'write'"
           @edit-label="(shapeIndex, text) => documentStore.setDiagramLabel(block.id, shapeIndex, text)"
         />
@@ -307,6 +312,12 @@ function diagramHeightPx(block: Extract<Block, { type: 'diagram' }>): number {
   padding: 6px;
   cursor: pointer;
   box-shadow: 0 1px 4px rgba(51, 51, 76, 0.18);
+}
+.act.text {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 8px;
 }
 .act:hover {
   color: var(--text, #33334c);

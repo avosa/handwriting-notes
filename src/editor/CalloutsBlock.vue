@@ -9,11 +9,15 @@ import { useDocument } from '@/store/document'
 import EditableText from './EditableText.vue'
 import Icon from '@/ui/Icon.vue'
 
-const props = defineProps<{
-  block: Extract<Block, { type: 'callouts' }>
-  fontStack: string
-  editable: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    block: Extract<Block, { type: 'callouts' }>
+    fontStack: string
+    editable: boolean
+    scale?: number
+  }>(),
+  { scale: 1 },
+)
 const emit = defineEmits<{ (e: 'focus'): void }>()
 const documentStore = useDocument()
 
@@ -37,7 +41,7 @@ function box(i: number): string {
       >
         <Icon name="close" :size="12" />
       </button>
-      <div class="inner" :style="{ fontFamily: fontStack }">
+      <div class="inner" :style="{ fontFamily: fontStack, fontSize: `${scale}em` }">
         <EditableText
           v-model="b.heading"
           class="heading"

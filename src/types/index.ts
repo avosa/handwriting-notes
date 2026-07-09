@@ -148,13 +148,36 @@ export interface FloatPos {
   width: number
 }
 
+/**
+ * How large a block's writing is drawn, as a multiple of its natural size. Left unset it
+ * is 1; a writer can dial any block up or down so a heading, a table's cells, or a
+ * diagram's letters carry exactly the weight they want.
+ */
+export type FontScale = number
+
 /** The things that flow down a page, in order, unless lifted out to float. */
 export type Block =
-  | { id: string; type: 'text'; text: Paragraph; float?: FloatPos }
-  | { id: string; type: 'list'; ordered: boolean; items: TextRun[][]; indent?: number; float?: FloatPos }
-  | { id: string; type: 'table'; header: string[]; rows: string[][]; caption?: string; float?: FloatPos }
-  | { id: string; type: 'callouts'; boxes: CalloutBox[]; caption?: string; float?: FloatPos }
-  | { id: string; type: 'diagram'; spec: DiagramSpec; heightRules: number; float?: FloatPos }
+  | { id: string; type: 'text'; text: Paragraph; float?: FloatPos; scale?: FontScale }
+  | {
+      id: string
+      type: 'list'
+      ordered: boolean
+      items: TextRun[][]
+      indent?: number
+      float?: FloatPos
+      scale?: FontScale
+    }
+  | {
+      id: string
+      type: 'table'
+      header: string[]
+      rows: string[][]
+      caption?: string
+      float?: FloatPos
+      scale?: FontScale
+    }
+  | { id: string; type: 'callouts'; boxes: CalloutBox[]; caption?: string; float?: FloatPos; scale?: FontScale }
+  | { id: string; type: 'diagram'; spec: DiagramSpec; heightRules: number; float?: FloatPos; scale?: FontScale }
 
 /**
  * A line of writing placed anywhere on the page, the way you would jot a note beside a

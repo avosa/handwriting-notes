@@ -54,7 +54,7 @@ function paragraphStyle(block: Extract<Block, { type: 'text' }>): CSSProperties 
   const leadRules = Math.round(props.metrics.roleLeadIn[t.role])
   return {
     fontFamily: roleFont(t.role),
-    fontSize: `${props.metrics.fontSize[t.role] * props.pxPerMm}px`,
+    fontSize: `${props.metrics.fontSize[t.role] * props.pxPerMm * (block.scale ?? 1)}px`,
     lineHeight: `${lineHeightPx.value}px`,
     color: roleColor(t.role),
     textAlign: t.align ?? defaultAlign(t.role),
@@ -62,10 +62,10 @@ function paragraphStyle(block: Extract<Block, { type: 'text' }>): CSSProperties 
     marginLeft: `${(t.indent ?? 0) * props.pxPerMm}px`,
   }
 }
-function listStyle(): CSSProperties {
+function listStyle(block: Extract<Block, { type: 'list' }>): CSSProperties {
   return {
     fontFamily: bodyFontStack(handwriting.value),
-    fontSize: `${props.metrics.fontSize.body * props.pxPerMm}px`,
+    fontSize: `${props.metrics.fontSize.body * props.pxPerMm * (block.scale ?? 1)}px`,
     lineHeight: `${lineHeightPx.value}px`,
     color: handwriting.value.palette.ink,
   }
@@ -202,7 +202,7 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
         @select-all-note="documentStore.selectWholeNote()"
       />
 
-      <ol v-else-if="block.type === 'list'" class="list" :class="{ bullets: !block.ordered }" :style="listStyle()">
+      <ol v-else-if="block.type === 'list'" class="list" :class="{ bullets: !block.ordered }" :style="listStyle(block)">
         <li v-for="(_, i) in block.items" :key="i">
           <span class="marker">{{ block.ordered ? `${i + 1}.` : '•' }}</span>
           <EditableText
@@ -226,6 +226,7 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
           :row-height-mm="metrics.lineHeight"
           :font-stack="bodyFontStack(handwriting)"
           :ink="handwriting.palette.ink"
+          :scale="block.scale ?? 1"
           :editable="editable"
           @focus="onFocusBlock(block.id)"
         />
@@ -236,6 +237,7 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
         <CalloutsBlock
           :block="block"
           :font-stack="bodyFontStack(handwriting)"
+          :scale="block.scale ?? 1"
           :editable="editable"
           @focus="onFocusBlock(block.id)"
         />
@@ -253,6 +255,7 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
           :height-mm="block.heightRules * metrics.lineHeight"
           :font-stack="diagramFont()"
           :seed="hashSeed(block.id)"
+          :scale="block.scale ?? 1"
           :editable="editable"
           @edit-label="(shapeIndex, text) => documentStore.setDiagramLabel(block.id, shapeIndex, text)"
         />

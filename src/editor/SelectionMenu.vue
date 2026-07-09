@@ -83,6 +83,11 @@ onBeforeUnmount(() => document.removeEventListener('selectionchange', onSelectio
 function makeRole(role: TextRole) {
   if (documentStore.selectedBlockId) documentStore.setRole(documentStore.selectedBlockId, role)
 }
+// Size the whole line or figure the selection sits in; the selection is left untouched so
+// the writer can keep nudging up or down and watch it grow.
+function nudgeSize(delta: number) {
+  if (documentStore.selectedBlockId) documentStore.nudgeFontScale(documentStore.selectedBlockId, delta)
+}
 
 async function startAsk() {
   // Capture the line before focus leaves it, and keep it lit while the writer types.
@@ -137,6 +142,9 @@ function cancelAsk() {
         <button title="Bold" @click="toggleBold"><Icon name="bold" :size="17" /></button>
         <button title="Italic" @click="toggleItalic"><Icon name="italic" :size="17" /></button>
         <button title="Underline" @click="toggleUnderline"><Icon name="underline" :size="17" /></button>
+        <span class="sep" />
+        <button class="size" title="Smaller" @mousedown.prevent="nudgeSize(-0.1)">A−</button>
+        <button class="size big" title="Larger" @mousedown.prevent="nudgeSize(0.1)">A+</button>
         <span class="sep" />
         <button class="word" @click="makeRole('title')">Title</button>
         <button class="word" @click="makeRole('heading')">Heading</button>
@@ -235,6 +243,14 @@ button:hover {
 .word {
   font-size: 13px;
   min-width: auto;
+}
+.size {
+  font-weight: 700;
+  font-size: 12px;
+  min-width: 30px;
+}
+.size.big {
+  font-size: 15px;
 }
 .sep {
   width: 1px;

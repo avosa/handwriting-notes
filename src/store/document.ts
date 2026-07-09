@@ -315,6 +315,19 @@ export const useDocument = defineStore('document', {
       loc.block.heightRules = Math.max(4, Math.min(40, Math.round(heightRules)))
       this.touch()
     },
+    // How large a block's writing is drawn. One dial covers every kind of block: a
+    // paragraph, a list, a table's cells, a callout's lines, or a diagram's letters.
+    setFontScale(blockId: string, scale: number) {
+      const loc = this.locate(blockId)
+      if (!loc) return
+      loc.block.scale = Math.max(0.6, Math.min(2.4, Math.round(scale * 20) / 20))
+      this.touch()
+    },
+    nudgeFontScale(blockId: string, delta: number) {
+      const loc = this.locate(blockId)
+      if (!loc) return
+      this.setFontScale(blockId, (loc.block.scale ?? 1) + delta)
+    },
     // Every letter in a diagram is the writer's to change. A named figure is first turned
     // into its concrete scene so its labels become editable in place; then the one being
     // typed is set. The rest of the drawing is untouched, and its seed stays with the

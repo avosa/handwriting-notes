@@ -113,6 +113,23 @@ describe('free-world placement', () => {
   })
 })
 
+describe('font size', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('nudges a block scale up and down and clamps it', () => {
+    const doc = useDocument()
+    const id = doc.addTable(null, 2, 1)
+    doc.nudgeFontScale(id, 0.2)
+    expect(doc.locate(id)!.block.scale).toBeCloseTo(1.2, 5)
+    doc.nudgeFontScale(id, -0.4)
+    expect(doc.locate(id)!.block.scale).toBeCloseTo(0.8, 5)
+    doc.setFontScale(id, 9)
+    expect(doc.locate(id)!.block.scale).toBe(2.4)
+    doc.setFontScale(id, 0)
+    expect(doc.locate(id)!.block.scale).toBe(0.6)
+  })
+})
+
 describe('dynamic diagrams', () => {
   beforeEach(() => setActivePinia(createPinia()))
 

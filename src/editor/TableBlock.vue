@@ -10,14 +10,18 @@ import { rect, line, hashSeed } from '@/diagrams/wobble'
 import { useDocument } from '@/store/document'
 import Icon from '@/ui/Icon.vue'
 
-const props = defineProps<{
-  block: Extract<Block, { type: 'table' }>
-  widthMm: number
-  rowHeightMm: number
-  fontStack: string
-  ink: string
-  editable: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    block: Extract<Block, { type: 'table' }>
+    widthMm: number
+    rowHeightMm: number
+    fontStack: string
+    ink: string
+    editable: boolean
+    scale?: number
+  }>(),
+  { scale: 1 },
+)
 const emit = defineEmits<{ (e: 'change'): void; (e: 'focus'): void }>()
 const documentStore = useDocument()
 
@@ -70,7 +74,11 @@ function editCell(r: number, c: number, event: Event) {
     </svg>
     <div
       class="cells"
-      :style="{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rowCount}, 1fr)` }"
+      :style="{
+        gridTemplateColumns: `repeat(${cols}, 1fr)`,
+        gridTemplateRows: `repeat(${rowCount}, 1fr)`,
+        fontSize: `${scale}em`,
+      }"
     >
       <div
         v-for="(h, c) in block.header"

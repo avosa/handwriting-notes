@@ -17,10 +17,15 @@ const props = defineProps<{
   fontStack: string
   seed?: number
   editable?: boolean
+  scale?: number
 }>()
 const emit = defineEmits<{ (e: 'edit-label', shapeIndex: number, text: string): void }>()
 
 const drawn = computed(() => renderDiagram(props.spec, props.seed))
+// The writer's font-size dial enlarges every letter in the figure together.
+function labelSize(size: number): number {
+  return size * (props.scale ?? 1)
+}
 const vb = computed(() => `0 0 ${drawn.value.width} ${drawn.value.height}`)
 </script>
 
@@ -44,7 +49,7 @@ const vb = computed(() => `0 0 ${drawn.value.width} ${drawn.value.height}`)
         :y="l.y"
         :text="l.text"
         :color="l.color"
-        :size="l.size"
+        :size="labelSize(l.size)"
         :anchor="l.anchor"
         :font-stack="fontStack"
         @edit="(text) => emit('edit-label', l.shapeIndex, text)"
@@ -57,7 +62,7 @@ const vb = computed(() => `0 0 ${drawn.value.width} ${drawn.value.height}`)
         :x="l.x"
         :y="l.y"
         :fill="l.color"
-        :font-size="l.size"
+        :font-size="labelSize(l.size)"
         :text-anchor="l.anchor"
         :style="{ fontFamily: fontStack }"
       >
