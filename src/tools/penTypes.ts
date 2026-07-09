@@ -20,7 +20,15 @@ export const penProfiles: Record<PenType, PenProfile> = {
   pencil: { id: 'pencil', name: 'Pencil', width: 0.5, minWidth: 0.2, maxWidth: 1.5, opacity: 0.85, blend: 'normal' },
   fine: { id: 'fine', name: 'Fine pen', width: 0.4, minWidth: 0.2, maxWidth: 1.2, opacity: 1, blend: 'normal' },
   marker: { id: 'marker', name: 'Marker', width: 1.6, minWidth: 0.8, maxWidth: 4, opacity: 1, blend: 'normal' },
-  highlighter: { id: 'highlighter', name: 'Highlighter', width: 5, minWidth: 3, maxWidth: 9, opacity: 0.35, blend: 'multiply' },
+  highlighter: {
+    id: 'highlighter',
+    name: 'Highlighter',
+    width: 5,
+    minWidth: 3,
+    maxWidth: 9,
+    opacity: 0.35,
+    blend: 'multiply',
+  },
   eraser: { id: 'eraser', name: 'Eraser', width: 4, minWidth: 1, maxWidth: 12, opacity: 1, blend: 'normal' },
 }
 

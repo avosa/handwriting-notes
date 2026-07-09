@@ -96,12 +96,7 @@ export function rect(x: number, y: number, w: number, h: number, seed: string | 
 }
 
 /** A wavy triangle through three corners. */
-export function tri(
-  p0: [number, number],
-  p1: [number, number],
-  p2: [number, number],
-  seed: string | number,
-): string {
+export function tri(p0: [number, number], p1: [number, number], p2: [number, number], seed: string | number): string {
   const rand = mulberry32(hashSeed(seed))
   const corners = [p0, p1, p2]
   const scale = Math.hypot(p1[0] - p0[0], p1[1] - p0[1])
