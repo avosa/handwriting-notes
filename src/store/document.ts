@@ -165,6 +165,31 @@ export const useDocument = defineStore('document', {
       this.touch()
     },
 
+    // Free notes: handwriting placed anywhere on a page, over and around the flow.
+    addNote(pageIndex: number, x: number, y: number): string {
+      const page = this.doc.pages[pageIndex]
+      if (!page) return ''
+      if (!page.notes) page.notes = []
+      const note = { id: uid('n'), x, y, runs: [{ text: '' }] }
+      page.notes.push(note)
+      this.pendingFocusId = note.id
+      this.touch()
+      return note.id
+    },
+    setNoteRuns(pageIndex: number, noteId: string, runs: TextRun[]) {
+      const note = this.doc.pages[pageIndex]?.notes?.find((n) => n.id === noteId)
+      if (note) {
+        note.runs = runs.length ? runs : [{ text: '' }]
+        this.touch()
+      }
+    },
+    removeNote(pageIndex: number, noteId: string) {
+      const page = this.doc.pages[pageIndex]
+      if (!page.notes) return
+      page.notes = page.notes.filter((n) => n.id !== noteId)
+      this.touch()
+    },
+
     addStroke(pageIndex: number, stroke: Stroke) {
       this.doc.pages[pageIndex]?.strokes.push(stroke)
       this.touch()

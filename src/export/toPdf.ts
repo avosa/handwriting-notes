@@ -454,6 +454,22 @@ export async function documentToPdf(doc: NoteDocument): Promise<Uint8Array> {
     drawSheet(pdfPage, preset, heightMm)
     layoutBlocks(page, metrics, fonts, pdfPage, metrics.firstBaseline - metrics.lineHeight)
     drawStrokes(pdfPage, page.strokes)
+    const ink = getHandwriting(useSettings().activeHandwritingId).palette.ink
+    for (const note of page.notes ?? []) {
+      const text = note.runs.map((r) => r.text).join('')
+      if (text.trim()) {
+        drawShaped(
+          pdfPage,
+          fonts.body,
+          text,
+          mm(metrics.fontSize.body),
+          mm(note.x),
+          mm(note.y - metrics.lineHeight * 0.22),
+          color(note.color ?? ink),
+          false,
+        )
+      }
+    }
   }
   return pdf.save()
 }
