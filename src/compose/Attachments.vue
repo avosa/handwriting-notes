@@ -43,6 +43,10 @@ function onPick(event: Event) {
   input.value = ''
 }
 
+// The picker is triggered from the composer toolbar, so the trigger lives there and the
+// file input is opened through here.
+defineExpose({ open: () => fileInput.value?.click() })
+
 async function remove(att: Attachment) {
   if (playingId.value === att.id) stopPlayback()
   await deleteBlob(att.blobRef)
@@ -89,23 +93,22 @@ const glyph: Record<AttachmentKind, string> = { image: 'image', video: 'video', 
 </script>
 
 <template>
+  <input
+    ref="fileInput"
+    class="hidden"
+    type="file"
+    multiple
+    accept="image/*,video/*,audio/*,application/pdf,.txt,.md,.csv,.tsv,.json,.xml,.html,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.rtf,.odt"
+    @change="onPick"
+  />
   <div
+    v-show="attachments.length"
     class="attachments"
     :class="{ dragging }"
     @dragover.prevent="dragging = true"
     @dragleave.prevent="dragging = false"
     @drop.prevent="onDrop"
   >
-    <button class="add" title="Attach files" @click="fileInput?.click()"><Icon name="plus" :size="15" /> Attach</button>
-    <input
-      ref="fileInput"
-      class="hidden"
-      type="file"
-      multiple
-      accept="image/*,video/*,audio/*,application/pdf,.txt,.md,.csv,.tsv,.json,.xml,.html,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.rtf,.odt"
-      @change="onPick"
-    />
-
     <div v-for="att in attachments" :key="att.id" class="chip" :class="{ audio: att.kind === 'audio' }">
       <button
         v-if="att.kind === 'audio'"
@@ -146,18 +149,6 @@ const glyph: Record<AttachmentKind, string> = { image: 'image', video: 'video', 
 }
 .attachments.dragging {
   border-color: var(--accent);
-  background: var(--accent-wash);
-}
-.add {
-  border: 1px solid var(--border);
-  background: var(--surface);
-  border-radius: 8px;
-  padding: 6px 10px;
-  cursor: pointer;
-  color: var(--text);
-  font-size: 13px;
-}
-.add:hover {
   background: var(--accent-wash);
 }
 .hidden {

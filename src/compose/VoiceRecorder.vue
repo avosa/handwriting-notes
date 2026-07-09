@@ -112,18 +112,16 @@ function togglePause() {
 
 <template>
   <div class="voice" :class="{ active }">
-    <!-- Idle: the press target and its hint. -->
-    <div v-if="!active" class="idle">
-      <button
-        class="mic-btn"
-        title="Hold to record, slide up to lock"
-        aria-label="Record a voice note"
-        @pointerdown="onPointerDown"
-      >
-        <Icon name="mic" :size="18" />
-      </button>
-      <span class="idle-hint">Hold to record a voice note</span>
-    </div>
+    <!-- Idle: the press target, sized to sit in the composer toolbar. -->
+    <button
+      v-if="!active"
+      class="mic-btn"
+      title="Hold to record a voice note, slide up to lock"
+      aria-label="Record a voice note"
+      @pointerdown="onPointerDown"
+    >
+      <Icon name="mic" :size="18" />
+    </button>
 
     <!-- Active: the recording bar takes over the row. -->
     <div v-else class="bar" :class="{ cancelling: cancelArmed, locked, paused: rec.status.value === 'paused' }">
@@ -177,15 +175,6 @@ function togglePause() {
 }
 .voice.active {
   flex: 1;
-}
-.idle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.idle-hint {
-  font-size: 12.5px;
-  color: var(--text-muted);
 }
 .mic-btn {
   display: inline-flex;

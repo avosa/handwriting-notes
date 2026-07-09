@@ -1,9 +1,9 @@
 <script setup lang="ts">
-// The AI compose panel. Everything else in the app is free, but drafting notes calls the
-// chosen AI with the writer's own key, so the panel says plainly when none is connected
-// and offers to connect one before anything is typed. It shows which AI is in use, offers
-// a few example prompts, accepts attachments, and rises as a centred card on a wide
-// screen or a bottom sheet on a phone.
+// The AI compose panel. The task leads: a grouped composer with prompt starters, a place
+// to type, a small toolbar for a file or a voice note, and one primary Generate. Setup is
+// quiet: a single slim strip says whether an AI is connected and offers to connect one,
+// without ever standing louder than the input a writer touches every time. It rises as a
+// centred card on a wide screen or a bottom sheet on a phone.
 import { computed, onMounted, ref } from 'vue'
 import type { Attachment } from '@/types'
 import { loadApiKey, putBlob } from '@/store/persistence'
@@ -35,14 +35,13 @@ function openConnect() {
 
 const instruction = ref('')
 const attachments = ref<Attachment[]>([])
+const attachmentsRef = ref<InstanceType<typeof Attachments> | null>(null)
 const voiceError = ref('')
 // Start on the current note when there is something to work on, otherwise a fresh page.
 const mode = ref<'new' | 'current'>(props.hasContent ? 'current' : 'new')
 
-// A finished voice note joins the other attachments and carries its own transcript, so
-// the spoken words reach the model even though the audio itself is not model readable.
-// When the live recogniser heard nothing, the note is transcribed on the device instead,
-// filling the chip in once it is ready.
+// A finished voice note joins the other attachments and carries its own transcript. When
+// the live recogniser heard nothing, it is transcribed on the device, filling the chip in.
 let voiceCount = 0
 async function onVoiceAttach(recording: Recording) {
   const blobRef = uid('blob')
@@ -79,23 +78,13 @@ async function onVoiceAttach(recording: Recording) {
 
 const examples = computed(() =>
   mode.value === 'current'
-    ? [
-        'Polish and tidy my notes',
-        'Continue from where I left off',
-        'Summarise this into key points',
-        'Explain this more simply',
-      ]
-    : [
-        'Take neat notes on my reading',
-        'Explain a topic with a diagram',
-        'Summarise into key points',
-        'Make a truth table',
-      ],
+    ? ['Polish and tidy my notes', 'Continue where I left off', 'Summarise to key points', 'Explain more simply']
+    : ['Neat notes on my reading', 'Explain with a diagram', 'Summarise to key points', 'Make a truth table'],
 )
 
 const canSend = computed(() => instruction.value.trim().length > 0 || attachments.value.length > 0)
 
-// Hand the request to the app and step aside, so the page is watched as Claude writes.
+// Hand the request to the app and step aside, so the page is watched as the notes appear.
 // A voice note or file on its own is enough; if nothing was typed, a plain instruction
 // stands in so the attachments have something to act on.
 async function send() {
@@ -119,68 +108,70 @@ async function send() {
         <div class="badge"><Icon name="wand" :size="20" /></div>
         <div class="titles">
           <h2>Write with AI</h2>
-          <p>
-            Describe the notes you want. {{ provider.name }} drafts them onto new pages using the same tools you have.
-          </p>
+          <p>Describe the notes you want and {{ provider.name }} drafts them onto new pages.</p>
         </div>
         <button class="x" title="Close" @click="emit('close')"><Icon name="close" :size="18" /></button>
       </header>
 
-      <!-- No AI is connected: make it plain, and offer to connect one before anything is typed. -->
-      <div v-if="!connected" class="connect-cta">
-        <div class="connect-body">
-          <strong>Connect an AI to write with it</strong>
-          <span
-            >Pick Claude, ChatGPT, Gemini, or DeepSeek and paste a key. It stays on your device, and the app stays free
-            otherwise.</span
+      <!-- One quiet line about connection: never louder than the task. -->
+      <div class="conn" :class="{ off: !connected }">
+        <span class="conn-dot" />
+        <span class="conn-text">
+          <template v-if="connected"
+            >Writing with <strong>{{ provider.name }}</strong> · your key, on your device</template
           >
-        </div>
-        <button class="connect-btn" @click="openConnect"><Icon name="key" :size="16" /> Connect an AI</button>
+          <template v-else>No AI connected · works with your own key, stays on your device</template>
+        </span>
+        <button class="conn-btn" @click="openConnect">{{ connected ? 'Change' : 'Connect' }}</button>
       </div>
-      <!-- Connected: say which AI will write, with a quick way to switch. -->
-      <button v-else class="using" @click="openConnect">
-        <span class="using-dot" />
-        Writing with <strong>{{ provider.name }}</strong>
-        <span class="using-change">Change</span>
-      </button>
 
       <div v-if="props.hasContent" class="mode">
         <button :class="{ on: mode === 'current' }" @click="mode = 'current'">Work on this note</button>
         <button :class="{ on: mode === 'new' }" @click="mode = 'new'">Start a new note</button>
       </div>
 
-      <div class="examples">
-        <button v-for="ex in examples" :key="ex" class="example" @click="instruction = ex">{{ ex }}</button>
+      <!-- The composer: everything the writer touches, in one group. -->
+      <div class="composer">
+        <div class="inner">
+          <div class="try">
+            <span class="try-label">Try</span>
+            <div class="chips">
+              <button v-for="ex in examples" :key="ex" class="example" @click="instruction = ex">{{ ex }}</button>
+            </div>
+          </div>
+
+          <textarea
+            v-model="instruction"
+            class="field"
+            rows="3"
+            placeholder="Take notes on this, summarise the reading, make a table for…"
+            @keydown.enter.exact.prevent="send"
+          />
+
+          <Attachments ref="attachmentsRef" v-model="attachments" />
+          <p v-if="voiceError" class="error"><Icon name="close" :size="14" /> {{ voiceError }}</p>
+        </div>
+
+        <div class="tools">
+          <div class="tool-left">
+            <button class="tool" title="Attach a file" @click="attachmentsRef?.open()">
+              <Icon name="paperclip" :size="18" />
+            </button>
+            <VoiceRecorder @attach="onVoiceAttach" @error="voiceError = $event" />
+          </div>
+          <button class="generate" :disabled="!connected || !canSend" @click="send">
+            <Icon name="wand" :size="16" /> Generate
+          </button>
+        </div>
       </div>
 
-      <textarea
-        v-model="instruction"
-        class="field"
-        rows="3"
-        placeholder="Take notes on this, summarise the reading, make a table for…"
-        @keydown.enter.exact.prevent="send"
-      />
-      <Attachments v-model="attachments" />
-
-      <div class="voice-row">
-        <VoiceRecorder @attach="onVoiceAttach" @error="voiceError = $event" />
-      </div>
-      <p v-if="voiceError" class="error"><Icon name="close" :size="14" /> {{ voiceError }}</p>
-
-      <footer>
-        <span class="note">
-          <Icon name="key" :size="14" />
-          {{
-            connected
-              ? `Free to use. Generating runs on your ${provider.name} key.`
-              : 'Free to use. Generating needs an AI connected.'
-          }}
-        </span>
-        <button v-if="!connected" class="send" @click="openConnect"><Icon name="key" :size="16" />Connect an AI</button>
-        <button v-else class="send" :disabled="!canSend" @click="send">
-          <Icon name="wand" :size="16" />Write notes
-        </button>
-      </footer>
+      <p class="foot">
+        {{
+          connected
+            ? `Free to use · generating runs on your ${provider.name} key`
+            : 'Free to use · connect a key above to enable generating'
+        }}
+      </p>
     </div>
   </div>
 </template>
@@ -218,7 +209,7 @@ header {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 .badge {
   flex-shrink: 0;
@@ -255,85 +246,62 @@ h2 {
 .x:hover {
   background: var(--surface-sunken);
 }
-.connect-cta {
+
+/* Connection strip: slim, one line, quiet. */
+.conn {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
-  padding: 14px;
-  border-radius: 14px;
-  border: 1px solid var(--accent-wash-2);
-  background: var(--accent-wash);
-}
-.connect-body {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  flex: 1;
-  min-width: 0;
-}
-.connect-body strong {
-  font-size: 14px;
-  color: var(--brand);
-}
-.connect-body span {
+  gap: 10px;
+  padding: 9px 12px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
   font-size: 12.5px;
   color: var(--text-soft);
-  line-height: 1.45;
 }
-.connect-btn {
+.conn-dot {
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  border: none;
-  border-radius: 11px;
-  padding: 11px 15px;
-  cursor: pointer;
-  color: #fff;
-  font-size: 13.5px;
-  font-weight: 600;
-  background: var(--accent-grad);
-  box-shadow: 0 3px 12px var(--accent-shadow);
-}
-.using {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  margin-bottom: 14px;
-  border: none;
-  background: transparent;
-  padding: 4px 2px;
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--text-soft);
-}
-.using strong {
-  color: var(--text);
-  font-weight: 600;
-}
-.using-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: #3f8f5c;
-  box-shadow: 0 0 0 3px rgba(63, 143, 92, 0.18);
+  box-shadow: 0 0 0 3px rgba(63, 143, 92, 0.16);
 }
-.using-change {
-  color: var(--accent);
+.conn.off .conn-dot {
+  background: #e0a63a;
+  box-shadow: 0 0 0 3px rgba(224, 166, 58, 0.18);
+}
+.conn-text {
+  flex: 1;
+  min-width: 0;
+}
+.conn-text strong {
+  color: var(--text);
   font-weight: 600;
-  margin-left: 2px;
 }
-.using:hover .using-change {
-  text-decoration: underline;
+.conn-btn {
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--accent);
+  border-radius: 9px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
 }
+.conn-btn:hover {
+  background: var(--accent-wash);
+}
+
 .mode {
   display: flex;
   gap: 3px;
   background: var(--surface-sunken);
   border-radius: 11px;
   padding: 3px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 .mode button {
   flex: 1;
@@ -351,21 +319,43 @@ h2 {
   color: var(--brand);
   box-shadow: 0 1px 4px var(--border);
 }
-.examples {
+
+/* Composer group: the prompt starters, the input, and the toolbar as one object. */
+.composer {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.inner {
+  padding: 14px;
+}
+.try {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.try-label {
+  flex-shrink: 0;
+  padding-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.chips {
   display: flex;
   flex-wrap: wrap;
   align-content: flex-start;
   gap: 7px;
-  /* Hold two rows of chips so switching between the two tabs never resizes the panel. */
+  flex: 1;
+  /* Two steady rows so switching mode never resizes the panel. */
   min-height: 72px;
-  margin-bottom: 12px;
 }
 .example {
   border: 1px solid var(--accent-wash-2);
   background: var(--accent-wash);
   color: var(--accent);
   border-radius: 999px;
-  padding: 7px 13px;
+  padding: 6px 12px;
   font-size: 12.5px;
   cursor: pointer;
   transition: background 0.12s ease;
@@ -373,29 +363,29 @@ h2 {
 .example:hover {
   background: var(--accent-wash-2);
 }
+/* A real text field: a distinct box that takes a violet border on focus. */
 .field {
+  display: block;
   width: 100%;
   resize: none;
-  padding: 13px;
-  border-radius: 13px;
   border: 1px solid var(--border);
+  outline: none;
   background: var(--surface-sunken);
+  border-radius: 12px;
+  padding: 13px;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text);
-  margin-bottom: 8px;
-}
-.field::placeholder {
-  color: var(--text-muted);
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
 }
 .field:focus {
-  outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-wash-2);
 }
-.voice-row {
-  display: flex;
-  margin-top: 8px;
+.field::placeholder {
+  color: var(--text-muted);
 }
 .error {
   display: flex;
@@ -405,38 +395,66 @@ h2 {
   color: var(--danger);
   font-size: 12.5px;
 }
-footer {
+.tools {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 16px;
+  gap: 10px;
+  padding: 9px 11px;
+  border-top: 1px solid var(--border);
 }
-.note {
+.tool-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--text-muted);
 }
-.send {
+.tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.tool:hover {
+  background: var(--accent-wash);
+}
+/* While a voice note records, its bar takes over the toolbar row. */
+.tools :deep(.voice.active) {
+  position: absolute;
+  inset: 6px 11px;
+  z-index: 2;
+}
+.generate {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: 7px;
   border: none;
-  border-radius: 12px;
-  padding: 12px 20px;
+  border-radius: 11px;
+  padding: 11px 20px;
   background: var(--accent-grad);
   color: #fff;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   box-shadow: 0 4px 14px var(--accent-shadow);
 }
-.send:disabled {
-  opacity: 0.5;
+.generate:disabled {
+  opacity: 0.45;
   cursor: default;
   box-shadow: none;
+}
+.foot {
+  margin: 12px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 @media (max-width: 720px) {
@@ -447,11 +465,11 @@ footer {
   }
   .card {
     width: 100%;
-    max-height: 85vh;
+    max-height: 88vh;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     border-radius: 22px 22px 0 0;
-    padding: 18px 18px calc(20px + env(safe-area-inset-bottom));
+    padding: 18px 18px calc(16px + env(safe-area-inset-bottom));
     animation: rise 0.24s ease;
   }
   @keyframes rise {
@@ -467,38 +485,18 @@ footer {
     background: var(--border);
     margin: 0 auto 14px;
   }
-  header {
-    margin-bottom: 14px;
+  .try {
+    flex-direction: column;
+    gap: 6px;
   }
-  /* Stack the mode toggle so long labels wrap cleanly instead of overflowing. */
-  .mode {
-    flex-wrap: wrap;
-  }
-  .mode button {
-    flex: 1 1 45%;
-    padding: 11px;
-    font-size: 14px;
-  }
-  .example {
-    padding: 9px 14px;
-    font-size: 13.5px;
+  .try-label {
+    padding-top: 0;
   }
   .field {
     font-size: 16px;
-    padding: 14px;
-    min-height: 96px;
   }
-  /* Full-width, thumb-reachable footer: note above, big submit below. */
-  footer {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-  .send {
-    width: 100%;
-    justify-content: center;
-    padding: 15px 20px;
-    font-size: 15px;
+  .generate {
+    padding: 12px 20px;
   }
 }
 </style>
