@@ -9,6 +9,7 @@ import type { TextMetrics } from './alignment'
 import { getHandwriting, bodyFontStack, headerFontStack } from '@/handwriting/registry'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
+import { hashSeed } from '@/diagrams/wobble'
 import EditableText from './EditableText.vue'
 import TableBlock from './TableBlock.vue'
 import CalloutsBlock from './CalloutsBlock.vue'
@@ -163,6 +164,23 @@ function diagramFont() {
 function updateRuns(blockId: string, runs: TextRun[]) {
   documentStore.setRuns(blockId, runs)
 }
+
+// Drag the handle at a diagram's foot to make it taller or shorter, in whole ruled lines.
+function startResize(blockId: string, fromRules: number, event: PointerEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+  const startY = event.clientY
+  const perRule = lineHeightPx.value
+  function onMove(move: PointerEvent) {
+    documentStore.setDiagramHeight(blockId, fromRules + (move.clientY - startY) / perRule)
+  }
+  function onUp() {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+  }
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+}
 </script>
 
 <template>
@@ -232,7 +250,18 @@ function updateRuns(blockId: string, runs: TextRun[]) {
           :width-mm="metrics.width"
           :height-mm="block.heightRules * metrics.lineHeight"
           :font-stack="diagramFont()"
+          :seed="hashSeed(block.id)"
+          :editable="editable"
+          @edit-label="(shapeIndex, text) => documentStore.setDiagramLabel(block.id, shapeIndex, text)"
         />
+        <button
+          v-if="editable"
+          class="resize-handle"
+          title="Drag to resize"
+          @pointerdown="startResize(block.id, block.heightRules, $event)"
+        >
+          <span />
+        </button>
       </div>
     </template>
   </div>
@@ -288,6 +317,36 @@ function updateRuns(blockId: string, runs: TextRun[]) {
   margin-bottom: 2px;
 }
 .diagram-slot {
+  position: relative;
   width: 100%;
+}
+/* A quiet grip at the foot of a figure; it appears on hover and drags the height. */
+.resize-handle {
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  cursor: ns-resize;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.diagram-slot:hover .resize-handle {
+  opacity: 1;
+}
+.resize-handle span {
+  width: 34px;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--accent, #4a72b0);
+  opacity: 0.55;
+}
+.resize-handle:hover span {
+  opacity: 0.9;
 }
 </style>

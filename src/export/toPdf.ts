@@ -182,7 +182,7 @@ function drawDiagram(
   face: Face,
 ) {
   const h = page.getHeight()
-  const rendered = renderDiagram(block.spec)
+  const rendered = renderDiagram(block.spec, hashSeed(block.id))
   const scale = Math.min(colWidth / rendered.width, heightPt / rendered.height)
   const offsetX = (colWidth - rendered.width * scale) / 2
   const offsetY = (heightPt - rendered.height * scale) / 2

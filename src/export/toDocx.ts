@@ -19,6 +19,7 @@ import type { Block, NoteDocument, Page, TextRole, TextRun } from '@/types'
 import { getPreset, ruleYs, type SheetPreset } from '@/paper/sheetSpec'
 import { getHandwriting } from '@/handwriting/registry'
 import { renderDiagram } from '@/diagrams/render'
+import { hashSeed } from '@/diagrams/wobble'
 import { useSettings } from '@/store/settings'
 import { triggerDownload } from './toPdf'
 
@@ -75,8 +76,8 @@ function sheetSvg(preset: SheetPreset): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${preset.width} ${preset.height}"><rect width="${preset.width}" height="${preset.height}" fill="${preset.background}"/>${rules}<line x1="${preset.margin.left}" y1="0" x2="${preset.margin.left}" y2="${preset.height}" stroke="${preset.margin.color}" stroke-width="0.4"/></svg>`
 }
 
-function diagramSvg(spec: Extract<Block, { type: 'diagram' }>['spec'], fontFamily: string): string {
-  const d = renderDiagram(spec)
+function diagramSvg(block: Extract<Block, { type: 'diagram' }>, fontFamily: string): string {
+  const d = renderDiagram(block.spec, hashSeed(block.id))
   const paths = d.paths
     .map(
       (p) =>
@@ -225,7 +226,7 @@ async function blockToChildren(
   }
   // diagram
   const heightMm = block.heightRules * preset.rule.spacing * preset.text.leadingRules
-  const png = await svgToPng(diagramSvg(block.spec, bodyFont), Math.round(colWidthMm * 4), Math.round(heightMm * 4))
+  const png = await svgToPng(diagramSvg(block, bodyFont), Math.round(colWidthMm * 4), Math.round(heightMm * 4))
   return [
     new Paragraph({
       children: [

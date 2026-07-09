@@ -4,6 +4,7 @@
 import { defineStore } from 'pinia'
 import type { Block, CalloutBox, NoteDocument, Stroke, TextRole, TextRun } from '@/types'
 import { blankDocument, blankPage } from '@/content/blankDocument'
+import { toScene } from '@/diagrams/diagramSpec'
 import { uid } from '@/util/id'
 
 interface DocumentState {
@@ -185,6 +186,102 @@ export const useDocument = defineStore('document', {
     },
     addDiagram(blockId: string | null, block: Extract<Block, { type: 'diagram' }>): string {
       return this.insertAfter(blockId, { ...block, id: uid('b') })
+    },
+
+    // A table grows and shrinks after it is placed. A column adds an empty cell to the
+    // header and to every row; a row adds a full width of empty cells. The header and at
+    // least one body row are kept so the grid never collapses to nothing.
+    addTableColumn(blockId: string, at?: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'table') return
+      const table = loc.block
+      const index = at ?? table.header.length
+      table.header.splice(index, 0, '')
+      table.rows.forEach((row) => row.splice(index, 0, ''))
+      this.touch()
+    },
+    removeTableColumn(blockId: string, index: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'table' || loc.block.header.length <= 1) return
+      loc.block.header.splice(index, 1)
+      loc.block.rows.forEach((row) => row.splice(index, 1))
+      this.touch()
+    },
+    addTableRow(blockId: string, at?: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'table') return
+      const table = loc.block
+      const index = at ?? table.rows.length
+      table.rows.splice(
+        index,
+        0,
+        Array.from({ length: table.header.length }, () => ''),
+      )
+      this.touch()
+    },
+    removeTableRow(blockId: string, index: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'table' || loc.block.rows.length <= 1) return
+      loc.block.rows.splice(index, 1)
+      this.touch()
+    },
+
+    // Callout boxes are added and removed as a set, and each box's lines the same way.
+    addCalloutBox(blockId: string, at?: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'callouts') return
+      const boxes = loc.block.boxes
+      const palette = ['#4A72B0', '#C8792E', '#3F8F5C', '#B73B3A']
+      boxes.splice(at ?? boxes.length, 0, {
+        color: palette[boxes.length % palette.length],
+        heading: [{ text: '' }],
+        items: [[{ text: '' }]],
+      })
+      this.touch()
+    },
+    removeCalloutBox(blockId: string, index: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'callouts' || loc.block.boxes.length <= 1) return
+      loc.block.boxes.splice(index, 1)
+      this.touch()
+    },
+    addCalloutItem(blockId: string, boxIndex: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'callouts') return
+      loc.block.boxes[boxIndex]?.items.push([{ text: '' }])
+      this.touch()
+    },
+    removeCalloutItem(blockId: string, boxIndex: number, itemIndex: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'callouts') return
+      const box = loc.block.boxes[boxIndex]
+      if (!box || box.items.length <= 1) return
+      box.items.splice(itemIndex, 1)
+      this.touch()
+    },
+
+    // A diagram is resized by the number of ruled lines it spans, kept within sane bounds.
+    setDiagramHeight(blockId: string, heightRules: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'diagram') return
+      loc.block.heightRules = Math.max(4, Math.min(40, Math.round(heightRules)))
+      this.touch()
+    },
+    // Every letter in a diagram is the writer's to change. A named figure is first turned
+    // into its concrete scene so its labels become editable in place; then the one being
+    // typed is set. The rest of the drawing is untouched, and its seed stays with the
+    // block, so the hand-drawn shapes do not shift while a label is edited.
+    setDiagramLabel(blockId: string, shapeIndex: number, text: string) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'diagram') return
+      if (loc.block.spec.kind !== 'scene') {
+        loc.block.spec = { kind: 'scene', scene: toScene(loc.block.spec) }
+      }
+      const shape = loc.block.spec.scene.shapes[shapeIndex]
+      if (shape && shape.type === 'label') {
+        shape.text = text
+        this.touch()
+      }
     },
     /** Split the page after a block so the rest continues on a fresh page. */
     breakPageAt(blockId: string): number {

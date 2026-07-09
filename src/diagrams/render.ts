@@ -18,6 +18,8 @@ export interface RenderedLabel {
   color: string
   size: number
   anchor: 'start' | 'middle' | 'end'
+  /** Index of this label's shape in the scene, so an inline edit maps back to it. */
+  shapeIndex: number
 }
 
 export interface RenderedDiagram {
@@ -28,9 +30,11 @@ export interface RenderedDiagram {
   strokeWidth: number
 }
 
-export function renderDiagram(spec: DiagramSpec): RenderedDiagram {
+// A caller may pass a stable seed (from the block's id) so the hand-drawn shapes stay put
+// while its labels are edited; without one the seed comes from the spec, as before.
+export function renderDiagram(spec: DiagramSpec, seed?: number): RenderedDiagram {
   const scene = toScene(spec)
-  const seedBase = hashSeed(JSON.stringify(spec))
+  const seedBase = seed ?? hashSeed(JSON.stringify(spec))
   const paths: RenderedPath[] = []
   const labels: RenderedLabel[] = []
 
@@ -78,6 +82,7 @@ export function renderDiagram(spec: DiagramSpec): RenderedDiagram {
           color: shape.color,
           size: shape.size ?? 4,
           anchor: shape.anchor ?? 'middle',
+          shapeIndex: i,
         })
         break
     }
