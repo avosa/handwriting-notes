@@ -4,7 +4,7 @@
 // the home screen. Writes are debounced; the first load hydrates the stores before the
 // app renders.
 import { openDB, type IDBPDatabase } from 'idb'
-import type { LibraryEntry, NoteDocument, Settings } from '@/types'
+import type { LibraryEntry, NoteDocument, ProviderId, Settings } from '@/types'
 import { useDocument } from './document'
 import { useSettings } from './settings'
 import { useLibrary } from './library'
@@ -107,14 +107,19 @@ export async function deleteBlob(key: string): Promise<void> {
   await (await db()).delete('blobs', key)
 }
 
-export async function loadApiKey(): Promise<string | undefined> {
-  return (await db()).get('meta', API_KEY_KEY) as Promise<string | undefined>
+// Each provider keeps its own key under its own name. Anthropic keeps the original name
+// it has always used, so a key connected before other providers existed is still found.
+function apiKeyName(provider: ProviderId): string {
+  return provider === 'anthropic' ? API_KEY_KEY : `${provider}-api-key`
 }
-export async function saveApiKey(key: string): Promise<void> {
-  await (await db()).put('meta', key, API_KEY_KEY)
+export async function loadApiKey(provider: ProviderId = 'anthropic'): Promise<string | undefined> {
+  return (await db()).get('meta', apiKeyName(provider)) as Promise<string | undefined>
 }
-export async function clearApiKey(): Promise<void> {
-  await (await db()).delete('meta', API_KEY_KEY)
+export async function saveApiKey(provider: ProviderId, key: string): Promise<void> {
+  await (await db()).put('meta', key, apiKeyName(provider))
+}
+export async function clearApiKey(provider: ProviderId): Promise<void> {
+  await (await db()).delete('meta', apiKeyName(provider))
 }
 
 function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: number): (...args: A) => void {

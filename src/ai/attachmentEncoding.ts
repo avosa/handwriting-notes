@@ -10,7 +10,7 @@ export type ContentBlock =
   | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }
   | { type: 'document'; source: { type: 'base64'; media_type: string; data: string } }
 
-async function blobToBase64(blob: Blob): Promise<string> {
+export async function blobToBase64(blob: Blob): Promise<string> {
   const buffer = await blob.arrayBuffer()
   let binary = ''
   const bytes = new Uint8Array(buffer)

@@ -1,54 +1,80 @@
 <script setup lang="ts">
-// Where a writer connects their own Claude key so the AI can draft notes. The key is
-// stored only in this browser and sent only to Anthropic. Before a key is connected it
-// walks a first timer through getting one; once connected it shows a calm status with
-// the key masked, and offers only what makes sense: replace it or disconnect. It rises
-// as a centred card on a wide screen and as a bottom sheet on a phone.
+// Where a writer connects an AI so it can draft and rewrite notes. Claude, ChatGPT,
+// Gemini, and DeepSeek each hold their own key; pick one, follow the short steps to get a key, and
+// paste it. Keys stay in this browser and are sent only to their own vendor. The one you
+// connect becomes the one in use, and any connected provider can be made the one in use.
+// It rises as a centred card on a wide screen and a bottom sheet on a phone.
 import { computed, onMounted, ref } from 'vue'
+import type { ProviderId } from '@/types'
 import { loadApiKey, saveApiKey, clearApiKey } from '@/store/persistence'
+import { useSettings } from '@/store/settings'
+import { providerList, getProvider } from '@/ai/providers'
 import Icon from './Icon.vue'
 
 const emit = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>()
-const key = ref('')
-const original = ref('')
+const settings = useSettings()
+
+const viewed = ref<ProviderId>(settings.activeProvider)
+const keys = ref<Record<string, string>>({})
+const draft = ref('')
 const replacing = ref(false)
 const show = ref(false)
 
-const connected = computed(() => !!original.value)
+const provider = computed(() => getProvider(viewed.value))
+const savedKey = computed(() => keys.value[viewed.value] ?? '')
+const connected = computed(() => !!savedKey.value)
+const isActive = computed(() => settings.activeProvider === viewed.value)
+const editing = computed(() => !connected.value || replacing.value)
 
 onMounted(async () => {
-  const existing = await loadApiKey()
-  if (existing) {
-    key.value = existing
-    original.value = existing
+  const found: Record<string, string> = {}
+  for (const p of providerList) {
+    const existing = await loadApiKey(p.id)
+    if (existing) found[p.id] = existing
   }
+  keys.value = found
 })
 
-async function save() {
-  if (!key.value.trim()) return
-  await saveApiKey(key.value.trim())
-  original.value = key.value.trim()
+function pick(id: ProviderId) {
+  viewed.value = id
   replacing.value = false
+  show.value = false
+  draft.value = ''
+}
+async function save() {
+  const key = draft.value.trim()
+  if (!key) return
+  await saveApiKey(viewed.value, key)
+  keys.value = { ...keys.value, [viewed.value]: key }
+  settings.setProvider(viewed.value)
+  replacing.value = false
+  draft.value = ''
   emit('saved')
-  emit('close')
 }
 async function disconnect() {
-  await clearApiKey()
-  key.value = ''
-  original.value = ''
+  await clearApiKey(viewed.value)
+  const next = { ...keys.value }
+  delete next[viewed.value]
+  keys.value = next
   replacing.value = false
+  if (settings.activeProvider === viewed.value) {
+    settings.setProvider(providerList.find((p) => keys.value[p.id])?.id ?? 'anthropic')
+  }
 }
 function startReplace() {
-  key.value = ''
+  draft.value = ''
   replacing.value = true
 }
 function cancelReplace() {
-  key.value = original.value
+  draft.value = ''
   replacing.value = false
+}
+function useForWriting() {
+  settings.setProvider(viewed.value)
 }
 function masked(k: string): string {
   const t = k.trim()
-  return t.length > 14 ? `${t.slice(0, 10)}${'•'.repeat(6)}${t.slice(-4)}` : t
+  return t.length > 14 ? `${t.slice(0, 8)}${'•'.repeat(6)}${t.slice(-4)}` : t
 }
 </script>
 
@@ -58,72 +84,81 @@ function masked(k: string): string {
       <div class="grip" />
       <button class="x" title="Close" @click="emit('close')"><Icon name="close" :size="18" /></button>
 
+      <div class="tabs">
+        <button v-for="p in providerList" :key="p.id" class="tab" :class="{ on: viewed === p.id }" @click="pick(p.id)">
+          <span class="tab-name">{{ p.name }}</span>
+          <span v-if="settings.activeProvider === p.id" class="tab-flag">In use</span>
+          <span v-else-if="keys[p.id]" class="tab-dot" />
+        </button>
+      </div>
+
       <div class="head">
         <div class="badge" :class="{ ok: connected && !replacing }">
           <Icon :name="connected && !replacing ? 'check' : 'wand'" :size="22" />
         </div>
-        <h2>{{ connected && !replacing ? 'Claude is connected' : 'Write with AI' }}</h2>
+        <h2>{{ connected && !replacing ? `${provider.name} is connected` : `Connect ${provider.name}` }}</h2>
         <p v-if="connected && !replacing">
-          AI drafting is on. Your key stays in this browser and is sent only to Anthropic.
+          {{ isActive ? 'This is drafting your notes.' : 'Connected.' }} Your key stays in this browser and is sent only
+          to {{ provider.vendor }}.
         </p>
-        <p v-else>Everything here is free. To have Claude draft or rewrite notes, connect your own Anthropic key.</p>
+        <p v-else>
+          Everything here is free. To have {{ provider.name }} draft or rewrite notes, connect your own
+          {{ provider.vendor }} key.
+        </p>
       </div>
 
-      <ol v-if="!connected" class="steps">
-        <li>
-          <span class="n">1</span>
-          <div>
-            Open the Anthropic Console and sign in or sign up.
-            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener"
-              >console.anthropic.com</a
-            >
-          </div>
-        </li>
-        <li>
-          <span class="n">2</span>
-          <div>Create a key and copy it. It starts with <code>sk-ant-</code>.</div>
-        </li>
-        <li>
-          <span class="n">3</span>
-          <div>Paste it below. It is saved only in this browser.</div>
-        </li>
-      </ol>
+      <template v-if="editing">
+        <ol class="steps">
+          <li v-for="(step, i) in provider.steps" :key="i">
+            <span class="n">{{ i + 1 }}</span>
+            <div>{{ step }}</div>
+          </li>
+        </ol>
+        <a class="console" :href="provider.consoleUrl" target="_blank" rel="noopener">
+          <Icon name="key" :size="15" /> Open the {{ provider.vendor }} key page
+          <Icon name="arrowLeft" :size="14" class="ext" />
+        </a>
+        <div class="field">
+          <input
+            type="password"
+            :value="draft"
+            :placeholder="provider.keyPlaceholder"
+            spellcheck="false"
+            autocomplete="off"
+            @input="draft = ($event.target as HTMLInputElement).value"
+            @keydown.enter="save"
+          />
+        </div>
+      </template>
 
-      <div v-if="connected && !replacing" class="status">
+      <div v-else class="status">
         <div class="status-top">
           <span class="dot" />
-          <span class="masked" :class="{ full: show }">{{ show ? original : masked(original) }}</span>
+          <span class="masked" :class="{ full: show }">{{ show ? savedKey : masked(savedKey) }}</span>
         </div>
         <div class="status-actions">
           <button class="link" @click="show = !show">{{ show ? 'Hide' : 'Show' }}</button>
           <span class="dot-sep" />
           <button class="link" @click="startReplace">Replace</button>
+          <template v-if="!isActive">
+            <span class="dot-sep" />
+            <button class="link" @click="useForWriting">Use for writing</button>
+          </template>
         </div>
-      </div>
-
-      <div v-else class="field">
-        <input
-          type="password"
-          :value="key"
-          placeholder="sk-ant-..."
-          spellcheck="false"
-          autocomplete="off"
-          @input="key = ($event.target as HTMLInputElement).value"
-        />
       </div>
 
       <div class="actions">
         <template v-if="!connected">
           <button class="ghost" @click="emit('close')">Not now</button>
           <span class="spacer" />
-          <button class="primary" :disabled="!key.trim()" @click="save">
+          <button class="primary" :disabled="!draft.trim()" @click="save">
             <Icon name="check" :size="16" /> Connect
           </button>
         </template>
         <template v-else-if="replacing">
           <button class="ghost" @click="cancelReplace">Cancel</button>
           <span class="spacer" />
-          <button class="primary" :disabled="!key.trim()" @click="save">
+          <button class="primary" :disabled="!draft.trim()" @click="save">
             <Icon name="check" :size="16" /> Save key
           </button>
         </template>
@@ -134,7 +169,7 @@ function masked(k: string): string {
         </template>
       </div>
 
-      <p class="foot">Usage is billed by Anthropic to your account.</p>
+      <p class="foot">Usage is billed by {{ provider.vendor }} to your account.</p>
     </div>
   </div>
 </template>
@@ -152,10 +187,10 @@ function masked(k: string): string {
 }
 .card {
   position: relative;
-  width: min(440px, 100%);
+  width: min(460px, 100%);
   background: var(--surface);
   border-radius: 22px;
-  padding: 26px 24px 20px;
+  padding: 22px 24px 20px;
   box-shadow: var(--pop-shadow);
   animation: pop 0.2s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
@@ -178,13 +213,58 @@ function masked(k: string): string {
   cursor: pointer;
   padding: 4px;
   border-radius: 8px;
+  z-index: 1;
 }
 .x:hover {
   background: var(--surface-sunken);
 }
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin: 6px 0 18px;
+  background: var(--surface-sunken);
+  border-radius: 12px;
+}
+.tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  border-radius: 9px;
+  padding: 9px 6px;
+  cursor: pointer;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+.tab.on {
+  background: var(--surface);
+  color: var(--brand);
+  box-shadow: 0 1px 4px var(--border);
+}
+.tab-flag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #fff;
+  background: linear-gradient(135deg, #3f8f5c, #2e9e8f);
+  border-radius: 999px;
+  padding: 2px 6px;
+}
+.tab-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3f8f5c;
+}
 .head {
   text-align: center;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 .badge {
   width: 46px;
@@ -212,11 +292,11 @@ h2 {
 }
 .steps {
   list-style: none;
-  margin: 0 0 16px;
+  margin: 0 0 12px;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 11px;
 }
 .steps li {
   display: flex;
@@ -237,18 +317,21 @@ h2 {
   display: grid;
   place-items: center;
 }
-.steps a {
+.console {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--accent);
   text-decoration: none;
 }
-.steps a:hover {
+.console:hover {
   text-decoration: underline;
 }
-code {
-  background: var(--surface-sunken);
-  padding: 1px 5px;
-  border-radius: 5px;
-  font-size: 12px;
+.console .ext {
+  transform: rotate(135deg);
 }
 .status {
   display: flex;
@@ -282,7 +365,6 @@ code {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* When the full key is shown it wraps within the box instead of overflowing. */
 .masked.full {
   white-space: normal;
   overflow: visible;
@@ -294,6 +376,7 @@ code {
   align-items: center;
   gap: 10px;
   padding-left: 19px;
+  flex-wrap: wrap;
 }
 .link {
   border: none;
@@ -402,7 +485,7 @@ button.primary:disabled {
     height: 4px;
     border-radius: 2px;
     background: var(--border);
-    margin: -8px auto 14px;
+    margin: -6px auto 12px;
   }
   .actions {
     flex-wrap: wrap;

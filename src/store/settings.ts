@@ -2,7 +2,7 @@
 // tool. The palette and recent colours feed every colour picker in the app, from pen
 // ink to headings to diagram accents, so a colour chosen anywhere is offered again.
 import { defineStore } from 'pinia'
-import type { PenType, Settings, ThemeChoice } from '@/types'
+import type { PenType, ProviderId, Settings, ThemeChoice } from '@/types'
 import { defaultHandwritingId } from '@/handwriting/registry'
 import { penProfile } from '@/tools/penTypes'
 import { defaultSwatches } from '@/ui/colors'
@@ -11,6 +11,7 @@ function defaultSettings(): Settings {
   return {
     activeHandwritingId: defaultHandwritingId,
     theme: 'system',
+    activeProvider: 'anthropic',
     penColors: [...defaultSwatches],
     recentColors: [],
     activeTool: 'fine',
@@ -49,8 +50,16 @@ export const useSettings = defineStore('settings', {
     setTheme(theme: ThemeChoice) {
       this.theme = theme
     },
+    setProvider(provider: ProviderId) {
+      this.activeProvider = provider
+    },
     hydrate(saved: Settings) {
-      this.$patch({ ...saved, recentColors: saved.recentColors ?? [], theme: saved.theme ?? 'system' })
+      this.$patch({
+        ...saved,
+        recentColors: saved.recentColors ?? [],
+        theme: saved.theme ?? 'system',
+        activeProvider: saved.activeProvider ?? 'anthropic',
+      })
     },
   },
 })

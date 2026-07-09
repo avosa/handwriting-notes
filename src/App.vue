@@ -6,7 +6,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Attachment } from './types'
 import { useDocument } from './store/document'
 import { useLibrary } from './store/library'
-import { useClaude } from './compose/useClaude'
+import { useAi } from './compose/useAi'
 import { useTheme } from './theme/useTheme'
 import NotePage from './editor/NotePage.vue'
 import EditorBar from './editor/EditorBar.vue'
@@ -24,7 +24,7 @@ import Popover from './ui/Popover.vue'
 
 const documentStore = useDocument()
 const library = useLibrary()
-const { generating, error: aiError, generate, stop } = useClaude()
+const { generating, error: aiError, generate, stop } = useAi()
 const { resolved: resolvedTheme } = useTheme()
 
 const mode = ref<'write' | 'draw'>('write')

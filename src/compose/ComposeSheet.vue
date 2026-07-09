@@ -6,6 +6,8 @@
 import { computed, ref } from 'vue'
 import type { Attachment } from '@/types'
 import { loadApiKey, putBlob } from '@/store/persistence'
+import { useSettings } from '@/store/settings'
+import { getProvider } from '@/ai/providers'
 import { uid } from '@/util/id'
 import Attachments from './Attachments.vue'
 import VoiceRecorder from './VoiceRecorder.vue'
@@ -18,6 +20,9 @@ const emit = defineEmits<{
   (e: 'needs-key'): void
   (e: 'submit', instruction: string, attachments: Attachment[], useCurrent: boolean): void
 }>()
+
+const settings = useSettings()
+const provider = computed(() => getProvider(settings.activeProvider))
 
 const instruction = ref('')
 const attachments = ref<Attachment[]>([])
@@ -86,7 +91,7 @@ const canSend = computed(() => instruction.value.trim().length > 0 || attachment
 // stands in so the attachments have something to act on.
 async function send() {
   if (!canSend.value) return
-  if (!(await loadApiKey())) {
+  if (!(await loadApiKey(settings.activeProvider))) {
     emit('needs-key')
     return
   }
@@ -134,7 +139,9 @@ async function send() {
       <p v-if="voiceError" class="error"><Icon name="close" :size="14" /> {{ voiceError }}</p>
 
       <footer>
-        <span class="note"><Icon name="key" :size="14" /> Free to use. Generating needs your Claude key.</span>
+        <span class="note"
+          ><Icon name="key" :size="14" /> Free to use. Generating needs your {{ provider.name }} key.</span
+        >
         <button class="send" :disabled="!canSend" @click="send"><Icon name="wand" :size="16" />Write notes</button>
       </footer>
     </div>

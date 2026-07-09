@@ -6,7 +6,7 @@ import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { TextRole } from '@/types'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
-import { useClaude } from '@/compose/useClaude'
+import { useAi } from '@/compose/useAi'
 import { toggleBold, toggleItalic, toggleUnderline, setTextColor, rememberSelection } from './marks'
 import Icon from '@/ui/Icon.vue'
 import Popover from '@/ui/Popover.vue'
@@ -14,7 +14,7 @@ import ColorPicker from '@/ui/ColorPicker.vue'
 
 const documentStore = useDocument()
 const settings = useSettings()
-const { rewriteLine, refining, error } = useClaude()
+const { rewriteLine, refining, error } = useAi()
 
 const visible = ref(false)
 const x = ref(0)
