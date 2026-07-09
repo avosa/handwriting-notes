@@ -1,89 +1,133 @@
 <script setup lang="ts">
 // Where a writer connects their own Claude key so the AI can draft notes. The key is
-// stored only in this browser and sent only to Anthropic. The dialog explains why the
-// key is needed, walks through getting one, and links straight to the page for it, so
-// a first-timer is never stuck.
-import { onMounted, ref } from 'vue'
+// stored only in this browser and sent only to Anthropic. Before a key is connected it
+// walks a first timer through getting one; once connected it shows a calm status with
+// the key masked, and offers only what makes sense: replace it or disconnect. It rises
+// as a centred card on a wide screen and as a bottom sheet on a phone.
+import { computed, onMounted, ref } from 'vue'
 import { loadApiKey, saveApiKey, clearApiKey } from '@/store/persistence'
 import Icon from './Icon.vue'
 
 const emit = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>()
 const key = ref('')
-const saved = ref(false)
-const show = ref(false)
+const original = ref('')
+const replacing = ref(false)
+
+const connected = computed(() => !!original.value)
 
 onMounted(async () => {
   const existing = await loadApiKey()
   if (existing) {
     key.value = existing
-    saved.value = true
+    original.value = existing
   }
 })
 
 async function save() {
   if (!key.value.trim()) return
   await saveApiKey(key.value.trim())
-  saved.value = true
+  original.value = key.value.trim()
+  replacing.value = false
   emit('saved')
   emit('close')
 }
-async function forget() {
+async function disconnect() {
   await clearApiKey()
   key.value = ''
-  saved.value = false
+  original.value = ''
+  replacing.value = false
+}
+function startReplace() {
+  key.value = ''
+  replacing.value = true
+}
+function cancelReplace() {
+  key.value = original.value
+  replacing.value = false
+}
+function masked(k: string): string {
+  const t = k.trim()
+  return t.length > 14 ? `${t.slice(0, 10)}${'•'.repeat(6)}${t.slice(-4)}` : t
 }
 </script>
 
 <template>
   <div class="backdrop" @click.self="emit('close')">
-    <div class="sheet">
+    <div class="card">
+      <div class="grip" />
       <button class="x" title="Close" @click="emit('close')"><Icon name="close" :size="18" /></button>
 
       <div class="head">
-        <div class="badge"><Icon name="wand" :size="22" /></div>
-        <h2>Write notes with AI</h2>
-        <p>Everything here is free. To have Claude draft or rewrite notes for you, connect your own Anthropic key.</p>
+        <div class="badge" :class="{ ok: connected && !replacing }">
+          <Icon :name="connected && !replacing ? 'check' : 'wand'" :size="22" />
+        </div>
+        <h2>{{ connected && !replacing ? 'Claude is connected' : 'Write with AI' }}</h2>
+        <p v-if="connected && !replacing">
+          AI drafting is on. Your key stays in this browser and is sent only to Anthropic.
+        </p>
+        <p v-else>Everything here is free. To have Claude draft or rewrite notes, connect your own Anthropic key.</p>
       </div>
 
-      <ol class="steps">
+      <ol v-if="!connected" class="steps">
         <li>
           <span class="n">1</span>
           <div>
             Open the Anthropic Console and sign in or sign up.
             <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener"
-              >console.anthropic.com/settings/keys</a
+              >console.anthropic.com</a
             >
           </div>
         </li>
         <li>
           <span class="n">2</span>
-          <div>Create a key, then copy it. It starts with <code>sk-ant-</code>.</div>
+          <div>Create a key and copy it. It starts with <code>sk-ant-</code>.</div>
         </li>
         <li>
           <span class="n">3</span>
-          <div>Paste it below. It is saved only in this browser and sent only to Anthropic.</div>
+          <div>Paste it below. It is saved only in this browser.</div>
         </li>
       </ol>
 
-      <div class="field">
+      <div v-if="connected && !replacing" class="status">
+        <span class="dot" />
+        <span class="masked">{{ masked(original) }}</span>
+        <button class="replace" @click="startReplace">Replace</button>
+      </div>
+
+      <div v-else class="field">
         <input
-          :type="show ? 'text' : 'password'"
+          type="password"
           :value="key"
           placeholder="sk-ant-..."
           spellcheck="false"
+          autocomplete="off"
           @input="key = ($event.target as HTMLInputElement).value"
         />
-        <button class="reveal" @click="show = !show">{{ show ? 'Hide' : 'Show' }}</button>
       </div>
 
       <div class="actions">
-        <button v-if="saved" class="ghost" @click="forget">Disconnect</button>
-        <span class="spacer" />
-        <button class="ghost" @click="emit('close')">Not now</button>
-        <button class="primary" :disabled="!key.trim()" @click="save"><Icon name="check" :size="16" /> Connect</button>
+        <template v-if="!connected">
+          <button class="ghost" @click="emit('close')">Not now</button>
+          <span class="spacer" />
+          <button class="primary" :disabled="!key.trim()" @click="save">
+            <Icon name="check" :size="16" /> Connect
+          </button>
+        </template>
+        <template v-else-if="replacing">
+          <button class="ghost" @click="cancelReplace">Cancel</button>
+          <span class="spacer" />
+          <button class="primary" :disabled="!key.trim()" @click="save">
+            <Icon name="check" :size="16" /> Save key
+          </button>
+        </template>
+        <template v-else>
+          <button class="danger" @click="disconnect">Disconnect</button>
+          <span class="spacer" />
+          <button class="primary" @click="emit('close')">Done</button>
+        </template>
       </div>
 
-      <p class="foot">Usage is billed by Anthropic to your account. You can disconnect any time.</p>
+      <p class="foot">Usage is billed by Anthropic to your account.</p>
     </div>
   </div>
 </template>
@@ -92,19 +136,30 @@ async function forget() {
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(31, 31, 40, 0.4);
+  background: rgba(31, 31, 40, 0.42);
+  backdrop-filter: blur(2px);
   display: grid;
   place-items: center;
   z-index: 80;
   padding: 16px;
 }
-.sheet {
+.card {
   position: relative;
-  width: min(460px, 100%);
+  width: min(440px, 100%);
   background: #fff;
-  border-radius: 20px;
+  border-radius: 22px;
   padding: 26px 24px 20px;
   box-shadow: 0 30px 80px rgba(31, 31, 40, 0.35);
+  animation: pop 0.2s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+@keyframes pop {
+  from {
+    transform: scale(0.96) translateY(8px);
+    opacity: 0;
+  }
+}
+.grip {
+  display: none;
 }
 .x {
   position: absolute;
@@ -133,6 +188,9 @@ async function forget() {
   place-items: center;
   color: #fff;
   background: linear-gradient(135deg, #4a72b0, #7e3f8a);
+}
+.badge.ok {
+  background: linear-gradient(135deg, #3f8f5c, #2e9e8f);
 }
 h2 {
   margin: 0 0 6px;
@@ -185,32 +243,63 @@ code {
   border-radius: 5px;
   font-size: 12px;
 }
-.field {
+.status {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(63, 143, 92, 0.08);
+  border: 1px solid rgba(63, 143, 92, 0.2);
+  min-width: 0;
+}
+.dot {
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #3f8f5c;
+  box-shadow: 0 0 0 3px rgba(63, 143, 92, 0.2);
+}
+.masked {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  color: #33334c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.replace {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: #4a72b0;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 7px;
+}
+.replace:hover {
+  background: rgba(74, 114, 176, 0.12);
+}
+.field {
   border: 1px solid rgba(51, 51, 76, 0.2);
   border-radius: 10px;
-  padding: 4px 4px 4px 12px;
+  padding: 4px 12px;
 }
 .field:focus-within {
   border-color: #4a72b0;
 }
 .field input {
-  flex: 1;
+  width: 100%;
   border: none;
   outline: none;
   font-size: 14px;
-  padding: 8px 0;
+  padding: 9px 0;
   font-family: inherit;
-}
-.reveal {
-  border: none;
-  background: transparent;
-  color: #6a6a80;
-  cursor: pointer;
-  font-size: 13px;
-  padding: 6px 8px;
 }
 .actions {
   display: flex;
@@ -221,14 +310,22 @@ code {
 .spacer {
   flex: 1;
 }
-button.ghost {
+button.ghost,
+button.danger {
   border: 1px solid rgba(51, 51, 76, 0.18);
   background: transparent;
   color: #33334c;
   border-radius: 10px;
-  padding: 9px 14px;
+  padding: 10px 16px;
   cursor: pointer;
   font-size: 14px;
+}
+button.danger {
+  color: #b73b3a;
+  border-color: rgba(183, 59, 58, 0.3);
+}
+button.danger:hover {
+  background: rgba(183, 59, 58, 0.08);
 }
 button.primary {
   display: inline-flex;
@@ -238,7 +335,7 @@ button.primary {
   background: #4a72b0;
   color: #fff;
   border-radius: 10px;
-  padding: 9px 16px;
+  padding: 10px 18px;
   cursor: pointer;
   font-size: 14px;
 }
@@ -251,5 +348,34 @@ button.primary:disabled {
   text-align: center;
   font-size: 12px;
   color: #9a9aa8;
+}
+
+@media (max-width: 560px) {
+  .backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .card {
+    width: 100%;
+    border-radius: 22px 22px 0 0;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    animation: rise 0.24s ease;
+  }
+  @keyframes rise {
+    from {
+      transform: translateY(100%);
+    }
+  }
+  .grip {
+    display: block;
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(51, 51, 76, 0.18);
+    margin: -8px auto 14px;
+  }
+  .actions {
+    flex-wrap: wrap;
+  }
 }
 </style>
