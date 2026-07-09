@@ -186,12 +186,21 @@ function addPage() {
       />
     </aside>
 
+    <!-- The menu toggle rides with the drawer instead of being carried off on the pushed
+         page: at rest it sits at the top left; opening carries it to the drawer's right
+         edge; tapping it opens or closes the menu. Phone only. -->
+    <button
+      class="menu-toggle hide-desktop"
+      :class="{ open: drawerOpen }"
+      :aria-label="drawerOpen ? 'Close menu' : 'Open menu'"
+      @click="drawerOpen = !drawerOpen"
+    >
+      <Icon name="menu" :size="22" />
+    </button>
+
     <div class="app surface" :class="{ pushed: drawerOpen }">
       <header class="topbar">
         <div class="left">
-          <button class="icon-btn hamburger hide-desktop" title="Menu" @click="drawerOpen = true">
-            <Icon name="menu" :size="20" />
-          </button>
           <button class="icon-btn hide-mobile" title="All notes" @click="showHome = true">
             <Icon name="grid" :size="18" />
           </button>
@@ -385,6 +394,34 @@ function addPage() {
   transform: translateX(0);
   box-shadow: 10px 0 40px rgba(0, 0, 0, 0.32);
 }
+/* Rides on the same curve as the drawer and the page push, so the three read as one
+   motion. Open, it rests just inside the drawer's right edge. */
+.menu-toggle {
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top));
+  left: 10px;
+  z-index: 72;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 11px;
+  cursor: pointer;
+  transition:
+    transform 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    background 0.12s ease;
+  will-change: transform;
+}
+.menu-toggle:hover {
+  background: var(--accent-wash);
+}
+.menu-toggle.open {
+  transform: translateX(calc(var(--drawer-w) - 62px));
+}
 .drawer-scrim {
   position: fixed;
   inset: 0;
@@ -430,10 +467,6 @@ function addPage() {
 }
 .logo {
   flex-shrink: 0;
-}
-.hamburger {
-  border: none;
-  background: transparent;
 }
 .brand {
   font-weight: 700;
@@ -748,6 +781,8 @@ function addPage() {
   }
   .topbar {
     padding: 8px 12px;
+    /* Leave room at the left for the floating menu toggle that sits over the bar. */
+    padding-left: 60px;
     gap: 8px;
     grid-template-columns: auto 1fr auto;
   }
