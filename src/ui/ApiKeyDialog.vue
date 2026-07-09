@@ -9,6 +9,7 @@ import type { ProviderId } from '@/types'
 import { loadApiKey, saveApiKey, clearApiKey } from '@/store/persistence'
 import { useSettings } from '@/store/settings'
 import { providerList, getProvider } from '@/ai/providers'
+import { refreshConnections } from '@/compose/aiConnection'
 import Icon from './Icon.vue'
 
 const emit = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>()
@@ -47,6 +48,7 @@ async function save() {
   await saveApiKey(viewed.value, key)
   keys.value = { ...keys.value, [viewed.value]: key }
   settings.setProvider(viewed.value)
+  await refreshConnections()
   replacing.value = false
   draft.value = ''
   emit('saved')
@@ -56,6 +58,7 @@ async function disconnect() {
   const next = { ...keys.value }
   delete next[viewed.value]
   keys.value = next
+  await refreshConnections()
   replacing.value = false
   if (settings.activeProvider === viewed.value) {
     settings.setProvider(providerList.find((p) => keys.value[p.id])?.id ?? 'anthropic')

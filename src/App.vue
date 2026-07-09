@@ -7,6 +7,7 @@ import type { Attachment } from './types'
 import { useDocument } from './store/document'
 import { useLibrary } from './store/library'
 import { useAi } from './compose/useAi'
+import { refreshConnections } from './compose/aiConnection'
 import { useTheme } from './theme/useTheme'
 import NotePage from './editor/NotePage.vue'
 import EditorBar from './editor/EditorBar.vue'
@@ -145,7 +146,10 @@ function askAiWholeNote() {
   showCompose.value = true
 }
 
-onMounted(fit)
+onMounted(() => {
+  fit()
+  void refreshConnections()
+})
 window.addEventListener('resize', fit)
 window.addEventListener('keydown', onKeydown)
 onBeforeUnmount(() => {
