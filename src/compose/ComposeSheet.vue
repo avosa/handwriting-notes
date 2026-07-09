@@ -424,11 +424,21 @@ h2 {
 .tool:hover {
   background: var(--accent-wash);
 }
-/* While a voice note records, its bar takes over the toolbar row. */
+/* While a voice note records, its bar takes over the whole toolbar row as a solid surface,
+   so the attach and generate buttons are covered rather than bleeding through, and the
+   slide-up-to-lock animation floats above it as before. */
 .tools :deep(.voice.active) {
   position: absolute;
-  inset: 6px 11px;
-  z-index: 2;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+}
+.tools :deep(.voice.active .bar) {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0 0 15px 15px;
+  background: var(--surface);
 }
 .generate {
   flex-shrink: 0;

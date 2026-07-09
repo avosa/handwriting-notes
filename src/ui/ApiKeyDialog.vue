@@ -26,6 +26,12 @@ const connected = computed(() => !!savedKey.value)
 const isActive = computed(() => settings.activeProvider === viewed.value)
 const editing = computed(() => !connected.value || replacing.value)
 
+// The first step shows the key page as a link; split its text around the bare domain.
+const step0 = computed(() => {
+  const [before, after = ''] = provider.value.steps[0].split(provider.value.consoleLabel)
+  return { before, after }
+})
+
 onMounted(async () => {
   const found: Record<string, string> = {}
   for (const p of providerList) {
@@ -104,15 +110,25 @@ function masked(k: string): string {
           <h2>{{ connected && !replacing ? `${provider.name} is connected` : `Connect ${provider.name}` }}</h2>
           <p>
             The app is free. You connect your own {{ provider.vendor }} key and pay {{ provider.vendor }} only for what
-            {{ provider.name }} does.
+            {{ provider.name }} generates.
           </p>
         </div>
       </header>
 
       <template v-if="editing">
         <ol class="steps">
-          <li v-for="(step, i) in provider.steps" :key="i">
-            <span class="n">{{ i + 1 }}</span
+          <li>
+            <span class="n">1</span>
+            <span
+              >{{ step0.before
+              }}<a class="ilink" :href="provider.consoleUrl" target="_blank" rel="noopener">{{
+                provider.consoleLabel
+              }}</a
+              >{{ step0.after }}</span
+            >
+          </li>
+          <li v-for="(step, i) in provider.steps.slice(1)" :key="i">
+            <span class="n">{{ i + 2 }}</span
             ><span>{{ step }}</span>
           </li>
         </ol>
@@ -221,10 +237,8 @@ function masked(k: string): string {
   margin-bottom: 10px;
 }
 .tab-title {
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-muted);
 }
 .x {
@@ -339,6 +353,14 @@ h2 {
   font-size: 12px;
   display: grid;
   place-items: center;
+}
+.ilink {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+.ilink:hover {
+  text-decoration: underline;
 }
 .field-head {
   display: flex;

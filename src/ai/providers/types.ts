@@ -34,6 +34,8 @@ export interface Provider {
   keyPrefix: string
   /** Where to create a key. */
   consoleUrl: string
+  /** The bare domain of the key page, shown as a link inside the first step. */
+  consoleLabel: string
   /** Short, ordered steps to obtain a key. */
   steps: string[]
   /** Which attachment kinds this vendor's model can read. */

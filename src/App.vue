@@ -366,8 +366,12 @@ function addPage() {
       />
     </div>
 
+    <!-- The connect dialog reads as a step in front of the compose panel, not a second
+         modal on top of it: the panel is kept mounted so a draft survives, but hidden while
+         the dialog is open so the two never stack or compete. -->
     <ComposeSheet
       v-if="showCompose"
+      v-show="!showKey"
       :has-content="noteHasContent"
       @close="showCompose = false"
       @needs-key="showKey = true"

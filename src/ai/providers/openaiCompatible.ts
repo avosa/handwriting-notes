@@ -14,6 +14,7 @@ interface Config {
   keyPlaceholder: string
   keyPrefix: string
   consoleUrl: string
+  consoleLabel: string
   steps: string[]
   reads: Reads
   endpoint: string
@@ -43,6 +44,7 @@ export function openAiCompatible(config: Config): Provider {
     keyPlaceholder: config.keyPlaceholder,
     keyPrefix: config.keyPrefix,
     consoleUrl: config.consoleUrl,
+    consoleLabel: config.consoleLabel,
     steps: config.steps,
     reads: config.reads,
 

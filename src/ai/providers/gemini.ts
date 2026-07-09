@@ -9,11 +9,8 @@ export const gemini = openAiCompatible({
   keyPlaceholder: 'AIza...',
   keyPrefix: 'AIza',
   consoleUrl: 'https://aistudio.google.com/app/apikey',
-  steps: [
-    'Sign in at aistudio.google.com and open Get API key.',
-    'Create a key and copy it.',
-    'Paste it here. It stays in this browser and is sent only to Google.',
-  ],
+  consoleLabel: 'aistudio.google.com',
+  steps: ['Open aistudio.google.com → Get API key.', 'Create a key and copy it.', 'Paste it below.'],
   reads: { images: true, pdf: true, docs: false },
   endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
   model: import.meta.env.VITE_GEMINI_MODEL ?? 'gemini-flash-latest',

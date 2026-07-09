@@ -26,10 +26,11 @@ export const anthropic: Provider = {
   keyPlaceholder: 'sk-ant-...',
   keyPrefix: 'sk-ant-',
   consoleUrl: 'https://console.anthropic.com/settings/keys',
+  consoleLabel: 'console.anthropic.com',
   steps: [
-    'Sign in at console.anthropic.com and open Settings, then API keys.',
-    'Create a key and copy it. It is shown once.',
-    'Paste it here. It stays in this browser and is sent only to Anthropic.',
+    'Open console.anthropic.com → Settings → API keys.',
+    "Create a key and copy it. It's shown only once.",
+    'Paste it below.',
   ],
   reads: { images: true, pdf: true, docs: false },
 
