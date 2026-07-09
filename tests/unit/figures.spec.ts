@@ -71,6 +71,48 @@ describe('dynamic callouts', () => {
   })
 })
 
+describe('free-world placement', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('drops an inserted figure where the writer last pointed, on that page, and floats it', () => {
+    const doc = useDocument()
+    doc.doc.pages.push({ ...doc.doc.pages[0], id: 'p2', index: 1, blocks: [] })
+    doc.setLastPoint(1, 40, 60)
+    const id = doc.addTable(null, 2, 1)
+    // The figure lives on page two (where the point was), not page one.
+    expect(doc.doc.pages[1].blocks.some((b) => b.id === id)).toBe(true)
+    expect(doc.doc.pages[0].blocks.some((b) => b.id === id)).toBe(false)
+    const loc = doc.locate(id)!
+    expect(loc.block.float).toEqual({ x: 40, y: 60, width: 84 })
+  })
+
+  it('drags a floating figure and clamps it to non-negative coordinates', () => {
+    const doc = useDocument()
+    doc.setLastPoint(0, 30, 30)
+    const id = doc.addDiagram(null, {
+      id: 'd',
+      type: 'diagram',
+      heightRules: 12,
+      spec: { kind: 'triangle', direction: 'up', topLabel: 'A', bottomLabel: 'B', color: '#4A72B0' },
+    })
+    doc.moveFloat(id, 120, 90)
+    expect(doc.locate(id)!.block.float).toMatchObject({ x: 120, y: 90 })
+    doc.moveFloat(id, -50, -50)
+    expect(doc.locate(id)!.block.float).toMatchObject({ x: 0, y: 0 })
+  })
+
+  it('docks a floating figure back into the flow and pops it out again', () => {
+    const doc = useDocument()
+    doc.setLastPoint(0, 20, 20)
+    const id = doc.addCallouts(null, [{ color: '#4A72B0', heading: [{ text: 'A' }], items: [[{ text: '' }]] }])
+    expect(doc.locate(id)!.block.float).toBeTruthy()
+    doc.dockFigure(id)
+    expect(doc.locate(id)!.block.float).toBeUndefined()
+    doc.popOutFigure(id)
+    expect(doc.locate(id)!.block.float).toBeTruthy()
+  })
+})
+
 describe('dynamic diagrams', () => {
   beforeEach(() => setActivePinia(createPinia()))
 

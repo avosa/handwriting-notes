@@ -24,6 +24,8 @@ interface DocumentState {
   future: string[]
   /** True when the whole note is selected, so an action can apply to all of it. */
   allSelected: boolean
+  /** Where the writer last pointed on a page, so an inserted figure lands there. */
+  lastPoint: { pageIndex: number; x: number; y: number } | null
 }
 
 // The state the history compares against; kept out of the reactive store since it is a
@@ -48,6 +50,7 @@ export const useDocument = defineStore('document', {
     past: [],
     future: [],
     allSelected: false,
+    lastPoint: null,
   }),
   getters: {
     canUndo: (state) => state.past.length > 0,
@@ -174,18 +177,63 @@ export const useDocument = defineStore('document', {
       this.pendingFocusId = id
       return id
     },
-    addTable(blockId: string | null, columns = 3, bodyRows = 2): string {
+    // Remember where the writer last pointed, so the next inserted figure lands there.
+    setLastPoint(pageIndex: number, x: number, y: number) {
+      this.lastPoint = { pageIndex, x, y }
+    },
+    // A figure is dropped where the writer last pointed and floats there, free to be
+    // dragged anywhere on its page. With no recent point it lands near the top of the page
+    // being worked on.
+    placeFigure(block: Block): string {
+      const point = this.lastPoint ?? { pageIndex: this.activePageIndex, x: 22, y: 22 }
+      const page = this.doc.pages[point.pageIndex] ?? this.doc.pages[this.activePageIndex] ?? this.doc.pages[0]
+      const width = block.type === 'diagram' ? 92 : block.type === 'callouts' ? 130 : 84
+      block.float = { x: Math.max(2, point.x), y: Math.max(2, point.y), width }
+      page.blocks.push(block)
+      this.touch()
+      this.select(block.id)
+      return block.id
+    },
+    addTable(_blockId: string | null, columns = 3, bodyRows = 2): string {
       const header = Array.from({ length: columns }, (_, i) => (i === 0 ? 'p' : i === columns - 1 ? 'result' : 'q'))
       const rows = Array.from({ length: bodyRows }, () => Array.from({ length: columns }, () => ''))
-      return this.insertAfter(blockId, { id: uid('b'), type: 'table', header, rows })
+      return this.placeFigure({ id: uid('b'), type: 'table', header, rows })
     },
-    addCallouts(blockId: string | null, boxes: CalloutBox[], caption?: string): string {
-      const id = this.insertAfter(blockId, { id: uid('b'), type: 'callouts', boxes, caption })
-      this.pendingFocusId = id
-      return id
+    addCallouts(_blockId: string | null, boxes: CalloutBox[], caption?: string): string {
+      return this.placeFigure({ id: uid('b'), type: 'callouts', boxes, caption })
     },
-    addDiagram(blockId: string | null, block: Extract<Block, { type: 'diagram' }>): string {
-      return this.insertAfter(blockId, { ...block, id: uid('b') })
+    addDiagram(_blockId: string | null, block: Extract<Block, { type: 'diagram' }>): string {
+      return this.placeFigure({ ...block, id: uid('b') })
+    },
+    // Drag a floating figure across its page; docking drops it back into the writing flow,
+    // and popping a flowing figure out lifts it to float where the writer last pointed.
+    moveFloat(blockId: string, x: number, y: number) {
+      const loc = this.locate(blockId)
+      if (!loc || !loc.block.float) return
+      loc.block.float.x = Math.max(0, x)
+      loc.block.float.y = Math.max(0, y)
+      this.touch()
+    },
+    setFloatWidth(blockId: string, width: number) {
+      const loc = this.locate(blockId)
+      if (!loc || !loc.block.float) return
+      loc.block.float.width = Math.max(24, Math.min(190, width))
+      this.touch()
+    },
+    dockFigure(blockId: string) {
+      const loc = this.locate(blockId)
+      if (loc?.block.float) {
+        delete loc.block.float
+        this.touch()
+      }
+    },
+    popOutFigure(blockId: string) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.float) return
+      const point = this.lastPoint ?? { x: 24, y: 24 }
+      const width = loc.block.type === 'diagram' ? 92 : loc.block.type === 'callouts' ? 130 : 84
+      loc.block.float = { x: point.x, y: point.y, width }
+      this.touch()
     },
 
     // A table grows and shrinks after it is placed. A column adds an empty cell to the

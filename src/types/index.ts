@@ -137,13 +137,24 @@ export interface LabeledSet {
   color: string
 }
 
-/** The things that flow down a page, in order. */
+/**
+ * Where a floating figure sits on its page, in millimetres from the top left, and how
+ * wide it is drawn. A block without this flows down the page in order; a block with it is
+ * lifted out and can be dragged anywhere.
+ */
+export interface FloatPos {
+  x: number
+  y: number
+  width: number
+}
+
+/** The things that flow down a page, in order, unless lifted out to float. */
 export type Block =
-  | { id: string; type: 'text'; text: Paragraph }
-  | { id: string; type: 'list'; ordered: boolean; items: TextRun[][]; indent?: number }
-  | { id: string; type: 'table'; header: string[]; rows: string[][]; caption?: string }
-  | { id: string; type: 'callouts'; boxes: CalloutBox[]; caption?: string }
-  | { id: string; type: 'diagram'; spec: DiagramSpec; heightRules: number }
+  | { id: string; type: 'text'; text: Paragraph; float?: FloatPos }
+  | { id: string; type: 'list'; ordered: boolean; items: TextRun[][]; indent?: number; float?: FloatPos }
+  | { id: string; type: 'table'; header: string[]; rows: string[][]; caption?: string; float?: FloatPos }
+  | { id: string; type: 'callouts'; boxes: CalloutBox[]; caption?: string; float?: FloatPos }
+  | { id: string; type: 'diagram'; spec: DiagramSpec; heightRules: number; float?: FloatPos }
 
 /**
  * A line of writing placed anywhere on the page, the way you would jot a note beside a

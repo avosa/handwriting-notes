@@ -11,6 +11,7 @@ import { textMetrics } from './alignment'
 import { useDocument } from '@/store/document'
 import Sheet from '@/paper/Sheet.vue'
 import TextLayer from './TextLayer.vue'
+import FreeFigureLayer from './FreeFigureLayer.vue'
 import FreeTextLayer from './FreeTextLayer.vue'
 import InkLayer from './InkLayer.vue'
 
@@ -28,13 +29,18 @@ const documentStore = useDocument()
 // of being confined to the flowing column.
 function onPageClick(event: MouseEvent) {
   if (props.mode !== 'write') return
-  const target = event.target as HTMLElement
-  if (target.closest('.editable, .cell')) return
   const rect = root.value?.getBoundingClientRect()
   if (!rect) return
   const p = preset.value
-  const xMm = Math.min(Math.max((event.clientX - rect.left) / pxPerMm.value, p.text.left), p.text.right - 6)
+  // Remember exactly where the writer pointed, on this page, so the next figure inserted
+  // from the toolbar drops right here instead of jumping to the top of page one.
+  const rawX = (event.clientX - rect.left) / pxPerMm.value
   const clickYMm = (event.clientY - rect.top) / pxPerMm.value
+  documentStore.setLastPoint(props.pageIndex, rawX, clickYMm)
+
+  const target = event.target as HTMLElement
+  if (target.closest('.editable, .cell')) return
+  const xMm = Math.min(Math.max(rawX, p.text.left), p.text.right - 6)
   const rules = ruleYsForHeight(p, heightMm.value)
   const line = rules.reduce((best, y) => (Math.abs(y - clickYMm) < Math.abs(best - clickYMm) ? y : best), rules[0])
   documentStore.addNote(props.pageIndex, xMm, line)
@@ -86,6 +92,16 @@ onBeforeUnmount(() => observer?.disconnect())
       :metrics="metrics"
       :px-per-mm="pxPerMm"
       :editable="mode === 'write'"
+    />
+    <!-- Figures lifted out of the flow float here, over the page, draggable in write mode. -->
+    <FreeFigureLayer
+      :page="page"
+      :page-index="pageIndex"
+      :metrics="metrics"
+      :px-per-mm="pxPerMm"
+      :mode="mode"
+      :page-width-mm="preset.width"
+      :page-height-mm="heightMm"
     />
     <!-- Free notes stay on the page in both modes: the ink canvas sits above them, so a
          stroke can cross a jotted note just as it can cross the flowing text. In draw

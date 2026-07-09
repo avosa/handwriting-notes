@@ -28,6 +28,8 @@ const settings = useSettings()
 const handwriting = computed(() => getHandwriting(settings.activeHandwritingId))
 
 const lineHeightPx = computed(() => props.metrics.lineHeight * props.pxPerMm)
+// Blocks lifted out to float are drawn by the free figure layer, so the flow skips them.
+const flowBlocks = computed(() => props.page.blocks.filter((b) => !b.float))
 const columnStyle = computed<CSSProperties>(() => ({
   left: `${props.metrics.left * props.pxPerMm}px`,
   top: `${(props.metrics.firstBaseline - props.metrics.lineHeight) * props.pxPerMm}px`,
@@ -185,7 +187,7 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
 
 <template>
   <div class="text-layer" :style="columnStyle">
-    <template v-for="block in page.blocks" :key="block.id">
+    <template v-for="block in flowBlocks" :key="block.id">
       <EditableText
         v-if="block.type === 'text'"
         :ref="bindEditable(`text:${block.id}`)"
