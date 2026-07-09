@@ -63,13 +63,17 @@ function drawerSave(kind: 'pdf' | 'docx') {
   void saveAs(kind)
 }
 
-// Start a run and step back so Claude is watched writing onto the page. When working on
-// the current note, its words go along as context so Claude can build on them.
+// Start a run and step back so the AI is watched writing onto the page. Working on the
+// current note carries its words along as context so the AI can build on them; starting a
+// new note opens a fresh page first, so the writing becomes its own note rather than more
+// pages added to the one on screen. The note that was on screen is parked in the library.
 async function onSubmit(instruction: string, attachments: Attachment[], useCurrent: boolean) {
   let context: string | undefined
   if (useCurrent) {
     const { noteToText } = await import('./ai/noteContext')
     context = noteToText(documentStore.doc)
+  } else if (noteHasContent.value) {
+    await newNote()
   }
   void generate(instruction, attachments, context)
 }
