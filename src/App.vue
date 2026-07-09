@@ -33,10 +33,22 @@ async function newNote() {
   await library.createNote('blank')
 }
 
-// Start a run and step back so Claude is watched writing onto the page.
-function onSubmit(instruction: string, attachments: Attachment[]) {
-  void generate(instruction, attachments)
+// Start a run and step back so Claude is watched writing onto the page. When working on
+// the current note, its words go along as context so Claude can build on them.
+async function onSubmit(instruction: string, attachments: Attachment[], useCurrent: boolean) {
+  let context: string | undefined
+  if (useCurrent) {
+    const { noteToText } = await import('./ai/noteContext')
+    context = noteToText(documentStore.doc)
+  }
+  void generate(instruction, attachments, context)
 }
+
+const noteHasContent = computed(() =>
+  documentStore.doc.pages.some((page) =>
+    page.blocks.some((b) => (b.type === 'text' ? b.text.runs.some((r) => r.text.trim()) : true)),
+  ),
+)
 
 // Follow the writing: keep the newest line Claude adds in view.
 watch(
@@ -191,7 +203,13 @@ function addPage() {
     </Transition>
 
     <SelectionMenu />
-    <ComposeSheet v-if="showCompose" @close="showCompose = false" @needs-key="showKey = true" @submit="onSubmit" />
+    <ComposeSheet
+      v-if="showCompose"
+      :has-content="noteHasContent"
+      @close="showCompose = false"
+      @needs-key="showKey = true"
+      @submit="onSubmit"
+    />
     <ApiKeyDialog v-if="showKey" @close="showKey = false" />
 
     <Transition name="home-fade">

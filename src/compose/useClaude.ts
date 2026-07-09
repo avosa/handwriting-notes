@@ -7,6 +7,7 @@ import { ref } from 'vue'
 import type { Attachment } from '@/types'
 import { encodeAttachments, type ContentBlock } from '@/ai/attachmentEncoding'
 import { BlockStreamer } from '@/ai/blockStreamer'
+import { stripDashes } from '@/ai/noteLint'
 import { systemPrompt } from '@/ai/systemPrompt'
 import { loadApiKey } from '@/store/persistence'
 import { useDocument } from '@/store/document'
@@ -29,7 +30,7 @@ export function useClaude() {
     controller?.abort()
   }
 
-  async function generate(instruction: string, attachments: Attachment[]): Promise<boolean> {
+  async function generate(instruction: string, attachments: Attachment[], context?: string): Promise<boolean> {
     error.value = null
     const key = await loadApiKey()
     if (!key) {
@@ -45,7 +46,8 @@ export function useClaude() {
 
     try {
       const palette = getHandwriting(settings.activeHandwritingId).palette
-      const content: ContentBlock[] = [{ type: 'text', text: instruction }, ...(await encodeAttachments(attachments))]
+      const prompt = context ? `Here are my current notes:\n\n${context}\n\n---\n\n${instruction}` : instruction
+      const content: ContentBlock[] = [{ type: 'text', text: prompt }, ...(await encodeAttachments(attachments))]
 
       const response = await fetch(ENDPOINT, {
         method: 'POST',
@@ -113,5 +115,54 @@ export function useClaude() {
     }
   }
 
-  return { generating, error, generate, stop }
+  // Rewrite one line in place, the way you would ask someone to fix or shorten a
+  // sentence. The reply is plain text, so it drops straight back into the line.
+  const refining = ref<string | null>(null)
+  async function refine(blockId: string, instruction: string): Promise<boolean> {
+    error.value = null
+    const key = await loadApiKey()
+    if (!key) {
+      error.value = 'Add your Anthropic API key first, using the key button.'
+      return false
+    }
+    const at = documentStore.locate(blockId)
+    if (!at || at.block.type !== 'text') return false
+    const original = at.block.text.runs.map((r) => r.text).join('')
+
+    refining.value = blockId
+    try {
+      const response = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': key,
+          'anthropic-version': API_VERSION,
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: DEFAULT_MODEL,
+          max_tokens: 1000,
+          system:
+            'Rewrite the one line of notes the user gives, following their instruction. Reply with only the rewritten line, no quotes and no preamble. Never use a hyphen or dash as punctuation.',
+          messages: [{ role: 'user', content: `Instruction: ${instruction}\n\nLine: ${original}` }],
+        }),
+      })
+      if (!response.ok) throw new Error(`Anthropic returned ${response.status}.`)
+      const data = (await response.json()) as { content: { type: string; text?: string }[] }
+      const text = data.content
+        .filter((b) => b.type === 'text')
+        .map((b) => b.text ?? '')
+        .join('')
+        .trim()
+      if (text) documentStore.setRuns(blockId, [{ text: stripDashes(text) }])
+      return true
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'That line could not be rewritten.'
+      return false
+    } finally {
+      refining.value = null
+    }
+  }
+
+  return { generating, error, generate, stop, refine, refining }
 }
