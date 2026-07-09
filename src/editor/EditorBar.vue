@@ -1,9 +1,10 @@
 <script setup lang="ts">
-// The control surface that floats at the bottom. When writing it offers the block
-// type, emphasis, alignment, colour, and an insert menu; when drawing it offers the
-// pens, width, fill, and colour. It stays compact and quiet so the paper leads.
+// The dock that floats at the bottom. A segmented switch flips between writing and
+// drawing. Writing shows the line type, emphasis, colour, alignment, and an insert
+// menu. Drawing shows a tray of real looking instruments you pick up, plus a width
+// slider and the ink colour. It is touch friendly and scrolls rather than crowd.
 import { computed } from 'vue'
-import type { TextRole } from '@/types'
+import type { PenType, TextRole } from '@/types'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
 import { penOrder, penProfile } from '@/tools/penTypes'
@@ -12,6 +13,7 @@ import { diagramBlock, diagramPresets } from '@/diagrams/presets'
 import Icon from '@/ui/Icon.vue'
 import Popover from '@/ui/Popover.vue'
 import ColorPicker from '@/ui/ColorPicker.vue'
+import ToolInstrument from '@/tools/ToolInstrument.vue'
 
 const props = defineProps<{ mode: 'write' | 'draw' }>()
 const emit = defineEmits<{ (e: 'update:mode', value: 'write' | 'draw'): void }>()
@@ -33,14 +35,11 @@ const selectedRole = computed(() => {
   const b = documentStore.selectedBlock
   return b && b.type === 'text' ? b.text.role : null
 })
+const activeRoleLabel = computed(() => roles.find((r) => r.role === selectedRole.value)?.label ?? 'Text')
+const activeRoleIcon = computed(() => roles.find((r) => r.role === selectedRole.value)?.icon ?? 'paragraph')
 
-const penIcon: Record<string, string> = {
-  pencil: 'pencil',
-  fine: 'pen',
-  marker: 'marker',
-  highlighter: 'highlighter',
-  fill: 'palette',
-  eraser: 'eraser',
+function toolColor(tool: PenType): string {
+  return tool === 'pencil' || tool === 'eraser' ? '#33334C' : settings.activeColor
 }
 
 function applyRole(role: TextRole) {
@@ -50,8 +49,7 @@ function applyAlign(align: 'left' | 'center' | 'justify') {
   if (selectedId.value) documentStore.setAlign(selectedId.value, align)
 }
 function insertParagraph(role: TextRole) {
-  const id = documentStore.addParagraphAfter(selectedId.value, role)
-  documentStore.select(id)
+  documentStore.select(documentStore.addParagraphAfter(selectedId.value, role))
 }
 function insertList(ordered: boolean) {
   documentStore.select(documentStore.addList(selectedId.value, ordered))
@@ -81,248 +79,331 @@ function addPage() {
 </script>
 
 <template>
-  <div class="bar">
-    <div class="segment modes">
+  <div class="dock" :class="mode">
+    <div class="switch">
       <button :class="{ on: props.mode === 'write' }" title="Write" @click="emit('update:mode', 'write')">
-        <Icon name="write" />
+        <Icon name="write" :size="18" /><span>Write</span>
       </button>
       <button :class="{ on: props.mode === 'draw' }" title="Draw" @click="emit('update:mode', 'draw')">
-        <Icon name="draw" />
+        <Icon name="draw" :size="18" /><span>Draw</span>
       </button>
     </div>
 
+    <div class="divider" />
+
     <template v-if="props.mode === 'write'">
-      <Popover align="center">
-        <template #trigger>
-          <button class="pill" title="Line type">
-            <Icon :name="roles.find((r) => r.role === selectedRole)?.icon ?? 'paragraph'" :size="18" />
-            <span class="pill-text">{{ roles.find((r) => r.role === selectedRole)?.label ?? 'Text' }}</span>
-            <Icon name="chevronDown" :size="14" />
-          </button>
-        </template>
-        <template #default>
-          <div class="menu">
-            <button v-for="r in roles" :key="r.role" class="menu-item" @click="applyRole(r.role)">
-              <Icon :name="r.icon" :size="18" />
-              <span>{{ r.label }}</span>
-            </button>
-          </div>
-        </template>
-      </Popover>
-
-      <div class="segment">
-        <button title="Bold" @mousedown.prevent @click="toggleBold"><Icon name="bold" :size="18" /></button>
-        <button title="Italic" @mousedown.prevent @click="toggleItalic"><Icon name="italic" :size="18" /></button>
-        <button title="Underline" @mousedown.prevent @click="toggleUnderline">
-          <Icon name="underline" :size="18" />
-        </button>
-      </div>
-
-      <div class="segment">
+      <div class="controls">
         <Popover align="center">
           <template #trigger>
-            <button title="Text colour"><Icon name="palette" :size="18" /></button>
+            <button class="pill">
+              <Icon :name="activeRoleIcon" :size="18" /><span class="pill-text">{{ activeRoleLabel }}</span>
+              <Icon name="chevronDown" :size="14" />
+            </button>
           </template>
           <template #default>
-            <ColorPicker
-              label="Text colour"
-              :model-value="settings.activeColor"
-              @update:model-value="
-                (c: string) => {
-                  setTextColor(c)
-                  settings.rememberColor(c)
-                }
-              "
-            />
+            <div class="menu">
+              <button v-for="r in roles" :key="r.role" class="menu-item" @click="applyRole(r.role)">
+                <Icon :name="r.icon" :size="18" /><span>{{ r.label }}</span>
+              </button>
+            </div>
           </template>
         </Popover>
+
+        <div class="group">
+          <button title="Bold" @mousedown.prevent @click="toggleBold"><Icon name="bold" :size="18" /></button>
+          <button title="Italic" @mousedown.prevent @click="toggleItalic"><Icon name="italic" :size="18" /></button>
+          <button title="Underline" @mousedown.prevent @click="toggleUnderline">
+            <Icon name="underline" :size="18" />
+          </button>
+        </div>
+
+        <div class="group">
+          <Popover align="center">
+            <template #trigger>
+              <button title="Text colour"><Icon name="palette" :size="18" /></button>
+            </template>
+            <template #default>
+              <ColorPicker label="Text colour" :model-value="settings.activeColor" @update:model-value="setTextColor" />
+            </template>
+          </Popover>
+          <Popover align="center">
+            <template #trigger>
+              <button title="Highlight"><Icon name="highlighter" :size="18" /></button>
+            </template>
+            <template #default>
+              <ColorPicker
+                label="Highlight"
+                :model-value="'#F7E36A'"
+                allow-clear
+                @update:model-value="setHighlight"
+                @clear="setHighlight('transparent')"
+              />
+            </template>
+          </Popover>
+        </div>
+
+        <div class="group">
+          <button title="Align left" @click="applyAlign('left')"><Icon name="alignLeft" :size="18" /></button>
+          <button title="Centre" @click="applyAlign('center')"><Icon name="alignCenter" :size="18" /></button>
+          <button title="Justify" @click="applyAlign('justify')"><Icon name="alignJustify" :size="18" /></button>
+        </div>
+
         <Popover align="center">
           <template #trigger>
-            <button title="Highlight"><Icon name="highlighter" :size="18" /></button>
+            <button class="pill accent"><Icon name="plus" :size="18" /><span class="pill-text">Insert</span></button>
           </template>
           <template #default>
-            <ColorPicker
-              label="Highlight"
-              :model-value="'#F7E36A'"
-              allow-clear
-              @update:model-value="(c: string) => setHighlight(c)"
-              @clear="setHighlight('transparent')"
-            />
+            <div class="menu wide">
+              <button class="menu-item" @click="insertParagraph('heading')">
+                <Icon name="heading" :size="18" /><span>Heading</span>
+              </button>
+              <button class="menu-item" @click="insertParagraph('body')">
+                <Icon name="paragraph" :size="18" /><span>Paragraph</span>
+              </button>
+              <button class="menu-item" @click="insertList(true)">
+                <Icon name="listOrdered" :size="18" /><span>Numbered list</span>
+              </button>
+              <button class="menu-item" @click="insertList(false)">
+                <Icon name="listBullet" :size="18" /><span>Bulleted list</span>
+              </button>
+              <button class="menu-item" @click="insertTable()">
+                <Icon name="table" :size="18" /><span>Table</span>
+              </button>
+              <button class="menu-item" @click="insertCallouts()">
+                <Icon name="callout" :size="18" /><span>Callout boxes</span>
+              </button>
+              <div class="menu-divider" />
+              <div class="menu-label">Diagram</div>
+              <button v-for="p in diagramPresets" :key="p.key" class="menu-item" @click="insertDiagram(p.key)">
+                <Icon name="diagram" :size="18" /><span>{{ p.label }}</span>
+              </button>
+            </div>
           </template>
         </Popover>
+
+        <button class="ghost" title="Add page" @click="addPage"><Icon name="pageAdd" :size="18" /></button>
       </div>
-
-      <div class="segment">
-        <button title="Align left" @click="applyAlign('left')"><Icon name="alignLeft" :size="18" /></button>
-        <button title="Align centre" @click="applyAlign('center')"><Icon name="alignCenter" :size="18" /></button>
-        <button title="Justify" @click="applyAlign('justify')"><Icon name="alignJustify" :size="18" /></button>
-      </div>
-
-      <Popover align="center">
-        <template #trigger>
-          <button class="pill" title="Insert">
-            <Icon name="plus" :size="18" /><span class="pill-text">Insert</span>
-          </button>
-        </template>
-        <template #default>
-          <div class="menu wide">
-            <button class="menu-item" @click="insertParagraph('heading')">
-              <Icon name="heading" :size="18" /><span>Heading</span>
-            </button>
-            <button class="menu-item" @click="insertParagraph('body')">
-              <Icon name="paragraph" :size="18" /><span>Paragraph</span>
-            </button>
-            <button class="menu-item" @click="insertList(true)">
-              <Icon name="listOrdered" :size="18" /><span>Numbered list</span>
-            </button>
-            <button class="menu-item" @click="insertList(false)">
-              <Icon name="listBullet" :size="18" /><span>Bulleted list</span>
-            </button>
-            <button class="menu-item" @click="insertTable()"><Icon name="table" :size="18" /><span>Table</span></button>
-            <button class="menu-item" @click="insertCallouts()">
-              <Icon name="callout" :size="18" /><span>Callout boxes</span>
-            </button>
-            <div class="menu-divider" />
-            <div class="menu-label">Diagram</div>
-            <button v-for="p in diagramPresets" :key="p.key" class="menu-item" @click="insertDiagram(p.key)">
-              <Icon name="diagram" :size="18" /><span>{{ p.label }}</span>
-            </button>
-          </div>
-        </template>
-      </Popover>
-
-      <button class="ghost" title="Add page" @click="addPage"><Icon name="pageAdd" :size="18" /></button>
     </template>
 
     <template v-else>
-      <div class="segment pens">
+      <div class="tray">
         <button
           v-for="tool in penOrder"
           :key="tool"
-          :class="{ on: settings.activeTool === tool }"
+          class="slot"
+          :class="{ picked: settings.activeTool === tool }"
           :title="penProfile(tool).name"
           @click="settings.selectTool(tool)"
         >
-          <Icon :name="penIcon[tool]" :size="18" />
+          <ToolInstrument :tool="tool" :color="toolColor(tool)" :active="settings.activeTool === tool" />
         </button>
       </div>
-      <input
-        v-if="settings.activeTool !== 'fill'"
-        class="width"
-        type="range"
-        :min="penProfile(settings.activeTool).minWidth"
-        :max="penProfile(settings.activeTool).maxWidth"
-        :step="0.1"
-        :value="settings.activeWidth"
-        title="Width"
-        @input="settings.setWidth(Number(($event.target as HTMLInputElement).value))"
-      />
-      <Popover align="center">
-        <template #trigger>
-          <button title="Ink colour">
-            <span class="ink-dot" :style="{ background: settings.activeColor }" />
-          </button>
-        </template>
-        <template #default>
-          <ColorPicker :model-value="settings.activeColor" @update:model-value="settings.selectColor" />
-        </template>
-      </Popover>
+      <div class="divider" />
+      <div class="draw-controls">
+        <input
+          v-if="settings.activeTool !== 'fill'"
+          class="width"
+          type="range"
+          :min="penProfile(settings.activeTool).minWidth"
+          :max="penProfile(settings.activeTool).maxWidth"
+          :step="0.1"
+          :value="settings.activeWidth"
+          title="Width"
+          @input="settings.setWidth(Number(($event.target as HTMLInputElement).value))"
+        />
+        <Popover align="center">
+          <template #trigger>
+            <button class="ink" title="Ink colour">
+              <span class="ink-dot" :style="{ background: settings.activeColor }" />
+            </button>
+          </template>
+          <template #default>
+            <ColorPicker :model-value="settings.activeColor" @update:model-value="settings.selectColor" />
+          </template>
+        </Popover>
+      </div>
     </template>
   </div>
 </template>
 
 <style scoped>
-.bar {
+.dock {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 9px;
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(14px);
-  border: 1px solid rgba(51, 51, 76, 0.1);
-  border-radius: 16px;
-  box-shadow: 0 10px 34px rgba(51, 51, 76, 0.16);
-  max-width: calc(100vw - 24px);
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(16px) saturate(1.3);
+  border: 1px solid rgba(51, 51, 76, 0.08);
+  border-radius: 18px;
+  box-shadow:
+    0 14px 40px rgba(51, 51, 76, 0.18),
+    0 2px 6px rgba(51, 51, 76, 0.08);
+  max-width: calc(100vw - 20px);
   overflow-x: auto;
   scrollbar-width: none;
 }
-.bar::-webkit-scrollbar {
+.dock::-webkit-scrollbar {
   display: none;
 }
-.segment {
+.dock.draw {
+  align-items: flex-end;
+  padding-bottom: 10px;
+}
+
+.switch {
   display: flex;
-  align-items: center;
   gap: 2px;
+  background: rgba(51, 51, 76, 0.06);
+  border-radius: 12px;
+  padding: 3px;
+  flex-shrink: 0;
 }
-.segment + .segment,
-.segment + :deep(.popover-root),
-:deep(.popover-root) + .segment {
-  padding-left: 6px;
-  margin-left: 2px;
-  border-left: 1px solid rgba(51, 51, 76, 0.1);
-}
-button {
+.switch button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   border: none;
   background: transparent;
-  border-radius: 10px;
-  padding: 8px;
+  border-radius: 9px;
+  padding: 8px 12px;
   cursor: pointer;
+  color: #6a6a80;
+  font-size: 13px;
+  font-weight: 500;
+}
+.switch button.on {
+  background: #fff;
+  color: #29297e;
+  box-shadow: 0 1px 4px rgba(51, 51, 76, 0.14);
+}
+
+.divider {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(51, 51, 76, 0.1);
+  margin: 4px 2px;
+  flex-shrink: 0;
+}
+
+.controls,
+.group,
+.draw-controls {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.controls {
+  gap: 5px;
+}
+.group + .group,
+.group {
+  padding: 0 3px;
+}
+
+.dock button {
   color: #33334c;
-  min-width: 38px;
-  min-height: 38px;
+}
+.controls button,
+.draw-controls .ink {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  padding: 9px;
+  min-width: 40px;
+  min-height: 40px;
+  cursor: pointer;
   transition: background 0.12s ease;
 }
-button:hover {
+.controls button:hover,
+.draw-controls .ink:hover {
   background: rgba(74, 114, 176, 0.12);
 }
-button.on {
-  background: rgba(74, 114, 176, 0.2);
-}
 .pill {
-  padding: 8px 12px;
-  min-width: auto;
+  padding: 9px 13px !important;
+  min-width: auto !important;
 }
 .pill-text {
   font-size: 13px;
   white-space: nowrap;
+  font-weight: 500;
+}
+.pill.accent {
+  background: rgba(74, 114, 176, 0.12);
+  color: #29297e;
 }
 .ghost {
   color: #6a6a80;
 }
+
+.tray {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 0 4px 2px;
+  height: 78px;
+}
+.slot {
+  width: 40px;
+  height: 74px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 10px 10px 0 0;
+  transition: background 0.12s ease;
+}
+.slot:hover {
+  background: rgba(74, 114, 176, 0.08);
+}
+.slot.picked {
+  background: linear-gradient(to top, rgba(74, 114, 176, 0.16), transparent);
+}
+
 .width {
-  width: 84px;
+  width: 96px;
   accent-color: #4a72b0;
 }
 .ink-dot {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  box-shadow: inset 0 0 0 1px rgba(51, 51, 76, 0.25);
+  box-shadow:
+    inset 0 0 0 1px rgba(51, 51, 76, 0.22),
+    0 1px 3px rgba(51, 51, 76, 0.2);
 }
+
 .menu {
   display: flex;
   flex-direction: column;
   padding: 6px;
-  min-width: 180px;
+  min-width: 182px;
 }
 .menu.wide {
-  min-width: 210px;
+  min-width: 214px;
   max-height: 60vh;
   overflow-y: auto;
 }
 .menu-item {
-  justify-content: flex-start;
-  gap: 10px;
-  padding: 9px 10px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  padding: 10px 11px;
   width: 100%;
+  cursor: pointer;
+  color: #33334c;
   font-size: 14px;
+  text-align: left;
 }
-.menu-item span {
-  font-size: 14px;
+.menu-item:hover {
+  background: rgba(74, 114, 176, 0.1);
 }
 .menu-divider {
   height: 1px;
@@ -332,8 +413,21 @@ button.on {
 .menu-label {
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: #9a9aa8;
-  padding: 4px 10px 2px;
+  padding: 5px 11px 2px;
+}
+
+@media (max-width: 640px) {
+  .dock {
+    width: calc(100vw - 16px);
+    border-radius: 16px;
+  }
+  .switch button span {
+    display: none;
+  }
+  .pill-text {
+    display: none;
+  }
 }
 </style>

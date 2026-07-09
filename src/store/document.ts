@@ -11,6 +11,8 @@ interface DocumentState {
   activePageIndex: number
   /** The block currently being edited, for the contextual formatting bar. */
   selectedBlockId: string | null
+  /** A block just created that the editor should move the caret into. */
+  pendingFocusId: string | null
 }
 
 interface BlockLocation {
@@ -24,6 +26,7 @@ export const useDocument = defineStore('document', {
     doc: blankDocument(),
     activePageIndex: 0,
     selectedBlockId: null,
+    pendingFocusId: null,
   }),
   getters: {
     pageCount: (state) => state.doc.pages.length,
@@ -97,12 +100,23 @@ export const useDocument = defineStore('document', {
       this.touch()
     },
 
+    /** Ask the editor to move the caret into a block once it renders. */
+    requestFocus(blockId: string) {
+      this.pendingFocusId = blockId
+    },
+    clearPendingFocus() {
+      this.pendingFocusId = null
+    },
     addParagraphAfter(blockId: string | null, role: TextRole = 'body'): string {
       const block: Block = { id: uid('b'), type: 'text', text: { id: uid('t'), role, runs: [{ text: '' }] } }
-      return this.insertAfter(blockId, block)
+      const id = this.insertAfter(blockId, block)
+      this.pendingFocusId = id
+      return id
     },
     addList(blockId: string | null, ordered: boolean): string {
-      return this.insertAfter(blockId, { id: uid('b'), type: 'list', ordered, items: [[{ text: '' }]] })
+      const id = this.insertAfter(blockId, { id: uid('b'), type: 'list', ordered, items: [[{ text: '' }]] })
+      this.pendingFocusId = id
+      return id
     },
     addTable(blockId: string | null, columns = 3, bodyRows = 2): string {
       const header = Array.from({ length: columns }, (_, i) => (i === 0 ? 'p' : i === columns - 1 ? 'result' : 'q'))
@@ -110,7 +124,9 @@ export const useDocument = defineStore('document', {
       return this.insertAfter(blockId, { id: uid('b'), type: 'table', header, rows })
     },
     addCallouts(blockId: string | null, boxes: CalloutBox[], caption?: string): string {
-      return this.insertAfter(blockId, { id: uid('b'), type: 'callouts', boxes, caption })
+      const id = this.insertAfter(blockId, { id: uid('b'), type: 'callouts', boxes, caption })
+      this.pendingFocusId = id
+      return id
     },
     addDiagram(blockId: string | null, block: Extract<Block, { type: 'diagram' }>): string {
       return this.insertAfter(blockId, { ...block, id: uid('b') })
