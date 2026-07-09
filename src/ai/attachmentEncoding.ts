@@ -72,6 +72,19 @@ export async function encodeAttachment(attachment: Attachment): Promise<ContentB
     return [{ type: 'text', text: `Attached document "${attachment.name}":\n${text}` }]
   }
 
+  // Audio is not model readable, so a voice note contributes its spoken transcript.
+  if (attachment.kind === 'audio') {
+    const spoken = attachment.transcript?.trim()
+    return [
+      {
+        type: 'text',
+        text: spoken
+          ? `Transcript of a spoken voice note:\n${spoken}`
+          : 'A spoken voice note was attached but could not be transcribed in this browser.',
+      },
+    ]
+  }
+
   // Video: pasted transcript plus whatever frames the browser can decode.
   const blocks: ContentBlock[] = []
   if (attachment.transcript?.trim()) {
