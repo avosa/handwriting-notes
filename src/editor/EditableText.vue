@@ -42,7 +42,22 @@ function onBlur() {
   // nodes and detach a selection a colour picker needs to keep, so a colour applied
   // from a menu would land on nothing. The model already holds the canonical content.
 }
+function selectAll() {
+  if (!el.value) return
+  const range = document.createRange()
+  range.selectNodeContents(el.value)
+  const sel = window.getSelection()
+  sel?.removeAllRanges()
+  sel?.addRange(range)
+}
+
 function onKeydown(event: KeyboardEvent) {
+  // Select the whole line reliably, even across the runs' nested spans.
+  if ((event.key === 'a' || event.key === 'A') && (event.metaKey || event.ctrlKey)) {
+    event.preventDefault()
+    selectAll()
+    return
+  }
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
     emit('enter')
