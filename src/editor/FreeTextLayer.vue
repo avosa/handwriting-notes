@@ -6,7 +6,7 @@
 import { computed, nextTick, ref, watch, type CSSProperties } from 'vue'
 import type { FreeText, Page, TextRun } from '@/types'
 import type { TextMetrics } from './alignment'
-import { getHandwriting, bodyFontStack } from '@/handwriting/registry'
+import { getHandwriting, bodyFontStack, headerFontStack } from '@/handwriting/registry'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
 import EditableText from './EditableText.vue'
@@ -24,15 +24,22 @@ const settings = useSettings()
 const handwriting = computed(() => getHandwriting(settings.activeHandwritingId))
 
 function noteStyle(note: FreeText): CSSProperties {
+  // A note can be made a title or heading just like a paragraph, taking that role's font,
+  // size, and default colour, still sittable anywhere and sizable with its own scale.
+  const role = note.role ?? 'body'
+  const p = handwriting.value.palette
+  const roleColor = role === 'title' ? p.title : role === 'heading' || role === 'subheading' ? p.heading : p.ink
+  const roleFont =
+    role === 'title' || role === 'heading' ? headerFontStack(handwriting.value) : bodyFontStack(handwriting.value)
   return {
     left: `${note.x * props.pxPerMm}px`,
     top: `${(note.y - props.metrics.lineHeight) * props.pxPerMm}px`,
     minWidth: `${6 * props.pxPerMm}px`,
     maxWidth: `${(props.metrics.left + props.metrics.width - note.x) * props.pxPerMm}px`,
-    fontFamily: bodyFontStack(handwriting.value),
-    fontSize: `${props.metrics.fontSize.body * props.pxPerMm * (note.scale ?? 1)}px`,
+    fontFamily: roleFont,
+    fontSize: `${props.metrics.fontSize[role] * props.pxPerMm * (note.scale ?? 1)}px`,
     lineHeight: `${props.metrics.lineHeight * props.pxPerMm}px`,
-    color: note.color ?? handwriting.value.palette.ink,
+    color: note.color ?? roleColor,
   }
 }
 

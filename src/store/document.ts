@@ -143,6 +143,19 @@ export const useDocument = defineStore('document', {
         this.touch()
       }
     },
+    setNoteRole(pageIndex: number, noteId: string, role: TextRole) {
+      const note = this.doc.pages[pageIndex]?.notes?.find((n) => n.id === noteId)
+      if (note) {
+        note.role = role
+        this.touch()
+      }
+    },
+    // Make whatever line the caret is in a title, heading, or body, whether it is a block or
+    // a free note, so the role controls work on any text anywhere.
+    setSelectionRole(role: TextRole) {
+      if (this.selectedNote) this.setNoteRole(this.selectedNote.pageIndex, this.selectedNote.id, role)
+      else if (this.selectedBlockId) this.setRole(this.selectedBlockId, role)
+    },
     setAlign(blockId: string, align: 'left' | 'center' | 'justify') {
       const at = this.locate(blockId)
       if (at?.block.type === 'text') {

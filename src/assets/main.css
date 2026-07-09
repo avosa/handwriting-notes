@@ -99,6 +99,14 @@
   box-sizing: border-box;
 }
 
+/* The handwriting fonts ship with only a regular face, so bold and italic must be
+   synthesised or the emphasis controls would change nothing. This is scoped to the
+   handwriting the writer edits; the interface keeps its crisp, unsynthesised type. */
+.editable,
+.cell {
+  font-synthesis: weight style;
+}
+
 html,
 body {
   margin: 0;

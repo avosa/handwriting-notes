@@ -130,6 +130,19 @@ describe('font size', () => {
     expect(doc.locate(para)!.block.scale).toBeUndefined()
   })
 
+  it('makes the free note the caret is in a heading, not a stale block', () => {
+    const doc = useDocument()
+    const para = doc.doc.pages[0].blocks[0].id
+    doc.select(para)
+    const noteId = doc.addNote(0, 20, 30)
+    doc.selectNote(0, noteId)
+    doc.setSelectionRole('heading')
+    expect(doc.doc.pages[0].notes!.find((n) => n.id === noteId)!.role).toBe('heading')
+    // The earlier paragraph keeps its role.
+    const block = doc.locate(para)!.block
+    expect(block.type === 'text' ? block.text.role : null).not.toBe('heading')
+  })
+
   it('nudges a block scale up and down and clamps it', () => {
     const doc = useDocument()
     const id = doc.addTable(null, 2, 1)

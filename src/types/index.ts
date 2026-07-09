@@ -191,6 +191,9 @@ export interface FreeText {
   color?: string
   /** How large the note is drawn, a multiple of the body size; matches a block's scale. */
   scale?: FontScale
+  /** What kind of line the note is, so it can be made a title or heading like a paragraph.
+   *  Unset means body. */
+  role?: TextRole
 }
 
 export interface Page {

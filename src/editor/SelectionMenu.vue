@@ -81,7 +81,7 @@ onMounted(() => document.addEventListener('selectionchange', onSelectionChange))
 onBeforeUnmount(() => document.removeEventListener('selectionchange', onSelectionChange))
 
 function makeRole(role: TextRole) {
-  if (documentStore.selectedBlockId) documentStore.setRole(documentStore.selectedBlockId, role)
+  documentStore.setSelectionRole(role)
 }
 // Size whatever line the selection sits in, whether it is a block or a free note; the
 // selection is left untouched so the writer can keep nudging up or down and watch it grow.
