@@ -6,7 +6,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { TextRole } from '@/types'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
-import { toggleBold, toggleItalic, toggleUnderline, setTextColor } from './marks'
+import { toggleBold, toggleItalic, toggleUnderline, setTextColor, rememberSelection } from './marks'
 import Icon from '@/ui/Icon.vue'
 import Popover from '@/ui/Popover.vue'
 import ColorPicker from '@/ui/ColorPicker.vue'
@@ -75,7 +75,7 @@ function makeRole(role: TextRole) {
       <span class="sep" />
       <Popover align="center">
         <template #trigger>
-          <button title="Colour"><Icon name="palette" :size="17" /></button>
+          <button title="Colour" @mousedown="rememberSelection"><Icon name="palette" :size="17" /></button>
         </template>
         <template #default>
           <ColorPicker

@@ -8,7 +8,7 @@ import type { PenType, TextRole } from '@/types'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
 import { penOrder, penProfile } from '@/tools/penTypes'
-import { toggleBold, toggleItalic, toggleUnderline, setTextColor, setHighlight } from './marks'
+import { toggleBold, toggleItalic, toggleUnderline, setTextColor, setHighlight, rememberSelection } from './marks'
 import { diagramBlock, diagramPresets } from '@/diagrams/presets'
 import Icon from '@/ui/Icon.vue'
 import Popover from '@/ui/Popover.vue'
@@ -120,7 +120,7 @@ function addPage() {
         <div class="group">
           <Popover align="center">
             <template #trigger>
-              <button title="Text colour"><Icon name="palette" :size="18" /></button>
+              <button title="Text colour" @mousedown="rememberSelection"><Icon name="palette" :size="18" /></button>
             </template>
             <template #default>
               <ColorPicker label="Text colour" :model-value="settings.activeColor" @update:model-value="setTextColor" />
@@ -128,7 +128,7 @@ function addPage() {
           </Popover>
           <Popover align="center">
             <template #trigger>
-              <button title="Highlight"><Icon name="highlighter" :size="18" /></button>
+              <button title="Highlight" @mousedown="rememberSelection"><Icon name="highlighter" :size="18" /></button>
             </template>
             <template #default>
               <ColorPicker

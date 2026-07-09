@@ -192,11 +192,37 @@ export const useDocument = defineStore('document', {
       this.touch()
       return page.index
     },
-    removePage(pageIndex: number) {
-      if (this.doc.pages.length <= 1) return
-      this.doc.pages.splice(pageIndex, 1)
+    reindexPages() {
       this.doc.pages.forEach((p, i) => (p.index = i))
-      this.setActivePage(Math.min(this.activePageIndex, this.doc.pages.length - 1))
+    },
+    addPageAfter(pageIndex: number): number {
+      const page = blankPage(pageIndex + 1)
+      this.doc.pages.splice(pageIndex + 1, 0, page)
+      this.reindexPages()
+      this.touch()
+      return pageIndex + 1
+    },
+    duplicatePage(pageIndex: number): number {
+      const source = this.doc.pages[pageIndex]
+      if (!source) return pageIndex
+      const copy = JSON.parse(JSON.stringify(source)) as (typeof this.doc.pages)[number]
+      copy.id = uid('p')
+      copy.blocks.forEach((b) => (b.id = uid('b')))
+      this.doc.pages.splice(pageIndex + 1, 0, copy)
+      this.reindexPages()
+      this.touch()
+      return pageIndex + 1
+    },
+    // Remove a page, or, when it is the only one, wipe it back to a blank page.
+    deletePage(pageIndex: number) {
+      if (this.doc.pages.length <= 1) {
+        this.doc.pages.splice(0, 1, blankPage(0))
+      } else {
+        this.doc.pages.splice(pageIndex, 1)
+        this.reindexPages()
+        this.setActivePage(Math.min(this.activePageIndex, this.doc.pages.length - 1))
+      }
+      this.selectedBlockId = null
       this.touch()
     },
 

@@ -38,7 +38,9 @@ function onFocus() {
 function onBlur() {
   editing = false
   emit('blur')
-  render()
+  // The DOM is left as the browser has it. Re-rendering here would replace the text
+  // nodes and detach a selection a colour picker needs to keep, so a colour applied
+  // from a menu would land on nothing. The model already holds the canonical content.
 }
 function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Enter' && !event.shiftKey) {
