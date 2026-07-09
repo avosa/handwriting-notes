@@ -3,27 +3,39 @@
 // the writer's own key, so if none is connected it points them to add one. It offers a
 // few example prompts to start from, accepts attachments, and rises as a centred card
 // on a wide screen or a bottom sheet on a phone.
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { Attachment } from '@/types'
 import { loadApiKey } from '@/store/persistence'
 import Attachments from './Attachments.vue'
 import Icon from '@/ui/Icon.vue'
 
+const props = defineProps<{ hasContent: boolean }>()
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'needs-key'): void
-  (e: 'submit', instruction: string, attachments: Attachment[]): void
+  (e: 'submit', instruction: string, attachments: Attachment[], useCurrent: boolean): void
 }>()
 
 const instruction = ref('')
 const attachments = ref<Attachment[]>([])
+// Start on the current note when there is something to work on, otherwise a fresh page.
+const mode = ref<'new' | 'current'>(props.hasContent ? 'current' : 'new')
 
-const examples = [
-  'Take neat notes on the attached reading',
-  'Explain sets and Venn diagrams with a diagram',
-  'Summarise this into headings and bullet points',
-  'Make a truth table for AND, OR, and NOT',
-]
+const examples = computed(() =>
+  mode.value === 'current'
+    ? [
+        'Polish and tidy my notes',
+        'Continue from where I left off',
+        'Summarise this into key points',
+        'Explain this more simply',
+      ]
+    : [
+        'Take neat notes on the attached reading',
+        'Explain sets and Venn diagrams with a diagram',
+        'Summarise this into headings and bullet points',
+        'Make a truth table for AND, OR, and NOT',
+      ],
+)
 
 // Hand the request to the app and step aside, so the page is watched as Claude writes.
 async function send() {
@@ -32,7 +44,7 @@ async function send() {
     emit('needs-key')
     return
   }
-  emit('submit', instruction.value.trim(), attachments.value)
+  emit('submit', instruction.value.trim(), attachments.value, mode.value === 'current')
   emit('close')
 }
 </script>
@@ -49,6 +61,11 @@ async function send() {
         </div>
         <button class="x" title="Close" @click="emit('close')"><Icon name="close" :size="18" /></button>
       </header>
+
+      <div v-if="props.hasContent" class="mode">
+        <button :class="{ on: mode === 'current' }" @click="mode = 'current'">Work on this note</button>
+        <button :class="{ on: mode === 'new' }" @click="mode = 'new'">Start a new note</button>
+      </div>
 
       <div class="examples">
         <button v-for="ex in examples" :key="ex" class="example" @click="instruction = ex">{{ ex }}</button>
@@ -142,6 +159,30 @@ h2 {
 }
 .x:hover {
   background: rgba(51, 51, 76, 0.07);
+}
+.mode {
+  display: flex;
+  gap: 3px;
+  background: rgba(51, 51, 76, 0.06);
+  border-radius: 11px;
+  padding: 3px;
+  margin-bottom: 14px;
+}
+.mode button {
+  flex: 1;
+  border: none;
+  background: transparent;
+  border-radius: 9px;
+  padding: 9px;
+  cursor: pointer;
+  color: #6a6a80;
+  font-size: 13px;
+  font-weight: 500;
+}
+.mode button.on {
+  background: #fff;
+  color: #29297e;
+  box-shadow: 0 1px 4px rgba(51, 51, 76, 0.14);
 }
 .examples {
   display: flex;
