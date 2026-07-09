@@ -13,6 +13,10 @@ interface DocumentState {
   selectedBlockId: string | null
   /** A block just created that the editor should move the caret into. */
   pendingFocusId: string | null
+  /** True while Claude is writing onto the page, so the UI can show it live. */
+  generating: boolean
+  /** The last block Claude wrote, where the writing caret rests. */
+  writingBlockId: string | null
 }
 
 interface BlockLocation {
@@ -27,6 +31,8 @@ export const useDocument = defineStore('document', {
     activePageIndex: 0,
     selectedBlockId: null,
     pendingFocusId: null,
+    generating: false,
+    writingBlockId: null,
   }),
   getters: {
     pageCount: (state) => state.doc.pages.length,
@@ -254,6 +260,43 @@ export const useDocument = defineStore('document', {
         this.setActivePage(Math.min(this.activePageIndex, this.doc.pages.length - 1))
       }
       this.selectedBlockId = null
+      this.touch()
+    },
+
+    // Claude writing live: start a fresh page, drop blocks onto it as they arrive, and
+    // keep the caret on the newest one so the writing can be seen happening.
+    beginAiPage(): number {
+      const page = {
+        id: uid('p'),
+        index: this.doc.pages.length,
+        presetId: this.doc.pages[0].presetId,
+        blocks: [],
+        strokes: [],
+      }
+      this.doc.pages.push(page)
+      this.generating = true
+      this.writingBlockId = null
+      this.activePageIndex = page.index
+      this.touch()
+      return page.index
+    },
+    appendAiBlock(pageIndex: number, block: Block) {
+      const page = this.doc.pages[pageIndex]
+      if (!page) return
+      page.blocks.push(block)
+      this.writingBlockId = block.id
+      this.touch()
+    },
+    endAi() {
+      this.generating = false
+      this.writingBlockId = null
+      // A page that produced nothing is removed so a failed run leaves no blank sheet.
+      const last = this.doc.pages[this.activePageIndex]
+      if (last && last.blocks.length === 0 && this.doc.pages.length > 1) {
+        this.doc.pages.splice(this.activePageIndex, 1)
+        this.reindexPages()
+        this.setActivePage(this.doc.pages.length - 1)
+      }
       this.touch()
     },
 

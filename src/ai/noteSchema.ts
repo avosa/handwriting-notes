@@ -38,7 +38,7 @@ function adoptRuns(value: unknown): TextRun[] {
   return [{ text: '' }]
 }
 
-function adoptBlock(raw: unknown): Block | null {
+export function adoptBlock(raw: unknown): Block | null {
   if (!isRecord(raw)) return null
 
   if (raw.type === 'text' && ROLES.includes(raw.role as TextRole)) {
