@@ -1,5 +1,6 @@
 // Available handwritings. A handwriting pairs a body font with a header font and a
-// colour scheme. The default reproduces the look the notes are matched against.
+// starting colour scheme. One casual style ships now; more, including uploaded ones,
+// slot in later without touching the rest of the app.
 import type { ColorScheme, Handwriting } from '@/types'
 
 // The math set symbols the notes use are absent from the handwriting fonts, so the
@@ -7,7 +8,7 @@ import type { ColorScheme, Handwriting } from '@/types'
 // the handwriting for letters while showing the symbols correctly.
 const MATH_FALLBACK = "'STIX Two Math', 'Cambria Math', 'Noto Sans Math', serif"
 
-export const sanobiaPalette: ColorScheme = {
+export const notePalette: ColorScheme = {
   title: '#29297E',
   heading: '#B73B3A',
   ink: '#33334C',
@@ -24,20 +25,20 @@ export function headerFontStack(handwriting: Handwriting): string {
   return `'${handwriting.headerFont}', ${MATH_FALLBACK}`
 }
 
-const sanobia: Handwriting = {
-  id: 'sanobia',
-  name: "Sanobia's handwriting",
+const casual: Handwriting = {
+  id: 'casual',
+  name: 'Casual',
   bodyFont: 'Caveat',
   headerFont: 'Indie Flower',
-  palette: sanobiaPalette,
+  palette: notePalette,
 }
 
 export const handwritings: Record<string, Handwriting> = {
-  [sanobia.id]: sanobia,
+  [casual.id]: casual,
 }
 
-export const defaultHandwritingId = sanobia.id
+export const defaultHandwritingId = casual.id
 
 export function getHandwriting(id: string): Handwriting {
-  return handwritings[id] ?? sanobia
+  return handwritings[id] ?? casual
 }
