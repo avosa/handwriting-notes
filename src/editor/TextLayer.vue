@@ -30,6 +30,11 @@ const handwriting = computed(() => getHandwriting(settings.activeHandwritingId))
 const lineHeightPx = computed(() => props.metrics.lineHeight * props.pxPerMm)
 // Blocks lifted out to float are drawn by the free figure layer, so the flow skips them.
 const flowBlocks = computed(() => props.page.blocks.filter((b) => !b.float))
+// The line the AI is typing into right now, so a blinking caret can ride at its end and the
+// writing plainly looks like someone is typing it.
+function isWriting(blockId: string): boolean {
+  return documentStore.generating && documentStore.writingBlockId === blockId
+}
 const columnStyle = computed<CSSProperties>(() => ({
   left: `${props.metrics.left * props.pxPerMm}px`,
   top: `${(props.metrics.firstBaseline - props.metrics.lineHeight) * props.pxPerMm}px`,
@@ -193,6 +198,8 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
         :ref="bindEditable(`text:${block.id}`)"
         :model-value="block.text.runs"
         class="paragraph"
+        :class="{ writing: isWriting(block.id) }"
+        :data-block-id="block.id"
         :style="paragraphStyle(block)"
         :placeholder="placeholderFor(block, page.blocks.indexOf(block))"
         @update:model-value="updateRuns(block.id, $event)"
@@ -202,7 +209,13 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
         @select-all-note="documentStore.selectWholeNote()"
       />
 
-      <ol v-else-if="block.type === 'list'" class="list" :class="{ bullets: !block.ordered }" :style="listStyle(block)">
+      <ol
+        v-else-if="block.type === 'list'"
+        class="list"
+        :class="{ bullets: !block.ordered, writing: isWriting(block.id) }"
+        :data-block-id="block.id"
+        :style="listStyle(block)"
+      >
         <li v-for="(_, i) in block.items" :key="i">
           <span class="marker">{{ block.ordered ? `${i + 1}.` : '•' }}</span>
           <EditableText
@@ -218,7 +231,7 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
         </li>
       </ol>
 
-      <div v-else-if="block.type === 'table'" class="table-slot">
+      <div v-else-if="block.type === 'table'" class="table-slot" :data-block-id="block.id">
         <div v-if="block.caption" class="caption" :style="captionStyle()">{{ block.caption }}</div>
         <TableBlock
           :block="block"
@@ -232,7 +245,7 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
         />
       </div>
 
-      <div v-else-if="block.type === 'callouts'" class="callouts-slot">
+      <div v-else-if="block.type === 'callouts'" class="callouts-slot" :data-block-id="block.id">
         <div v-if="block.caption" class="caption" :style="captionStyle()">{{ block.caption }}</div>
         <CalloutsBlock
           :block="block"
@@ -246,6 +259,7 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
       <div
         v-else-if="block.type === 'diagram'"
         class="diagram-slot"
+        :data-block-id="block.id"
         :style="{ height: `${block.heightRules * lineHeightPx}px` }"
         @click="onFocusBlock(block.id)"
       >
@@ -257,6 +271,7 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
           :seed="hashSeed(block.id)"
           :scale="block.scale ?? 1"
           :editable="editable"
+          :animate="isWriting(block.id)"
           @edit-label="(shapeIndex, text) => documentStore.setDiagramLabel(block.id, shapeIndex, text)"
         />
         <button
@@ -297,6 +312,31 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
 }
 .paragraph {
   cursor: text;
+}
+/* The typing caret: a slim ink bar that sits right after the last character the AI has
+   written, so it moves along the line as the words appear and blinks like a real cursor.
+   For a paragraph it follows the text end; for a list it rides the item being written. */
+.paragraph.writing::after,
+.list.writing li:last-child .li-text::after {
+  content: '';
+  display: inline-block;
+  width: 0.09em;
+  height: 1.05em;
+  margin-left: 0.04em;
+  vertical-align: text-bottom;
+  background: currentColor;
+  border-radius: 1px;
+  animation: caret-blink 1s steps(1) infinite;
+}
+@keyframes caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
 }
 .list {
   list-style: none;

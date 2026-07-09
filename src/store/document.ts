@@ -29,6 +29,12 @@ interface DocumentState {
   allSelected: boolean
   /** Where the writer last pointed on a page, so an inserted figure lands there. */
   lastPoint: { pageIndex: number; x: number; y: number } | null
+  /** While the AI writes, the index on its page where the next block is placed, so writing
+   *  can begin at the line the writer chose rather than only at the end of the page. */
+  aiInsertAt: number
+  /** The tool the AI is reaching for right now, so a ghost cursor can glide to it and press
+   *  it: a role like 'heading', or an insert like 'table'. Null between presses. */
+  aiTool: string | null
 }
 
 // The state the history compares against; kept out of the reactive store since it is a
@@ -55,6 +61,8 @@ export const useDocument = defineStore('document', {
     future: [],
     allSelected: false,
     lastPoint: null,
+    aiInsertAt: 0,
+    aiTool: null,
   }),
   getters: {
     canUndo: (state) => state.past.length > 0,
@@ -511,41 +519,89 @@ export const useDocument = defineStore('document', {
       this.touch()
     },
 
-    // Claude writing live: start a fresh page, drop blocks onto it as they arrive, and
-    // keep the caret on the newest one so the writing can be seen happening.
-    beginAiPage(): number {
+    // The AI writing live: begin where the writer is, dropping blocks onto the page as they
+    // arrive and keeping the caret on the newest one so the writing is seen happening. A
+    // blank starting page is written into directly, so a new note fills from its first line.
+    // When continuing an existing note with a line chosen, the writing begins right after
+    // that line, so a section is worked on in place; otherwise it goes on a fresh sheet after
+    // the current page. `atSelection` asks for the in-place behaviour when working on a note.
+    beginAiPage(atSelection = false): number {
+      this.generating = true
+      this.writingBlockId = null
+      const current = this.doc.pages[this.activePageIndex] ?? this.doc.pages[0]
+      const currentIsBlank =
+        (current.strokes?.length ?? 0) === 0 &&
+        (current.notes?.length ?? 0) === 0 &&
+        current.blocks.every((b) => b.type === 'text' && b.text.runs.every((r) => !r.text.trim()))
+      if (currentIsBlank) {
+        current.blocks = []
+        this.aiInsertAt = 0
+        this.touch()
+        return current.index
+      }
+      const chosen = atSelection && this.selectedBlockId ? this.locate(this.selectedBlockId) : null
+      if (chosen && chosen.pageIndex === current.index) {
+        // Begin just after the line the writer clicked, so the section grows in place.
+        this.aiInsertAt = chosen.blockIndex + 1
+        this.touch()
+        return current.index
+      }
       const page = {
         id: uid('p'),
         index: this.doc.pages.length,
-        presetId: this.doc.pages[0].presetId,
-        blocks: [],
-        strokes: [],
+        presetId: current.presetId,
+        blocks: [] as Block[],
+        strokes: [] as Stroke[],
       }
       this.doc.pages.push(page)
-      this.generating = true
-      this.writingBlockId = null
       this.activePageIndex = page.index
+      this.aiInsertAt = 0
       this.touch()
       return page.index
+    },
+    // The tool the AI is reaching for, so the ghost cursor can glide to it and press it.
+    setAiTool(tool: string | null) {
+      this.aiTool = tool
     },
     appendAiBlock(pageIndex: number, block: Block) {
       const page = this.doc.pages[pageIndex]
       if (!page) return
-      page.blocks.push(block)
+      const at = Math.min(Math.max(0, this.aiInsertAt), page.blocks.length)
+      page.blocks.splice(at, 0, block)
+      this.aiInsertAt = at + 1
       this.writingBlockId = block.id
       this.touch()
     },
     endAi() {
       this.generating = false
-      this.writingBlockId = null
-      // A page that produced nothing is removed so a failed run leaves no blank sheet.
-      const last = this.doc.pages[this.activePageIndex]
-      if (last && last.blocks.length === 0 && this.doc.pages.length > 1) {
-        this.doc.pages.splice(this.activePageIndex, 1)
-        this.reindexPages()
-        this.setActivePage(this.doc.pages.length - 1)
+      const lastWritten = this.writingBlockId
+      const page = this.doc.pages[this.activePageIndex]
+      if (page && page.blocks.length === 0) {
+        if (this.doc.pages.length > 1) {
+          // A fresh continuation sheet a failed run left empty is removed.
+          this.doc.pages.splice(this.activePageIndex, 1)
+          this.reindexPages()
+          this.setActivePage(this.doc.pages.length - 1)
+        } else {
+          // The only page produced nothing, so give it back its blank starting line.
+          page.blocks.push({ id: uid('b'), type: 'text', text: { id: uid('t'), role: 'body', runs: [{ text: '' }] } })
+        }
       }
+      // Rest the caret on the last line the AI wrote, so the view finishes at the end of that
+      // section rather than jumping away, and clear the live writing marker.
+      const rested = this.doc.pages[this.activePageIndex]
+      this.selectedBlockId = lastWritten ?? rested?.blocks[rested.blocks.length - 1]?.id ?? null
+      this.writingBlockId = null
+      this.aiTool = null
       this.touch()
+    },
+    // Replace a list's items as the writing is typed in, one growing slice at a time.
+    setListItems(blockId: string, items: TextRun[][]) {
+      const at = this.locate(blockId)
+      if (at?.block.type === 'list') {
+        at.block.items = items.length ? items : [[{ text: '' }]]
+        this.touch()
+      }
     },
 
     appendGeneratedPages(pages: Block[][]) {

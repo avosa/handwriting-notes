@@ -13,8 +13,9 @@ import NotePage from './editor/NotePage.vue'
 import EditorBar from './editor/EditorBar.vue'
 import SelectionMenu from './editor/SelectionMenu.vue'
 import WholeNoteBar from './editor/WholeNoteBar.vue'
+import AiCursor from './editor/AiCursor.vue'
 import ComposeSheet from './compose/ComposeSheet.vue'
-import LiveWriting from './compose/LiveWriting.vue'
+import AiStatus from './compose/AiStatus.vue'
 import ApiKeyDialog from './ui/ApiKeyDialog.vue'
 import HandwritingPicker from './tools/HandwritingPicker.vue'
 import ThemeSwitch from './ui/ThemeSwitch.vue'
@@ -25,7 +26,7 @@ import Popover from './ui/Popover.vue'
 
 const documentStore = useDocument()
 const library = useLibrary()
-const { generating, error: aiError, generate, stop } = useAi()
+const { generating, phase, providerName, error: aiError, generate, stop } = useAi()
 const { resolved: resolvedTheme } = useTheme()
 
 const mode = ref<'write' | 'draw'>('write')
@@ -79,11 +80,45 @@ const noteHasContent = computed(() =>
   ),
 )
 
-// Follow the writing: keep the newest line Claude adds in view.
+// Bring a specific line into view, so coming to rest lands on an actual block rather than
+// the far bottom of the stack.
+function scrollToBlock(id: string | null, block: 'nearest' | 'center' = 'nearest') {
+  if (!id) return
+  requestAnimationFrame(() => {
+    document.querySelector(`[data-block-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block, behavior: 'smooth' })
+  })
+}
+
+// Follow the writing while the AI works: keep the line being typed lifted a little above the
+// bottom dock, so the words are never written behind the toolbar. The page is eased up only
+// when the line dips into that band, so it reads as a gentle pull rather than a jump, and the
+// writer can still scroll freely everywhere else.
+const HEADROOM_PX = 30
+let followFrame = 0
+function followWriting() {
+  const stack = document.querySelector('.stack') as HTMLElement | null
+  const dock = document.querySelector('.dock-wrap') as HTMLElement | null
+  const id = documentStore.writingBlockId
+  if (stack && dock && id) {
+    const el = stack.querySelector(`[data-block-id="${CSS.escape(id)}"]`)
+    if (el) {
+      const lineBottom = el.getBoundingClientRect().bottom
+      const limit = dock.getBoundingClientRect().top - HEADROOM_PX
+      const overshoot = lineBottom - limit
+      if (overshoot > 1) stack.scrollBy({ top: overshoot * 0.25 })
+    }
+  }
+  if (documentStore.generating) followFrame = requestAnimationFrame(followWriting)
+}
 watch(
-  () => documentStore.writingBlockId,
-  () => {
-    requestAnimationFrame(() => document.querySelector('.stack')?.scrollTo({ top: 1e9, behavior: 'smooth' }))
+  () => documentStore.generating,
+  (now, was) => {
+    if (now && !was) followFrame = requestAnimationFrame(followWriting)
+    if (was && !now) {
+      cancelAnimationFrame(followFrame)
+      // Come to rest on the last line written, deterministically.
+      scrollToBlock(documentStore.selectedBlockId, 'center')
+    }
   },
 )
 
@@ -288,7 +323,10 @@ function addPage() {
           <button class="icon-btn hide-mobile" title="Claude API key" @click="showKey = true">
             <Icon name="key" :size="18" />
           </button>
-          <button class="chip primary" title="Write with AI" @click="showCompose = true">
+          <button v-if="generating" class="chip primary stop" title="Stop the AI" @click="stop">
+            <Icon name="stop" :size="18" /><span class="chip-text">Stop</span>
+          </button>
+          <button v-else class="chip primary" title="Write with AI" @click="showCompose = true">
             <Icon name="wand" :size="18" /><span class="chip-text">Write with AI</span>
           </button>
         </div>
@@ -335,11 +373,9 @@ function addPage() {
         <EditorBar :mode="mode" @update:mode="mode = $event" />
       </div>
 
-      <Transition name="live-pop">
-        <div v-if="generating" class="live-wrap">
-          <LiveWriting @stop="stop" />
-        </div>
-      </Transition>
+      <div class="live-wrap">
+        <AiStatus :phase="phase" :name="providerName" />
+      </div>
 
       <Transition name="toast">
         <div v-if="aiError" class="toast" @click="aiError = null">
@@ -349,6 +385,7 @@ function addPage() {
       </Transition>
 
       <SelectionMenu />
+      <AiCursor />
       <Transition name="toast">
         <WholeNoteBar
           v-if="documentStore.allSelected"
@@ -540,6 +577,12 @@ function addPage() {
   color: #fff;
   background: var(--accent-grad);
   box-shadow: 0 3px 12px var(--accent-shadow);
+}
+/* During a run the same slot offers Stop, in a warm red so ending the writing is obvious and
+   always one tap away even though the status badge steps aside. */
+.chip.primary.stop {
+  background: linear-gradient(135deg, #d1544f, #b73b3a);
+  box-shadow: 0 3px 12px rgba(183, 59, 58, 0.4);
 }
 .chip:disabled {
   opacity: 0.55;

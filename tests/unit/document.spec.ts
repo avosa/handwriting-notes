@@ -32,6 +32,66 @@ describe('document store', () => {
     expect(doc.locate(second)?.pageIndex).toBe(1)
   })
 
+  it('writes into the blank first page instead of opening a second one', () => {
+    const doc = useDocument()
+    const pageIndex = doc.beginAiPage()
+    expect(pageIndex).toBe(0)
+    expect(doc.doc.pages).toHaveLength(1)
+    expect(doc.doc.pages[0].blocks).toHaveLength(0)
+    doc.appendAiBlock(0, { id: 'b1', type: 'text', text: { id: 't1', role: 'body', runs: [{ text: 'Hello' }] } })
+    doc.endAi()
+    // The note stays a single page and rests on the line just written.
+    expect(doc.doc.pages).toHaveLength(1)
+    expect(doc.selectedBlockId).toBe('b1')
+  })
+
+  it('continues on a fresh page when the current one already holds writing', () => {
+    const doc = useDocument()
+    doc.setRuns(doc.doc.pages[0].blocks[0].id, [{ text: 'Existing note' }])
+    const pageIndex = doc.beginAiPage()
+    expect(pageIndex).toBe(1)
+    expect(doc.doc.pages).toHaveLength(2)
+    doc.appendAiBlock(1, { id: 'b2', type: 'text', text: { id: 't2', role: 'body', runs: [{ text: 'More' }] } })
+    doc.endAi()
+    expect(doc.selectedBlockId).toBe('b2')
+  })
+
+  it('begins the writing after the chosen line when working on a section', () => {
+    const doc = useDocument()
+    const first = doc.doc.pages[0].blocks[0].id
+    doc.setRuns(first, [{ text: 'Intro paragraph' }])
+    const second = doc.addParagraphAfter(first, 'body')
+    doc.setRuns(second, [{ text: 'Later paragraph' }])
+    doc.select(first) // the writer clicks the first line
+    const pageIndex = doc.beginAiPage(true)
+    expect(pageIndex).toBe(0)
+    doc.appendAiBlock(0, { id: 'ai1', type: 'text', text: { id: 'x1', role: 'body', runs: [{ text: 'A' }] } })
+    doc.appendAiBlock(0, { id: 'ai2', type: 'text', text: { id: 'x2', role: 'body', runs: [{ text: 'B' }] } })
+    doc.endAi()
+    // The AI lines sit between the chosen line and what followed it, in order.
+    expect(doc.doc.pages[0].blocks.map((b) => b.id)).toEqual([first, 'ai1', 'ai2', second])
+    // The view rests on the last line the AI wrote, not the page's final line.
+    expect(doc.selectedBlockId).toBe('ai2')
+  })
+
+  it('restores a blank line when a run on the only page produced nothing', () => {
+    const doc = useDocument()
+    doc.beginAiPage()
+    doc.endAi()
+    expect(doc.doc.pages).toHaveLength(1)
+    expect(doc.doc.pages[0].blocks).toHaveLength(1)
+    expect(doc.doc.pages[0].blocks[0].type).toBe('text')
+  })
+
+  it('drops an empty continuation page a failed run left behind', () => {
+    const doc = useDocument()
+    doc.setRuns(doc.doc.pages[0].blocks[0].id, [{ text: 'Existing note' }])
+    doc.beginAiPage()
+    doc.endAi()
+    expect(doc.doc.pages).toHaveLength(1)
+    expect(doc.activePageIndex).toBe(0)
+  })
+
   it('fills a stroke by id', () => {
     const doc = useDocument()
     doc.addStroke(0, { id: 's1', tool: 'fine', color: '#000', width: 1, points: [{ x: 0, y: 0, pressure: 1 }] })

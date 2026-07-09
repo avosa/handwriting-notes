@@ -36,8 +36,17 @@ const selectedRole = computed(() => {
   const b = documentStore.selectedBlock
   return b && b.type === 'text' ? b.text.role : null
 })
-const activeRoleLabel = computed(() => roles.find((r) => r.role === selectedRole.value)?.label ?? 'Text')
-const activeRoleIcon = computed(() => roles.find((r) => r.role === selectedRole.value)?.icon ?? 'paragraph')
+// While the AI works, the tool it is reaching for lights up as though it clicked it, and the
+// role control names the role it just chose, so the writing looks hand made with the tools.
+const aiTool = computed(() => documentStore.aiTool)
+const aiRole = computed(() => roles.find((r) => r.role === aiTool.value) ?? null)
+const aiInsertPress = computed(() => ['list', 'table', 'diagram', 'callouts'].includes(aiTool.value ?? ''))
+const activeRoleLabel = computed(
+  () => aiRole.value?.label ?? roles.find((r) => r.role === selectedRole.value)?.label ?? 'Text',
+)
+const activeRoleIcon = computed(
+  () => aiRole.value?.icon ?? roles.find((r) => r.role === selectedRole.value)?.icon ?? 'paragraph',
+)
 
 function toolColor(tool: PenType): string {
   return tool === 'pencil' || tool === 'eraser' ? '#33334C' : settings.activeColor
@@ -96,7 +105,7 @@ function addPage() {
       <div class="controls">
         <Popover align="center">
           <template #trigger>
-            <button class="pill">
+            <button class="pill" data-ai-tool="role" :class="{ 'ai-press': !!aiRole }">
               <Icon :name="activeRoleIcon" :size="18" /><span class="pill-text">{{ activeRoleLabel }}</span>
               <Icon name="chevronDown" :size="14" />
             </button>
@@ -162,7 +171,9 @@ function addPage() {
 
         <Popover align="center">
           <template #trigger>
-            <button class="pill accent"><Icon name="plus" :size="18" /><span class="pill-text">Insert</span></button>
+            <button class="pill accent" data-ai-tool="insert" :class="{ 'ai-press': aiInsertPress }">
+              <Icon name="plus" :size="18" /><span class="pill-text">Insert</span>
+            </button>
           </template>
           <template #default>
             <div class="menu wide">
@@ -359,6 +370,28 @@ function addPage() {
 .pill.accent {
   background: var(--accent-wash-2);
   color: var(--brand);
+}
+/* The press the AI's ghost cursor makes on a tool: it sinks in, lights up in the accent, and
+   a ring flares out from it, so the control plainly reacts to being clicked. */
+.ai-press {
+  color: var(--brand) !important;
+  background: var(--accent-wash-2) !important;
+  box-shadow: 0 0 0 2px var(--accent);
+  animation: ai-press 0.44s ease;
+}
+@keyframes ai-press {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 var(--accent-shadow);
+  }
+  40% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 8px rgba(74, 114, 176, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 2px var(--accent);
+  }
 }
 .ghost {
   color: var(--text-soft);
