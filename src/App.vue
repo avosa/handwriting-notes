@@ -23,6 +23,26 @@ const exporting = ref<'pdf' | 'docx' | null>(null)
 
 const pageCount = computed(() => documentStore.doc.pages.length)
 
+// Right-clicking a page, or tapping its menu button, opens page actions at that spot.
+const pageMenu = ref<{ index: number; x: number; y: number } | null>(null)
+function openPageMenu(index: number, event: MouseEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+  // Keep the menu on screen: flip it up near the bottom, and in from the right edge.
+  const menuW = 200
+  const menuH = 170
+  const x = Math.min(event.clientX, window.innerWidth - menuW)
+  const y = event.clientY + menuH > window.innerHeight ? event.clientY - menuH : event.clientY
+  pageMenu.value = { index, x: Math.max(8, x), y: Math.max(8, y) }
+}
+function closePageMenu() {
+  pageMenu.value = null
+}
+function pageAction(fn: (i: number) => void) {
+  if (pageMenu.value) fn(pageMenu.value.index)
+  closePageMenu()
+}
+
 const pageWidth = ref(760)
 function fit() {
   pageWidth.value = Math.min(800, Math.max(300, window.innerWidth - 56))
@@ -55,7 +75,6 @@ function addPage() {
   <div class="app">
     <header class="topbar">
       <div class="left">
-        <div class="mark"><Icon name="pencil" :size="18" /></div>
         <span class="brand">{{ APP_NAME }}</span>
       </div>
 
@@ -91,12 +110,39 @@ function addPage() {
     </header>
 
     <main class="stack">
-      <div v-for="(page, i) in documentStore.doc.pages" :key="page.id" class="page-wrap">
+      <div
+        v-for="(page, i) in documentStore.doc.pages"
+        :key="page.id"
+        class="page-wrap"
+        @contextmenu="openPageMenu(i, $event)"
+      >
         <NotePage :page="page" :page-index="i" :width-px="pageWidth" :mode="mode" />
-        <div class="page-num">{{ i + 1 }} / {{ pageCount }}</div>
+        <div class="page-num">
+          <span>Page {{ i + 1 }} of {{ pageCount }}</span>
+          <button class="page-more" title="Page actions" @click="openPageMenu(i, $event)">
+            <Icon name="dots" :size="16" />
+          </button>
+        </div>
       </div>
       <button class="add-page" @click="addPage"><Icon name="pageAdd" :size="18" /> Add page</button>
     </main>
+
+    <Transition name="fade">
+      <div v-if="pageMenu" class="page-menu-scrim" @click="closePageMenu" @contextmenu.prevent="closePageMenu">
+        <div class="page-menu" :style="{ left: `${pageMenu.x}px`, top: `${pageMenu.y}px` }" @click.stop>
+          <button @click="pageAction((i) => documentStore.setActivePage(documentStore.addPageAfter(i)))">
+            <Icon name="pageAdd" :size="17" /><span>Add page after</span>
+          </button>
+          <button @click="pageAction((i) => documentStore.setActivePage(documentStore.duplicatePage(i)))">
+            <Icon name="copy" :size="17" /><span>Duplicate page</span>
+          </button>
+          <div class="sep" />
+          <button class="danger" @click="pageAction((i) => documentStore.deletePage(i))">
+            <Icon name="trash" :size="17" /><span>Delete page</span>
+          </button>
+        </div>
+      </div>
+    </Transition>
 
     <div class="dock-wrap">
       <EditorBar :mode="mode" @update:mode="mode = $event" />
@@ -236,9 +282,77 @@ function addPage() {
   gap: 8px;
 }
 .page-num {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
   color: #9a9aa8;
   font-variant-numeric: tabular-nums;
+}
+.page-more {
+  display: inline-flex;
+  border: none;
+  background: transparent;
+  color: #9a9aa8;
+  border-radius: 7px;
+  padding: 3px;
+  cursor: pointer;
+}
+.page-more:hover {
+  background: rgba(51, 51, 76, 0.08);
+  color: #33334c;
+}
+.page-menu-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+.page-menu {
+  position: fixed;
+  transform: translate(-6px, 6px);
+  min-width: 190px;
+  background: #fff;
+  border-radius: 13px;
+  padding: 6px;
+  box-shadow:
+    0 14px 44px rgba(51, 51, 76, 0.24),
+    0 0 0 1px rgba(51, 51, 76, 0.06);
+}
+.page-menu button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  border-radius: 9px;
+  padding: 10px 11px;
+  cursor: pointer;
+  color: #33334c;
+  font-size: 14px;
+  text-align: left;
+}
+.page-menu button:hover {
+  background: rgba(74, 114, 176, 0.1);
+}
+.page-menu button.danger {
+  color: #b73b3a;
+}
+.page-menu button.danger:hover {
+  background: rgba(183, 59, 58, 0.1);
+}
+.page-menu .sep {
+  height: 1px;
+  background: rgba(51, 51, 76, 0.1);
+  margin: 5px 8px;
+}
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.12s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 .add-page {
   display: inline-flex;

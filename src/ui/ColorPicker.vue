@@ -1,8 +1,9 @@
 <script setup lang="ts">
-// A colour picker used everywhere a colour is chosen: text, headings, highlight, pens,
-// diagrams, callouts. It offers the saved palette, recent choices, a broad spectrum, a
-// full colour wheel, and a hex field, so any colour is reachable in a tap or two.
-import { ref } from 'vue'
+// A full colour picker used everywhere a colour is chosen: text, headings, highlight,
+// pens, diagrams, callouts. It has a saturation and brightness field, a hue slider, a
+// hex box, and the saved and sample swatches, so any colour is reachable and the
+// familiar note colours are one tap away.
+import { onMounted, ref, watch } from 'vue'
 import { pickerRows } from './colors'
 import { useSettings } from '@/store/settings'
 import Icon from './Icon.vue'
@@ -11,79 +12,153 @@ const props = defineProps<{ modelValue: string; allowClear?: boolean; label?: st
 const emit = defineEmits<{ (e: 'update:modelValue', value: string): void; (e: 'clear'): void }>()
 
 const settings = useSettings()
+
+const hue = ref(210)
+const sat = ref(0.5)
+const val = ref(0.7)
 const hex = ref(props.modelValue)
 
-function choose(color: string) {
+function clamp(n: number, lo = 0, hi = 1) {
+  return Math.max(lo, Math.min(hi, n))
+}
+function hsvToHex(h: number, s: number, v: number): string {
+  const c = v * s
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+  const m = v - c
+  const [r, g, b] =
+    h < 60
+      ? [c, x, 0]
+      : h < 120
+        ? [x, c, 0]
+        : h < 180
+          ? [0, c, x]
+          : h < 240
+            ? [0, x, c]
+            : h < 300
+              ? [x, 0, c]
+              : [c, 0, x]
+  const to = (n: number) =>
+    Math.round((n + m) * 255)
+      .toString(16)
+      .padStart(2, '0')
+  return `#${to(r)}${to(g)}${to(b)}`
+}
+function hexToHsv(input: string) {
+  const clean = input.replace('#', '')
+  if (!/^([0-9a-f]{3}|[0-9a-f]{6})$/i.test(clean)) return null
+  const full = clean.length === 3 ? clean.replace(/(.)/g, '$1$1') : clean
+  const r = parseInt(full.slice(0, 2), 16) / 255
+  const g = parseInt(full.slice(2, 4), 16) / 255
+  const b = parseInt(full.slice(4, 6), 16) / 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const d = max - min
+  let h = 0
+  if (d !== 0) {
+    if (max === r) h = ((g - b) / d) % 6
+    else if (max === g) h = (b - r) / d + 2
+    else h = (r - g) / d + 4
+    h *= 60
+    if (h < 0) h += 360
+  }
+  return { h, s: max === 0 ? 0 : d / max, v: max }
+}
+
+function syncFromHex(value: string) {
+  const hsv = hexToHsv(value)
+  if (hsv) {
+    hue.value = hsv.h
+    sat.value = hsv.s
+    val.value = hsv.v
+  }
+}
+onMounted(() => syncFromHex(props.modelValue))
+watch(
+  () => props.modelValue,
+  (v) => {
+    if (v.toLowerCase() !== hex.value.toLowerCase()) {
+      hex.value = v
+      syncFromHex(v)
+    }
+  },
+)
+
+function emitCurrent() {
+  const value = hsvToHex(hue.value, sat.value, val.value)
+  hex.value = value
+  settings.rememberColor(value)
+  emit('update:modelValue', value)
+}
+
+const field = ref<HTMLElement | null>(null)
+const hueBar = ref<HTMLElement | null>(null)
+
+function pointFromField(event: PointerEvent) {
+  const rect = field.value!.getBoundingClientRect()
+  sat.value = clamp((event.clientX - rect.left) / rect.width)
+  val.value = clamp(1 - (event.clientY - rect.top) / rect.height)
+  emitCurrent()
+}
+function pointFromHue(event: PointerEvent) {
+  const rect = hueBar.value!.getBoundingClientRect()
+  hue.value = clamp((event.clientX - rect.left) / rect.width) * 360
+  emitCurrent()
+}
+function drag(el: HTMLElement | null, move: (e: PointerEvent) => void, event: PointerEvent) {
+  if (!el) return
+  el.setPointerCapture(event.pointerId)
+  move(event)
+  const onMove = (e: PointerEvent) => move(e)
+  const stop = () => {
+    el.removeEventListener('pointermove', onMove)
+    el.removeEventListener('pointerup', stop)
+  }
+  el.addEventListener('pointermove', onMove)
+  el.addEventListener('pointerup', stop)
+}
+
+function chooseSwatch(color: string) {
   hex.value = color
+  syncFromHex(color)
   settings.rememberColor(color)
   emit('update:modelValue', color)
 }
-
 function onHexInput(value: string) {
   hex.value = value
-  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)) emit('update:modelValue', value)
+  const hsv = hexToHsv(value)
+  if (hsv) {
+    hue.value = hsv.h
+    sat.value = hsv.s
+    val.value = hsv.v
+    settings.rememberColor(value)
+    emit('update:modelValue', value)
+  }
 }
-
 const rows = () => pickerRows(settings.penColors, settings.recentColors)
 </script>
 
 <template>
-  <div class="picker">
+  <div class="picker" @mousedown.prevent>
     <p v-if="label" class="label">{{ label }}</p>
 
-    <div v-if="rows().recent.length" class="group">
-      <span class="group-label">Recent</span>
-      <div class="swatches">
-        <button
-          v-for="c in rows().recent"
-          :key="`r-${c}`"
-          class="swatch"
-          :class="{ on: c.toLowerCase() === modelValue.toLowerCase() }"
-          :style="{ background: c }"
-          :title="c"
-          @click="choose(c)"
-        />
-      </div>
+    <div
+      ref="field"
+      class="field"
+      :style="{ background: `hsl(${hue}, 100%, 50%)` }"
+      @pointerdown="drag(field, pointFromField, $event)"
+    >
+      <div class="field-white" />
+      <div class="field-black" />
+      <div class="thumb" :style="{ left: `${sat * 100}%`, top: `${(1 - val) * 100}%`, background: hex }" />
     </div>
 
-    <div class="group">
-      <span class="group-label">Palette</span>
-      <div class="swatches">
-        <button
-          v-for="c in rows().saved"
-          :key="`s-${c}`"
-          class="swatch"
-          :class="{ on: c.toLowerCase() === modelValue.toLowerCase() }"
-          :style="{ background: c }"
-          :title="c"
-          @click="choose(c)"
-        />
-        <button class="swatch add" title="Save current colour" @click="settings.savePaletteColor(modelValue)">
-          <Icon name="plus" :size="13" />
-        </button>
-      </div>
+    <div ref="hueBar" class="hue" @pointerdown="drag(hueBar, pointFromHue, $event)">
+      <div class="hue-thumb" :style="{ left: `${(hue / 360) * 100}%` }" />
     </div>
 
-    <div class="group">
-      <span class="group-label">Spectrum</span>
-      <div class="swatches">
-        <button
-          v-for="c in rows().spectrum"
-          :key="`p-${c}`"
-          class="swatch"
-          :class="{ on: c.toLowerCase() === modelValue.toLowerCase(), light: c.toLowerCase() === '#ffffff' }"
-          :style="{ background: c }"
-          :title="c"
-          @click="choose(c)"
-        />
-      </div>
-    </div>
-
-    <div class="custom">
-      <label class="wheel" :style="{ background: modelValue }">
-        <input type="color" :value="modelValue" @input="choose(($event.target as HTMLInputElement).value)" />
-      </label>
-      <div class="hex">
+    <div class="current">
+      <span class="chip" :style="{ background: hex }" />
+      <div class="hexbox">
         <span>#</span>
         <input
           :value="hex.replace('#', '')"
@@ -94,16 +169,32 @@ const rows = () => pickerRows(settings.penColors, settings.recentColors)
       </div>
       <button v-if="allowClear" class="clear" @click="emit('clear')">Clear</button>
     </div>
+
+    <div class="swatches">
+      <button
+        v-for="c in [...rows().saved, ...rows().recent]"
+        :key="c"
+        class="swatch"
+        :class="{ on: c.toLowerCase() === modelValue.toLowerCase(), light: c.toLowerCase() === '#ffffff' }"
+        :style="{ background: c }"
+        :title="c"
+        @click="chooseSwatch(c)"
+      />
+      <button class="swatch add" title="Save this colour" @click="settings.savePaletteColor(hex)">
+        <Icon name="plus" :size="12" />
+      </button>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .picker {
-  width: 232px;
+  width: 236px;
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  user-select: none;
 }
 .label {
   margin: 0;
@@ -111,20 +202,99 @@ const rows = () => pickerRows(settings.penColors, settings.recentColors)
   font-weight: 600;
   color: #6a6a80;
 }
-.group {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+.field {
+  position: relative;
+  width: 100%;
+  height: 132px;
+  border-radius: 10px;
+  cursor: crosshair;
+  touch-action: none;
+  overflow: hidden;
 }
-.group-label {
-  font-size: 10px;
-  letter-spacing: 0.04em;
+.field-white,
+.field-black {
+  position: absolute;
+  inset: 0;
+}
+.field-white {
+  background: linear-gradient(to right, #fff, transparent);
+}
+.field-black {
+  background: linear-gradient(to top, #000, transparent);
+}
+.thumb {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow:
+    0 0 0 2px #fff,
+    0 1px 3px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+.hue {
+  position: relative;
+  height: 14px;
+  border-radius: 7px;
+  cursor: pointer;
+  touch-action: none;
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+.hue-thumb {
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.15),
+    0 1px 3px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chip {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgba(51, 51, 76, 0.2);
+}
+.hexbox {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(51, 51, 76, 0.18);
+  color: #6a6a80;
+  font-size: 13px;
+}
+.hexbox input {
+  width: 100%;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  color: #33334c;
   text-transform: uppercase;
-  color: #9a9aa8;
+  font-family: inherit;
+}
+.clear {
+  border: none;
+  background: transparent;
+  color: #b73b3a;
+  font-size: 12px;
+  cursor: pointer;
 }
 .swatches {
   display: grid;
-  grid-template-columns: repeat(10, 1fr);
+  grid-template-columns: repeat(9, 1fr);
   gap: 5px;
 }
 .swatch {
@@ -152,59 +322,5 @@ const rows = () => pickerRows(settings.penColors, settings.recentColors)
   place-items: center;
   background: #fff;
   color: #6a6a80;
-  box-shadow: inset 0 0 0 1px rgba(51, 51, 76, 0.25);
-}
-.custom {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-top: 4px;
-  border-top: 1px solid rgba(51, 51, 76, 0.1);
-}
-.wheel {
-  position: relative;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  box-shadow: inset 0 0 0 1px rgba(51, 51, 76, 0.2);
-  cursor: pointer;
-  overflow: hidden;
-}
-.wheel input {
-  position: absolute;
-  inset: -4px;
-  width: 40px;
-  height: 40px;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  opacity: 0;
-}
-.hex {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex: 1;
-  padding: 5px 8px;
-  border-radius: 8px;
-  border: 1px solid rgba(51, 51, 76, 0.18);
-  color: #6a6a80;
-  font-size: 13px;
-}
-.hex input {
-  width: 100%;
-  border: none;
-  outline: none;
-  font-size: 13px;
-  color: #33334c;
-  text-transform: uppercase;
-  font-family: inherit;
-}
-.clear {
-  border: none;
-  background: transparent;
-  color: #b73b3a;
-  font-size: 12px;
-  cursor: pointer;
 }
 </style>

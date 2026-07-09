@@ -8,6 +8,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Page } from '@/types'
 import { getPreset } from '@/paper/sheetSpec'
 import { textMetrics } from './alignment'
+import { useDocument } from '@/store/document'
 import Sheet from '@/paper/Sheet.vue'
 import TextLayer from './TextLayer.vue'
 import InkLayer from './InkLayer.vue'
@@ -18,6 +19,23 @@ const props = defineProps<{
   widthPx: number
   mode: 'write' | 'draw'
 }>()
+
+const documentStore = useDocument()
+
+// Clicking or tapping the blank part of the page starts a line there, so a writer can
+// point at where they want to write instead of pressing Enter to reach it.
+function onPageClick(event: MouseEvent) {
+  if (props.mode !== 'write') return
+  const target = event.target as HTMLElement
+  if (target.closest('.editable, .cell, .diagram-slot, .table-slot, .callouts-slot')) return
+  const blocks = props.page.blocks
+  const last = blocks[blocks.length - 1]
+  if (last && last.type === 'text' && last.text.runs.every((r) => r.text === '')) {
+    documentStore.requestFocus(last.id)
+  } else {
+    documentStore.addParagraphAfter(last ? last.id : null, 'body')
+  }
+}
 
 const preset = computed(() => getPreset(props.page.presetId))
 const pxPerMm = computed(() => props.widthPx / preset.value.width)
@@ -51,7 +69,13 @@ onBeforeUnmount(() => observer?.disconnect())
 </script>
 
 <template>
-  <div ref="root" class="note-page" :style="{ width: `${widthPx}px`, height: `${heightPx}px` }">
+  <div
+    ref="root"
+    class="note-page"
+    :class="{ writable: mode === 'write' }"
+    :style="{ width: `${widthPx}px`, height: `${heightPx}px` }"
+    @click="onPageClick"
+  >
     <Sheet class="layer" :preset-id="page.presetId" :height-mm="heightMm" />
     <TextLayer
       :page="page"
@@ -73,6 +97,9 @@ onBeforeUnmount(() => observer?.disconnect())
 </template>
 
 <style scoped>
+.note-page.writable {
+  cursor: text;
+}
 .note-page {
   position: relative;
   flex-shrink: 0;

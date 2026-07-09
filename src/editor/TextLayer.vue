@@ -140,6 +140,23 @@ function onListBackspace(block: Extract<Block, { type: 'list' }>, itemIndex: num
   pendingFocus.value = `list:${block.id}:${Math.max(0, itemIndex - 1)}`
 }
 
+// A gentle hint only where it helps: the empty document invites the first line, and a
+// freshly inserted heading or title names itself. Plain body lines stay clean, so a
+// new line after Enter never repeats a placeholder.
+const ROLE_HINT: Partial<Record<TextRole, string>> = {
+  title: 'Title',
+  subtitle: 'Subtitle',
+  heading: 'Heading',
+  subheading: 'Subheading',
+  caption: 'Caption',
+}
+function placeholderFor(block: Extract<Block, { type: 'text' }>, index: number): string {
+  if (block.text.role !== 'body') return ROLE_HINT[block.text.role] ?? ''
+  const pristine =
+    props.pageIndex === 0 && index === 0 && documentStore.doc.pages.length === 1 && props.page.blocks.length === 1
+  return pristine ? 'Start writing' : ''
+}
+
 function diagramFont() {
   return bodyFontStack(handwriting.value)
 }
@@ -157,9 +174,7 @@ function updateRuns(blockId: string, runs: TextRun[]) {
         :model-value="block.text.runs"
         class="paragraph"
         :style="paragraphStyle(block)"
-        :placeholder="
-          block.text.role === 'title' ? 'Title' : block.text.role === 'heading' ? 'Heading' : 'Start writing'
-        "
+        :placeholder="placeholderFor(block, page.blocks.indexOf(block))"
         @update:model-value="updateRuns(block.id, $event)"
         @focus="onFocusBlock(block.id)"
         @enter="onParagraphEnter(block)"
