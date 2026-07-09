@@ -12,6 +12,7 @@ vi.mock('@/store/persistence', () => ({
 import { providerList, getProvider } from '@/ai/providers'
 import { attachmentParts } from '@/ai/providers/content'
 import { sseData } from '@/ai/providers/sse'
+import { describeHttpError } from '@/ai/providers/errors'
 import type { Attachment } from '@/types'
 
 describe('provider registry', () => {
@@ -52,6 +53,29 @@ describe('attachment parts for OpenAI-style providers', () => {
   it('carries a voice note as its transcript', async () => {
     const parts = await attachmentParts([voice('take notes on sets')], false)
     expect(parts[0]).toEqual({ type: 'text', text: 'Transcript of a spoken voice note:\ntake notes on sets' })
+  })
+})
+
+describe('http error messages', () => {
+  it("reads a spent quota out of Gemini's array-shaped 429 and speaks plainly", () => {
+    const body =
+      '[{ "error": { "code": 429, "message": "You exceeded your current quota, please check your plan and billing details." } }]'
+    const msg = describeHttpError('Gemini', 429, body)
+    expect(msg).toContain('Gemini')
+    expect(msg.toLowerCase()).toContain('quota')
+    expect(msg).not.toContain('{')
+  })
+  it('points a refused key at the key button', () => {
+    const msg = describeHttpError('ChatGPT', 401, '{"error":{"message":"Incorrect API key provided"}}')
+    expect(msg).toContain('did not accept your key')
+  })
+  it('treats a server error as a passing outage', () => {
+    expect(describeHttpError('Claude', 503, 'upstream error')).toContain('trouble right now')
+  })
+  it('surfaces a 400 detail without the JSON', () => {
+    const msg = describeHttpError('DeepSeek', 400, '{"error":{"message":"model not found"}}')
+    expect(msg).toContain('model not found')
+    expect(msg).not.toContain('"error"')
   })
 })
 

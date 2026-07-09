@@ -17,6 +17,15 @@ import { getHandwriting } from '@/handwriting/registry'
 const REWRITE_SYSTEM =
   'Rewrite the one line of notes the user gives, following their instruction. Reply with only the rewritten line, no quotes and no preamble. Never use a hyphen or dash as punctuation.'
 
+// A failed fetch throws a TypeError with no useful text; the provider's own errors already
+// read well, so only the bare network case needs dressing up.
+function reason(e: unknown, providerName: string, fallback: string): string {
+  if (e instanceof TypeError) {
+    return `Could not reach ${providerName}. Check your connection; some providers also block requests made straight from a browser.`
+  }
+  return e instanceof Error ? e.message : fallback
+}
+
 let controller: AbortController | null = null
 
 export function useAi() {
@@ -59,7 +68,7 @@ export function useAi() {
       return true
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return wroteAnything
-      error.value = e instanceof Error ? e.message : 'The notes could not be generated.'
+      error.value = reason(e, provider.name, 'The notes could not be generated.')
       return false
     } finally {
       documentStore.endAi()
@@ -95,7 +104,7 @@ export function useAi() {
       if (!text) throw new Error(`${provider.name} returned an empty line.`)
       return stripDashes(text)
     } catch (e) {
-      error.value = e instanceof Error ? e.message : 'That line could not be rewritten.'
+      error.value = reason(e, provider.name, 'That line could not be rewritten.')
       return null
     } finally {
       refining.value = false

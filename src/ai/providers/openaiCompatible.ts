@@ -3,6 +3,7 @@
 // reply text. DeepSeek speaks the same protocol, so both are built from this one factory
 // with their own endpoint, model, and whether they can see images.
 import { attachmentParts, type ContentPart } from './content'
+import { describeHttpError } from './errors'
 import { sseData } from './sse'
 import type { ChatRequest, Provider } from './types'
 
@@ -61,7 +62,7 @@ export function openAiCompatible(config: Config): Provider {
         }),
       })
       if (!response.ok || !response.body) {
-        throw new Error(`${config.vendor} returned ${response.status}. ${(await response.text()).slice(0, 200)}`)
+        throw new Error(describeHttpError(config.name, response.status, await response.text()))
       }
       for await (const payload of sseData(response)) {
         if (payload === '[DONE]') continue
@@ -90,7 +91,7 @@ export function openAiCompatible(config: Config): Provider {
         }),
       })
       if (!response.ok) {
-        throw new Error(`${config.vendor} returned ${response.status}. ${(await response.text()).slice(0, 160)}`)
+        throw new Error(describeHttpError(config.name, response.status, await response.text()))
       }
       const data = (await response.json()) as Completion
       return (data.choices?.[0]?.message?.content ?? '').trim()

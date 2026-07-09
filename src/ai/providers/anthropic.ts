@@ -2,6 +2,7 @@
 // message events where each text delta arrives on its own; a single completion reads the
 // one text block back. Attachments keep the vendor's own inline encoding.
 import { encodeAttachments } from '@/ai/attachmentEncoding'
+import { describeHttpError } from './errors'
 import { sseData } from './sse'
 import type { ChatRequest, Provider } from './types'
 
@@ -47,7 +48,7 @@ export const anthropic: Provider = {
       }),
     })
     if (!response.ok || !response.body) {
-      throw new Error(`Anthropic returned ${response.status}. ${(await response.text()).slice(0, 200)}`)
+      throw new Error(describeHttpError('Claude', response.status, await response.text()))
     }
     for await (const payload of sseData(response)) {
       if (payload === '[DONE]') continue
@@ -74,7 +75,7 @@ export const anthropic: Provider = {
         messages: [{ role: 'user', content: user }],
       }),
     })
-    if (!response.ok) throw new Error(`Anthropic returned ${response.status}. ${(await response.text()).slice(0, 160)}`)
+    if (!response.ok) throw new Error(describeHttpError('Claude', response.status, await response.text()))
     const data = (await response.json()) as { content: { type: string; text?: string }[] }
     return data.content
       .filter((b) => b.type === 'text')
