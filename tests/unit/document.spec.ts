@@ -56,22 +56,33 @@ describe('document store', () => {
     expect(doc.selectedBlockId).toBe('b2')
   })
 
-  it('begins the writing after the chosen line when working on a section', () => {
+  it('rewrites the note in place when revising, and undo restores the original', () => {
     const doc = useDocument()
     const first = doc.doc.pages[0].blocks[0].id
-    doc.setRuns(first, [{ text: 'Intro paragraph' }])
-    const second = doc.addParagraphAfter(first, 'body')
-    doc.setRuns(second, [{ text: 'Later paragraph' }])
-    doc.select(first) // the writer clicks the first line
-    const pageIndex = doc.beginAiPage(true)
+    doc.setRuns(first, [{ text: 'Original messy note' }])
+    doc.addParagraphAfter(first, 'body')
+    const plain = () =>
+      doc.doc.pages
+        .flatMap((p) => p.blocks)
+        .map((b) => (b.type === 'text' ? b.text.runs.map((r) => r.text).join('') : ''))
+        .join(' ')
+
+    const pageIndex = doc.beginAiPage(true) // revise: clears the note for a full rewrite
     expect(pageIndex).toBe(0)
-    doc.appendAiBlock(0, { id: 'ai1', type: 'text', text: { id: 'x1', role: 'body', runs: [{ text: 'A' }] } })
-    doc.appendAiBlock(0, { id: 'ai2', type: 'text', text: { id: 'x2', role: 'body', runs: [{ text: 'B' }] } })
+    expect(doc.doc.pages).toHaveLength(1)
+    expect(doc.doc.pages[0].blocks).toHaveLength(0)
+    doc.appendAiBlock(0, {
+      id: 'r1',
+      type: 'text',
+      text: { id: 't', role: 'body', runs: [{ text: 'Corrected note' }] },
+    })
     doc.endAi()
-    // The AI lines sit between the chosen line and what followed it, in order.
-    expect(doc.doc.pages[0].blocks.map((b) => b.id)).toEqual([first, 'ai1', 'ai2', second])
-    // The view rests on the last line the AI wrote, not the page's final line.
-    expect(doc.selectedBlockId).toBe('ai2')
+    // The corrected note replaced the original rather than being added after it.
+    expect(plain()).toContain('Corrected note')
+    expect(plain()).not.toContain('Original messy note')
+    // One undo brings the original note back.
+    doc.undo()
+    expect(plain()).toContain('Original messy note')
   })
 
   it('restores a blank line when a run on the only page produced nothing', () => {
