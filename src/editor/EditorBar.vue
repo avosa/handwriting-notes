@@ -3,7 +3,7 @@
 // drawing. Writing shows the line type, emphasis, colour, alignment, and an insert
 // menu. Drawing shows a tray of real looking instruments you pick up, plus a width
 // slider and the ink colour. It is touch friendly and scrolls rather than crowd.
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { PenType, TextRole } from '@/types'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
@@ -20,6 +20,7 @@ const emit = defineEmits<{ (e: 'update:mode', value: 'write' | 'draw'): void }>(
 
 const documentStore = useDocument()
 const settings = useSettings()
+const highlightColour = ref('#F7E36A')
 
 const roles: { role: TextRole; label: string; icon: string }[] = [
   { role: 'title', label: 'Title', icon: 'title' },
@@ -120,7 +121,10 @@ function addPage() {
         <div class="group">
           <Popover align="center">
             <template #trigger>
-              <button title="Text colour" @mousedown="rememberSelection"><Icon name="palette" :size="18" /></button>
+              <button class="stacked" title="Text colour" @mousedown="rememberSelection">
+                <Icon name="textColour" :size="18" />
+                <span class="bar" :style="{ background: settings.activeColor }" />
+              </button>
             </template>
             <template #default>
               <ColorPicker label="Text colour" :model-value="settings.activeColor" @update:model-value="setTextColor" />
@@ -128,14 +132,22 @@ function addPage() {
           </Popover>
           <Popover align="center">
             <template #trigger>
-              <button title="Highlight" @mousedown="rememberSelection"><Icon name="highlighter" :size="18" /></button>
+              <button class="stacked" title="Highlight" @mousedown="rememberSelection">
+                <Icon name="highlighter" :size="18" />
+                <span class="bar" :style="{ background: highlightColour }" />
+              </button>
             </template>
             <template #default>
               <ColorPicker
                 label="Highlight"
-                :model-value="'#F7E36A'"
+                :model-value="highlightColour"
                 allow-clear
-                @update:model-value="setHighlight"
+                @update:model-value="
+                  (c) => {
+                    highlightColour = c
+                    setHighlight(c)
+                  }
+                "
                 @clear="setHighlight('transparent')"
               />
             </template>
@@ -322,6 +334,16 @@ function addPage() {
 .controls button:hover,
 .draw-controls .ink:hover {
   background: rgba(74, 114, 176, 0.12);
+}
+.stacked {
+  flex-direction: column;
+  gap: 2px !important;
+}
+.stacked .bar {
+  width: 18px;
+  height: 3px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(51, 51, 76, 0.12);
 }
 .pill {
   padding: 9px 13px !important;

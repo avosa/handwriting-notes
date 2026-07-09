@@ -7,7 +7,8 @@ export const icons: Record<string, string> = {
   pencil: '<path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="M15 5l4 4"/>',
   pen: '<path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/>',
   marker: '<path d="M9 11l-6 6v3h9l3-3"/><path d="M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>',
-  highlighter: '<path d="M9 11l-4 4v4h4l4-4"/><path d="M14 6l4 4"/><path d="M21 3l-9 9-4-4 9-9z"/>',
+  highlighter: '<path d="M15 4l5 5-8 8H7v-5z"/><path d="M8 20h9"/>',
+  textColour: '<path d="M5 16L10 5h1.6L17 16"/><path d="M7 12h8"/>',
   eraser:
     '<path d="M7 21h13"/><path d="M5 13l6 6"/><path d="M3 15l8.5-8.5a2 2 0 0 1 3 0l4 4a2 2 0 0 1 0 3L14 21H8l-5-5a2 2 0 0 1 0-3z"/>',
   bold: '<path d="M6 4h8a4 4 0 0 1 0 8H6z"/><path d="M6 12h9a4 4 0 0 1 0 8H6z"/>',
