@@ -17,7 +17,16 @@ interface DocumentState {
   generating: boolean
   /** The last block Claude wrote, where the writing caret rests. */
   writingBlockId: string | null
+  /** Earlier states of this note, most recent last, for undo. */
+  past: string[]
+  /** Undone states, for redo. */
+  future: string[]
 }
+
+// The state the history compares against; kept out of the reactive store since it is a
+// large string touched on every keystroke.
+let baseline = ''
+const HISTORY_LIMIT = 200
 
 interface BlockLocation {
   pageIndex: number
@@ -33,8 +42,12 @@ export const useDocument = defineStore('document', {
     pendingFocusId: null,
     generating: false,
     writingBlockId: null,
+    past: [],
+    future: [],
   }),
   getters: {
+    canUndo: (state) => state.past.length > 0,
+    canRedo: (state) => state.future.length > 0,
     pageCount: (state) => state.doc.pages.length,
     selectedBlock(state): Block | null {
       if (!state.selectedBlockId) return null
@@ -316,11 +329,52 @@ export const useDocument = defineStore('document', {
       this.doc = doc
       this.activePageIndex = 0
       this.selectedBlockId = null
+      this.resetHistory()
     },
     reset() {
       this.doc = blankDocument()
       this.activePageIndex = 0
       this.selectedBlockId = null
+      this.resetHistory()
+    },
+
+    // Undo and redo. History records whole states of the note, so anything lost, a word,
+    // a line, a drawing, a whole page, comes back. Opening a note starts its own history.
+    resetHistory() {
+      baseline = JSON.stringify(this.doc)
+      this.past = []
+      this.future = []
+    },
+    recordHistory() {
+      const now = JSON.stringify(this.doc)
+      if (now === baseline) return
+      this.past.push(baseline)
+      if (this.past.length > HISTORY_LIMIT) this.past.shift()
+      this.future = []
+      baseline = now
+    },
+    undo() {
+      if (!this.past.length) return
+      // Save the current state, capturing edits not yet recorded, then step back.
+      this.recordHistory()
+      const previous = this.past.pop()
+      if (previous === undefined) return
+      this.future.push(baseline)
+      baseline = previous
+      ;(document.activeElement as HTMLElement | null)?.blur?.()
+      this.doc = JSON.parse(previous)
+      this.selectedBlockId = null
+      this.activePageIndex = Math.min(this.activePageIndex, this.doc.pages.length - 1)
+    },
+    redo() {
+      const next = this.future.pop()
+      if (next === undefined) return
+      this.past.push(baseline)
+      baseline = next
+      ;(document.activeElement as HTMLElement | null)?.blur?.()
+      this.doc = JSON.parse(next)
+      this.selectedBlockId = null
+      this.activePageIndex = Math.min(this.activePageIndex, this.doc.pages.length - 1)
     },
   },
 })

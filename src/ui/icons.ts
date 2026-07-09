@@ -63,6 +63,8 @@ export const icons: Record<string, string> = {
   arrowLeft: '<path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>',
   sparkleEdit:
     '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/><path d="M19 3l.6 1.4L21 5l-1.4.6L19 7l-.6-1.4L17 5l1.4-.6z"/>',
+  undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h11a6 6 0 0 1 0 12H8"/>',
+  redo: '<path d="M15 14l5-5-5-5"/><path d="M20 9H9a6 6 0 0 0 0 12h7"/>',
 }
 
 export type IconName = keyof typeof icons

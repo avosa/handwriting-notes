@@ -187,8 +187,13 @@ export async function installPersistence(): Promise<void> {
   }, 400)
   const persistSettings = debounce((settings: Settings) => void saveSettings(settings), 300)
   const persistLibrary = debounce((list: LibraryEntry[]) => void saveLibrary(list), 300)
+  // Group a burst of typing into one undo step by recording once it settles.
+  const recordHistory = debounce(() => documentStore.recordHistory(), 500)
 
-  documentStore.$subscribe((_m, state) => persistDoc(state.doc))
+  documentStore.$subscribe((_m, state) => {
+    persistDoc(state.doc)
+    recordHistory()
+  })
   settingsStore.$subscribe((_m, state) => persistSettings(state))
   libraryStore.$subscribe((_m, state) => {
     persistLibrary(state.entries)

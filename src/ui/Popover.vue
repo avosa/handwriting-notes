@@ -2,14 +2,24 @@
 // A small floating panel anchored to a trigger. On a wide screen it opens beside the
 // trigger; on a narrow screen it rises from the bottom as a sheet, the way a native
 // app behaves. Clicking outside or pressing Escape closes it.
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = withDefaults(defineProps<{ align?: 'left' | 'right' | 'center' }>(), { align: 'left' })
 const open = ref(false)
+// Whether the panel sits above the trigger, chosen so it never spills off the bottom.
+const above = ref(false)
 const root = ref<HTMLElement | null>(null)
+const panel = ref<HTMLElement | null>(null)
 
-function toggle() {
+async function toggle() {
   open.value = !open.value
+  if (!open.value) return
+  await nextTick()
+  const trigger = root.value?.getBoundingClientRect()
+  const height = panel.value?.offsetHeight ?? 0
+  // Flip up when the panel would run past the bottom of the window but there is room
+  // above the trigger.
+  above.value = !!trigger && trigger.bottom + height + 16 > window.innerHeight && trigger.top - height - 16 > 0
 }
 function close() {
   open.value = false
@@ -43,7 +53,7 @@ defineExpose({ close })
       <slot name="trigger" :open="open" />
     </div>
     <Transition name="pop">
-      <div v-if="open" class="panel" :class="[`align-${props.align}`]" @click="onPanelClick">
+      <div v-if="open" ref="panel" class="panel" :class="[`align-${props.align}`, { above }]" @click="onPanelClick">
         <slot :close="close" />
       </div>
     </Transition>
@@ -74,6 +84,10 @@ defineExpose({ close })
     0 12px 40px rgba(51, 51, 76, 0.22),
     0 0 0 1px rgba(51, 51, 76, 0.06);
   overflow: hidden;
+}
+.panel.above {
+  top: auto;
+  bottom: calc(100% + 8px);
 }
 .align-left {
   left: 0;

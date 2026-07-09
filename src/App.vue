@@ -4,7 +4,7 @@
 // adapts from a wide desktop down to a phone, keeping every tool within reach.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Attachment } from './types'
-import { APP_NAME } from './brand'
+import { APP_NAME, APP_SHORT } from './brand'
 import { useDocument } from './store/document'
 import { useLibrary } from './store/library'
 import { useClaude } from './compose/useClaude'
@@ -84,9 +84,27 @@ const pageWidth = ref(760)
 function fit() {
   pageWidth.value = Math.min(800, Math.max(300, window.innerWidth - 56))
 }
+
+// Undo and redo with the usual keys. Real inputs keep their own undo; the handwriting
+// blocks are contenteditable, so those use the note's history instead.
+function onKeydown(event: KeyboardEvent) {
+  const meta = event.metaKey || event.ctrlKey
+  if (!meta || (event.key.toLowerCase() !== 'z' && event.key.toLowerCase() !== 'y')) return
+  const tag = (document.activeElement as HTMLElement | null)?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return
+  event.preventDefault()
+  const redo = event.key.toLowerCase() === 'y' || (event.key.toLowerCase() === 'z' && event.shiftKey)
+  if (redo) documentStore.redo()
+  else documentStore.undo()
+}
+
 onMounted(fit)
 window.addEventListener('resize', fit)
-onBeforeUnmount(() => window.removeEventListener('resize', fit))
+window.addEventListener('keydown', onKeydown)
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', fit)
+  window.removeEventListener('keydown', onKeydown)
+})
 
 const title = computed({
   get: () => documentStore.doc.title,
@@ -114,7 +132,24 @@ function addPage() {
       <div class="left">
         <button class="icon-btn" title="All notes" @click="showHome = true"><Icon name="grid" :size="18" /></button>
         <button class="icon-btn" title="New note" @click="newNote"><Icon name="plus" :size="18" /></button>
-        <span class="brand">{{ APP_NAME }}</span>
+        <button
+          class="icon-btn hide-mobile"
+          title="Undo"
+          :disabled="!documentStore.canUndo"
+          @click="documentStore.undo()"
+        >
+          <Icon name="undo" :size="18" />
+        </button>
+        <button
+          class="icon-btn hide-mobile"
+          title="Redo"
+          :disabled="!documentStore.canRedo"
+          @click="documentStore.redo()"
+        >
+          <Icon name="redo" :size="18" />
+        </button>
+        <span class="brand full">{{ APP_NAME }}</span>
+        <span class="brand short">{{ APP_SHORT }}</span>
       </div>
 
       <div class="center">
@@ -258,6 +293,9 @@ function addPage() {
   font-size: 15px;
   white-space: nowrap;
 }
+.brand.short {
+  display: none;
+}
 .center {
   display: flex;
   flex-direction: column;
@@ -327,6 +365,13 @@ function addPage() {
 }
 .icon-btn:hover {
   background: rgba(74, 114, 176, 0.08);
+}
+.icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.icon-btn:disabled:hover {
+  background: #fff;
 }
 .stack {
   flex: 1;
@@ -523,10 +568,13 @@ function addPage() {
 }
 
 @media (max-width: 720px) {
-  .brand,
+  .brand.full,
   .chip-text,
   .hide-mobile {
     display: none;
+  }
+  .brand.short {
+    display: inline;
   }
   .chip,
   .icon-btn {
