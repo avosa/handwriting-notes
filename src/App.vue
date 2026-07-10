@@ -13,6 +13,7 @@ import NotePage from './editor/NotePage.vue'
 import EditorBar from './editor/EditorBar.vue'
 import SelectionMenu from './editor/SelectionMenu.vue'
 import WholeNoteBar from './editor/WholeNoteBar.vue'
+import LineSelectionBar from './editor/LineSelectionBar.vue'
 import AiCursor from './editor/AiCursor.vue'
 import ComposeSheet from './compose/ComposeSheet.vue'
 import AiStatus from './compose/AiStatus.vue'
@@ -168,6 +169,10 @@ function onKeydown(event: KeyboardEvent) {
   }
   if (event.key === 'Escape' && documentStore.allSelected) {
     documentStore.clearWholeNote()
+    return
+  }
+  if (event.key === 'Escape' && documentStore.lineSelection) {
+    documentStore.clearLineSelection()
     return
   }
   const meta = event.metaKey || event.ctrlKey
@@ -396,6 +401,9 @@ function addPage() {
           @ask-ai="askAiWholeNote"
           @clear="documentStore.clearWholeNote()"
         />
+      </Transition>
+      <Transition name="toast">
+        <LineSelectionBar v-if="documentStore.lineSelection" />
       </Transition>
 
       <!-- While the menu is open the pushed page is a tap target that closes it. -->

@@ -2,7 +2,7 @@
 // drawn over them. It starts as one blank page; the writer builds everything with the
 // tools. Every mutation bumps updatedAt so persistence knows to save.
 import { defineStore } from 'pinia'
-import type { Block, CalloutBox, NoteDocument, Stroke, TextRole, TextRun } from '@/types'
+import type { Block, CalloutBox, NoteDocument, Page, Stroke, TextRole, TextRun } from '@/types'
 import { blankDocument, blankPage } from '@/content/blankDocument'
 import { toScene } from '@/diagrams/diagramSpec'
 import { uid } from '@/util/id'
@@ -35,6 +35,36 @@ interface DocumentState {
   /** The tool the AI is reaching for right now, so a ghost cursor can glide to it and press
    *  it: a role like 'heading', or an insert like 'table'. Null between presses. */
   aiTool: string | null
+  /** A run of whole lines chosen together across blocks, so a span can be styled or merged
+   *  the way a word processor lets you drag across lines. A native browser selection cannot
+   *  cross separate editable lines, so this tracks the chosen range at the line level. */
+  lineSelection: { pageIndex: number; refs: LineRef[] } | null
+  /** The line a shift-click extends from, set as the caret lands on a line. */
+  lineAnchor: LineRef | null
+}
+
+// A single editable line addressed across blocks: a paragraph carries item null, a list
+// item carries its index. A line selection ranges over these in the order they are read.
+export interface LineRef {
+  blockId: string
+  item: number | null
+}
+
+// A stable key for a line, so membership can be checked in one lookup while highlighting.
+export function lineKey(blockId: string, item: number | null): string {
+  return `${blockId}#${item ?? 'p'}`
+}
+
+// Every line on a page in reading order, so a shift-click can select the range between two
+// of them. Only paragraphs and list items are lines; floating figures are skipped.
+function pageLineRefs(page: Page): LineRef[] {
+  const refs: LineRef[] = []
+  for (const block of page.blocks) {
+    if (block.float) continue
+    if (block.type === 'text') refs.push({ blockId: block.id, item: null })
+    else if (block.type === 'list') block.items.forEach((_, i) => refs.push({ blockId: block.id, item: i }))
+  }
+  return refs
 }
 
 // The state the history compares against; kept out of the reactive store since it is a
@@ -63,6 +93,8 @@ export const useDocument = defineStore('document', {
     lastPoint: null,
     aiInsertAt: 0,
     aiTool: null,
+    lineSelection: null,
+    lineAnchor: null,
   }),
   getters: {
     canUndo: (state) => state.past.length > 0,
@@ -115,6 +147,148 @@ export const useDocument = defineStore('document', {
     },
     setColorForAll(color: string) {
       for (const array of this.allRunArrays()) for (const run of array) run.color = color
+      this.touch()
+    },
+
+    // Line selection: a run of whole lines chosen together across blocks. The caret landing on
+    // a line sets the anchor; shift-clicking another line selects every line between the two.
+    setLineAnchor(blockId: string, item: number | null) {
+      this.lineAnchor = { blockId, item }
+    },
+    selectLineRange(pageIndex: number, focus: LineRef) {
+      const page = this.doc.pages[pageIndex]
+      const anchor = this.lineAnchor
+      if (!page || !anchor) return
+      const refs = pageLineRefs(page)
+      const ai = refs.findIndex((r) => r.blockId === anchor.blockId && r.item === anchor.item)
+      const fi = refs.findIndex((r) => r.blockId === focus.blockId && r.item === focus.item)
+      if (ai === -1 || fi === -1) return
+      const [lo, hi] = ai <= fi ? [ai, fi] : [fi, ai]
+      // A shift-click back on the anchor is not a span; leave the caret to behave normally.
+      if (lo === hi) {
+        this.lineSelection = null
+        return
+      }
+      this.lineSelection = { pageIndex, refs: refs.slice(lo, hi + 1) }
+      this.selectedBlockId = null
+      this.selectedNote = null
+      this.allSelected = false
+    },
+    clearLineSelection() {
+      this.lineSelection = null
+    },
+    isLineSelected(blockId: string, item: number | null): boolean {
+      return !!this.lineSelection?.refs.some((r) => r.blockId === blockId && r.item === item)
+    },
+    // The runs of one line, whether a paragraph or a list item, so an action reads and rewrites
+    // any line the same way.
+    runsOfLine(ref: LineRef): TextRun[] | null {
+      const at = this.locate(ref.blockId)
+      if (!at) return null
+      if (at.block.type === 'text' && ref.item === null) return at.block.text.runs
+      if (at.block.type === 'list' && ref.item !== null) return at.block.items[ref.item] ?? null
+      return null
+    },
+    // Emphasis across the selected lines, turned off if every one of them already carries it,
+    // the same feel as bolding a run of text.
+    applyMarkToLines(mark: 'bold' | 'italic' | 'underline') {
+      const sel = this.lineSelection
+      if (!sel) return
+      const arrays = sel.refs.map((r) => this.runsOfLine(r)).filter((a): a is TextRun[] => !!a)
+      const runs = arrays.flat().filter((r) => r.text.trim())
+      if (!runs.length) return
+      const turnOff = runs.every((r) => r[mark])
+      for (const array of arrays) for (const run of array) run[mark] = turnOff ? undefined : true
+      this.touch()
+    },
+    setColorForLines(color: string) {
+      const sel = this.lineSelection
+      if (!sel) return
+      for (const ref of sel.refs) {
+        const runs = this.runsOfLine(ref)
+        if (runs) for (const run of runs) run.color = color
+      }
+      this.touch()
+    },
+    // Change the case of every selected line together. Title case lowercases first so a line
+    // that arrived shouting comes back to a clean Capitalised Line.
+    setCaseForLines(mode: 'upper' | 'lower' | 'title') {
+      const sel = this.lineSelection
+      if (!sel) return
+      const cased = (text: string) =>
+        mode === 'upper'
+          ? text.toUpperCase()
+          : mode === 'lower'
+            ? text.toLowerCase()
+            : text.toLowerCase().replace(/(^|\s|[("'])\p{L}/gu, (m) => m.toUpperCase())
+      for (const ref of sel.refs) {
+        const runs = this.runsOfLine(ref)
+        if (runs) for (const run of runs) run.text = cased(run.text)
+      }
+      this.touch()
+    },
+    // Join the selected lines into a single paragraph, in order, the way a word processor
+    // merges lines: their words run together separated by a space. A list the selection cuts
+    // through is left whole on either side, its remaining items still a list.
+    mergeSelectedLines() {
+      const sel = this.lineSelection
+      if (!sel || sel.refs.length < 2) return
+      const page = this.doc.pages[sel.pageIndex]
+      if (!page) return
+      const keys = new Set(sel.refs.map((r) => lineKey(r.blockId, r.item)))
+      const merged: TextRun[] = []
+      sel.refs.forEach((ref) => {
+        const runs = this.runsOfLine(ref)
+        if (!runs) return
+        if (merged.length) merged.push({ text: ' ' })
+        merged.push(...runs.filter((r) => r.text.length))
+      })
+      const paragraph: Block = {
+        id: uid('b'),
+        type: 'text',
+        text: { id: uid('t'), role: 'body', runs: merged.length ? merged : [{ text: '' }] },
+      }
+      // Rebuild the page, dropping the selected lines and dropping the one merged paragraph in
+      // where the first of them was. A list split by the selection keeps its items on either
+      // side as their own lists so nothing else on the page shifts.
+      const rebuilt: Block[] = []
+      let placed = false
+      const place = () => {
+        if (!placed) {
+          rebuilt.push(paragraph)
+          placed = true
+        }
+      }
+      for (const block of page.blocks) {
+        if (block.float) {
+          rebuilt.push(block)
+        } else if (block.type === 'text' && keys.has(lineKey(block.id, null))) {
+          place()
+        } else if (block.type === 'list' && block.items.some((_, i) => keys.has(lineKey(block.id, i)))) {
+          let segment: TextRun[][] = []
+          const flush = () => {
+            if (segment.length) {
+              rebuilt.push({ id: uid('b'), type: 'list', ordered: block.ordered, items: segment })
+              segment = []
+            }
+          }
+          block.items.forEach((item, i) => {
+            if (keys.has(lineKey(block.id, i))) {
+              flush()
+              place()
+            } else {
+              segment.push(item)
+            }
+          })
+          flush()
+        } else {
+          rebuilt.push(block)
+        }
+      }
+      page.blocks = rebuilt
+      this.lineSelection = null
+      this.selectedBlockId = paragraph.id
+      this.pendingFocusId = paragraph.id
       this.touch()
     },
     select(blockId: string | null) {

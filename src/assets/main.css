@@ -141,6 +141,14 @@ button {
   box-shadow: 0 0 0 1px var(--accent-wash-2);
 }
 
+/* Lines swept into a cross-line selection are washed with the selection tint and drawn a
+   little closer to a solid highlight, so a span chosen for styling or merging reads clearly. */
+.line-selected {
+  background: var(--accent-wash-2);
+  border-radius: 3px;
+  box-shadow: 0 0 0 2px var(--accent-wash-2);
+}
+
 /* The line the AI is about to rewrite stays lit while its instruction is typed, so the
    target is never lost when focus moves to the input and the text selection collapses. */
 .ai-asking {

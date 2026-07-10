@@ -9,7 +9,7 @@ import type { TextMetrics } from './alignment'
 import { getHandwriting, bodyFontStack, headerFontStack } from '@/handwriting/registry'
 import { plainText, type PasteGroup } from '@/ui/richText'
 import { uid } from '@/util/id'
-import { useDocument } from '@/store/document'
+import { useDocument, lineKey } from '@/store/document'
 import { useSettings } from '@/store/settings'
 import { hashSeed } from '@/diagrams/wobble'
 import EditableText from './EditableText.vue'
@@ -125,9 +125,28 @@ watch(
   },
 )
 
-function onFocusBlock(blockId: string) {
+function onFocusBlock(blockId: string, item: number | null = null) {
   documentStore.select(blockId)
+  // The caret resting on a line makes it the anchor a later shift-click extends from, and
+  // ends any line selection that was showing since the writer is now typing again.
+  documentStore.setLineAnchor(blockId, item)
+  documentStore.clearLineSelection()
 }
+// Shift-clicking a line selects every line from the anchor to it. The click is swallowed so
+// the caret does not jump and the anchor stays put, letting the writer sweep a whole span.
+function onLineMouseDown(blockId: string, item: number | null, event: MouseEvent) {
+  if (!event.shiftKey) return
+  event.preventDefault()
+  window.getSelection()?.removeAllRanges()
+  // Let the line go: while it is focused it holds its own DOM and would not repaint when a
+  // bar action rewrites its runs, so blurring lets every selected line show the change at once.
+  ;(document.activeElement as HTMLElement | null)?.blur?.()
+  documentStore.selectLineRange(props.pageIndex, { blockId, item })
+}
+// The selected lines as a set of keys, so each line can ask in one lookup whether it is lit.
+const selectedLineKeys = computed(
+  () => new Set((documentStore.lineSelection?.refs ?? []).map((r) => lineKey(r.blockId, r.item))),
+)
 
 function onParagraphEnter(block: Extract<Block, { type: 'text' }>, after: TextRun[]) {
   const nextRole = block.text.role === 'body' || block.text.role === 'caption' ? block.text.role : 'body'
@@ -310,12 +329,13 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
         :ref="bindEditable(`text:${block.id}`)"
         :model-value="block.text.runs"
         class="paragraph"
-        :class="{ writing: isWriting(block.id) }"
+        :class="{ writing: isWriting(block.id), 'line-selected': selectedLineKeys.has(lineKey(block.id, null)) }"
         :data-block-id="block.id"
         :style="paragraphStyle(block)"
         :placeholder="placeholderFor(block, page.blocks.indexOf(block))"
         split-lines
         @update:model-value="updateRuns(block.id, $event)"
+        @mousedown="onLineMouseDown(block.id, null, $event)"
         @focus="onFocusBlock(block.id)"
         @enter="onParagraphEnter(block, $event)"
         @paste-lines="onParagraphPasteLines(block, $event)"
@@ -337,9 +357,11 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
             :ref="bindEditable(`list:${block.id}:${i}`)"
             v-model="block.items[i]"
             class="li-text"
+            :class="{ 'line-selected': selectedLineKeys.has(lineKey(block.id, i)) }"
             placeholder="List item"
             split-lines
-            @focus="onFocusBlock(block.id)"
+            @mousedown="onLineMouseDown(block.id, i, $event)"
+            @focus="onFocusBlock(block.id, i)"
             @enter="onListEnter(block, i, $event)"
             @paste-lines="onListPasteLines(block, i, $event)"
             @paste-structure="onListPasteStructure(block, i, $event)"

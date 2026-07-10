@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useDocument } from '@/store/document'
+import type { Block } from '@/types'
 
 describe('document store', () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -106,6 +107,87 @@ describe('document store', () => {
     expect(block.type === 'list' && block.items[0][0].text).toBe('Hello world')
     // The paragraph became the list; it is not left behind as a separate line.
     expect(doc.doc.pages[0].blocks.filter((b) => b.type === 'text')).toHaveLength(0)
+  })
+
+  // A small page of a paragraph, an ordered list of three, then another paragraph, used to
+  // exercise selecting and acting on a run of lines across blocks.
+  function seedLines() {
+    const doc = useDocument()
+    doc.doc.pages[0].blocks = [
+      { id: 'p1', type: 'text', text: { id: 't1', role: 'body', runs: [{ text: 'alpha' }] } },
+      { id: 'l1', type: 'list', ordered: true, items: [[{ text: 'one' }], [{ text: 'two' }], [{ text: 'three' }]] },
+      { id: 'p2', type: 'text', text: { id: 't2', role: 'body', runs: [{ text: 'beta' }] } },
+    ]
+    return doc
+  }
+  const plainOf = (block: Block | undefined) =>
+    block && block.type === 'text' ? block.text.runs.map((r) => r.text).join('') : ''
+
+  it('selects a range of lines between the anchor and a shift-clicked line', () => {
+    const doc = seedLines()
+    doc.setLineAnchor('l1', 0)
+    doc.selectLineRange(0, { blockId: 'l1', item: 2 })
+    expect(doc.lineSelection?.refs).toHaveLength(3)
+    expect(doc.isLineSelected('l1', 1)).toBe(true)
+    expect(doc.isLineSelected('p1', null)).toBe(false)
+  })
+
+  it('shouts a run of selected lines in one action', () => {
+    const doc = seedLines()
+    doc.lineSelection = {
+      pageIndex: 0,
+      refs: [
+        { blockId: 'p1', item: null },
+        { blockId: 'l1', item: 0 },
+      ],
+    }
+    doc.setCaseForLines('upper')
+    expect(plainOf(doc.locate('p1')?.block)).toBe('ALPHA')
+    const list = doc.locate('l1')?.block
+    expect(list?.type === 'list' && list.items[0][0].text).toBe('ONE')
+    // A line outside the selection is untouched.
+    expect(list?.type === 'list' && list.items[1][0].text).toBe('two')
+  })
+
+  it('bolds selected lines and toggles the emphasis off when all already carry it', () => {
+    const doc = seedLines()
+    doc.lineSelection = {
+      pageIndex: 0,
+      refs: [
+        { blockId: 'l1', item: 0 },
+        { blockId: 'l1', item: 1 },
+      ],
+    }
+    doc.applyMarkToLines('bold')
+    const list = () => doc.locate('l1')?.block
+    const b = list()
+    expect(b?.type === 'list' && b.items[0][0].bold).toBe(true)
+    doc.applyMarkToLines('bold')
+    const b2 = list()
+    expect(b2?.type === 'list' && b2.items[0][0].bold).toBeUndefined()
+  })
+
+  it('merges a run of lines into one paragraph, splitting the list around it', () => {
+    const doc = seedLines()
+    // Select the last two list items and the paragraph after them.
+    doc.lineSelection = {
+      pageIndex: 0,
+      refs: [
+        { blockId: 'l1', item: 1 },
+        { blockId: 'l1', item: 2 },
+        { blockId: 'p2', item: null },
+      ],
+    }
+    doc.mergeSelectedLines()
+    const blocks = doc.doc.pages[0].blocks
+    // alpha paragraph, the list now holding only 'one', then the merged paragraph.
+    expect(blocks[0].id).toBe('p1')
+    const keptList = blocks[1]
+    expect(keptList.type === 'list' && keptList.items).toHaveLength(1)
+    expect(keptList.type === 'list' && keptList.items[0][0].text).toBe('one')
+    expect(plainOf(blocks[2])).toBe('two three beta')
+    expect(blocks).toHaveLength(3)
+    expect(doc.lineSelection).toBeNull()
   })
 
   it('fills a stroke by id', () => {
