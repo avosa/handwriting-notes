@@ -7,7 +7,7 @@ import type { TextRole } from '@/types'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
 import { useAi } from '@/compose/useAi'
-import { toggleBold, toggleItalic, toggleUnderline, setTextColor, rememberSelection } from './marks'
+import { toggleBold, toggleItalic, toggleUnderline, setTextColor, rememberSelection, convertCase } from './marks'
 import Icon from '@/ui/Icon.vue'
 import Popover from '@/ui/Popover.vue'
 import ColorPicker from '@/ui/ColorPicker.vue'
@@ -158,6 +158,10 @@ function cancelAsk() {
         <button class="size" title="Smaller" @mousedown.prevent="nudgeSize(-0.1)">A−</button>
         <button class="size big" title="Larger" @mousedown.prevent="nudgeSize(0.1)">A+</button>
         <span class="sep" />
+        <button class="case" title="UPPERCASE" @mousedown.prevent="convertCase('upper')">AA</button>
+        <button class="case" title="lowercase" @mousedown.prevent="convertCase('lower')">aa</button>
+        <button class="case" title="Capitalise" @mousedown.prevent="convertCase('title')">Aa</button>
+        <span class="sep" />
         <button class="word" @click="makeRole('title')">Title</button>
         <button class="word" @click="makeRole('heading')">Heading</button>
         <button class="word" @click="makeRole('body')">Body</button>
@@ -263,6 +267,12 @@ button:hover {
 }
 .size.big {
   font-size: 15px;
+}
+.case {
+  font-weight: 600;
+  font-size: 12px;
+  min-width: 28px;
+  letter-spacing: 0.02em;
 }
 .sep {
   width: 1px;

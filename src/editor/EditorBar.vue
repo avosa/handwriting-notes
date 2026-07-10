@@ -62,7 +62,7 @@ function insertParagraph(role: TextRole) {
   documentStore.select(documentStore.addParagraphAfter(selectedId.value, role))
 }
 function insertList(ordered: boolean) {
-  documentStore.select(documentStore.addList(selectedId.value, ordered))
+  documentStore.select(documentStore.convertToList(selectedId.value, ordered))
 }
 function insertTable() {
   documentStore.select(documentStore.addTable(selectedId.value, 3, 2))

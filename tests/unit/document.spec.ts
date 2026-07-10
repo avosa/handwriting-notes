@@ -96,6 +96,18 @@ describe('document store', () => {
     expect(doc.activePageIndex).toBe(0)
   })
 
+  it('turns the current paragraph into a one item list, keeping its words', () => {
+    const doc = useDocument()
+    const first = doc.doc.pages[0].blocks[0].id
+    doc.setRuns(first, [{ text: 'Hello world' }])
+    const id = doc.convertToList(first, true)
+    const block = doc.locate(id)!.block
+    expect(block.type).toBe('list')
+    expect(block.type === 'list' && block.items[0][0].text).toBe('Hello world')
+    // The paragraph became the list; it is not left behind as a separate line.
+    expect(doc.doc.pages[0].blocks.filter((b) => b.type === 'text')).toHaveLength(0)
+  })
+
   it('fills a stroke by id', () => {
     const doc = useDocument()
     doc.addStroke(0, { id: 's1', tool: 'fine', color: '#000', width: 1, points: [{ x: 0, y: 0, pressure: 1 }] })

@@ -7,6 +7,8 @@ import { computed, nextTick, ref, watch, type CSSProperties } from 'vue'
 import type { Block, Page, TextRole, TextRun } from '@/types'
 import type { TextMetrics } from './alignment'
 import { getHandwriting, bodyFontStack, headerFontStack } from '@/handwriting/registry'
+import { plainText, type PasteGroup } from '@/ui/richText'
+import { uid } from '@/util/id'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
 import { hashSeed } from '@/diagrams/wobble'
@@ -93,13 +95,21 @@ function bindEditable(key: string) {
     else editables.value.delete(key)
   }
 }
-const pendingFocus = ref<string | null>(null)
-watch(pendingFocus, async (key) => {
-  if (!key) return
+// The line to move the caret into next, and where along it the caret should sit, so a merge
+// can drop the caret at the join between the two lines it made one.
+const pendingFocus = ref<{ key: string; offset?: number } | null>(null)
+watch(pendingFocus, async (target) => {
+  if (!target) return
   await nextTick()
-  editables.value.get(key)?.focus()
+  editables.value.get(target.key)?.focus(target.offset)
   pendingFocus.value = null
 })
+
+// Join two lines of runs into one, dropping the empty placeholders so the seam is clean.
+function mergeRuns(a: TextRun[], b: TextRun[]): TextRun[] {
+  const runs = [...a, ...b].filter((r) => r.text.length)
+  return runs.length ? runs : [{ text: '' }]
+}
 
 // A block inserted from the tool bar asks the editor to place the caret in it.
 watch(
@@ -119,33 +129,135 @@ function onFocusBlock(blockId: string) {
   documentStore.select(blockId)
 }
 
-function onParagraphEnter(block: Extract<Block, { type: 'text' }>) {
+function onParagraphEnter(block: Extract<Block, { type: 'text' }>, after: TextRun[]) {
   const nextRole = block.text.role === 'body' || block.text.role === 'caption' ? block.text.role : 'body'
   const id = documentStore.addParagraphAfter(block.id, nextRole)
-  pendingFocus.value = `text:${id}`
+  documentStore.setRuns(id, after)
+  pendingFocus.value = { key: `text:${id}` }
 }
-function onParagraphBackspace(block: Extract<Block, { type: 'text' }>) {
+// Each pasted line becomes its own paragraph after this one, so a copied block of lines lands
+// as a run of paragraphs rather than a wall of text in one.
+function onParagraphPasteLines(block: Extract<Block, { type: 'text' }>, lines: string[]) {
+  let afterId = block.id
+  for (const line of lines) {
+    afterId = documentStore.addParagraphAfter(afterId, 'body')
+    documentStore.setRuns(afterId, [{ text: line }])
+  }
+  pendingFocus.value = { key: `text:${afterId}` }
+}
+// Lay a pasted block out by its sections: a lone line becomes a red heading, a run of lines
+// becomes a numbered list under it, numbering restarting for each list, so a copied set of
+// answers lands the way it was written.
+function insertStructure(afterBlockId: string, groups: PasteGroup[], ordered: boolean): string {
+  let afterId = afterBlockId
+  for (const group of groups) {
+    if (group.heading !== undefined) {
+      const heading: Block = {
+        id: uid('b'),
+        type: 'text',
+        text: { id: uid('t'), role: 'heading', runs: [{ text: group.heading }] },
+      }
+      documentStore.insertAfter(afterId, heading)
+      afterId = heading.id
+    } else if (group.items) {
+      const list: Block = { id: uid('b'), type: 'list', ordered, items: group.items.map((line) => [{ text: line }]) }
+      documentStore.insertAfter(afterId, list)
+      afterId = list.id
+    }
+  }
+  return afterId
+}
+function onParagraphPasteStructure(block: Extract<Block, { type: 'text' }>, groups: PasteGroup[]) {
+  const lastId = insertStructure(block.id, groups, true)
+  if (plainText(block.text.runs).trim() === '') documentStore.removeBlock(block.id)
+  documentStore.requestFocus(lastId)
+}
+// Append `runs` onto the end of the line above `blockId`, whatever kind of line it is: a
+// paragraph, or the last bullet of a list. The caret target is returned at the seam. Null
+// means there is no line above to join, or the block above is a figure that holds no words.
+function joinOntoLineAbove(blockId: string, runs: TextRun[]): { key: string; offset: number } | null {
   const page = props.page
-  const index = page.blocks.findIndex((b) => b.id === block.id)
-  if (page.blocks.length === 1 && props.pageIndex === 0) return
+  const index = page.blocks.findIndex((b) => b.id === blockId)
+  if (index <= 0) return null
   const prev = page.blocks[index - 1]
-  documentStore.removeBlock(block.id)
-  if (prev && prev.type === 'text') pendingFocus.value = `text:${prev.id}`
+  if (prev.type === 'text') {
+    const offset = plainText(prev.text.runs).length
+    documentStore.setRuns(prev.id, mergeRuns(prev.text.runs, runs))
+    return { key: `text:${prev.id}`, offset }
+  }
+  if (prev.type === 'list') {
+    const last = prev.items.length - 1
+    const offset = plainText(prev.items[last]).length
+    prev.items[last] = mergeRuns(prev.items[last], runs)
+    documentStore.touch()
+    return { key: `list:${prev.id}:${last}`, offset }
+  }
+  return null
 }
 
-function onListEnter(block: Extract<Block, { type: 'list' }>, itemIndex: number) {
-  block.items.splice(itemIndex + 1, 0, [{ text: '' }])
-  documentStore.touch()
-  pendingFocus.value = `list:${block.id}:${itemIndex + 1}`
-}
-function onListBackspace(block: Extract<Block, { type: 'list' }>, itemIndex: number) {
-  if (block.items.length === 1) {
+// Backspace at the start of a paragraph joins it onto the line above, be it another paragraph
+// or a bullet, dropping the caret at the seam, so the words come up onto the previous line.
+function onParagraphMergeBack(block: Extract<Block, { type: 'text' }>, runs: TextRun[]) {
+  const target = joinOntoLineAbove(block.id, runs)
+  if (target) {
     documentStore.removeBlock(block.id)
+    pendingFocus.value = target
+  } else if (plainText(runs).trim() === '' && props.page.blocks.findIndex((b) => b.id === block.id) > 0) {
+    documentStore.removeBlock(block.id)
+  }
+}
+
+function onListEnter(block: Extract<Block, { type: 'list' }>, itemIndex: number, after: TextRun[]) {
+  // Enter on an empty bullet ends the list: the empty bullet is dropped and the writing
+  // carries on as a normal paragraph after the list, so pressing enter twice escapes it.
+  if (plainText(block.items[itemIndex]).trim() === '' && plainText(after).trim() === '') {
+    block.items.splice(itemIndex, 1)
+    const id = documentStore.addParagraphAfter(block.id, 'body')
+    if (!block.items.length) documentStore.removeBlock(block.id)
+    documentStore.touch()
+    pendingFocus.value = { key: `text:${id}` }
     return
   }
-  block.items.splice(itemIndex, 1)
+  block.items.splice(itemIndex + 1, 0, after.length ? after : [{ text: '' }])
   documentStore.touch()
-  pendingFocus.value = `list:${block.id}:${Math.max(0, itemIndex - 1)}`
+  pendingFocus.value = { key: `list:${block.id}:${itemIndex + 1}` }
+}
+// Each pasted line becomes the next bullet right after this one, so a copied list adopts our
+// own numbering in order instead of arriving as a block on its own.
+function onListPasteLines(block: Extract<Block, { type: 'list' }>, itemIndex: number, lines: string[]) {
+  block.items.splice(itemIndex + 1, 0, ...lines.map((line) => [{ text: line }]))
+  documentStore.touch()
+  pendingFocus.value = { key: `list:${block.id}:${itemIndex + lines.length}` }
+}
+// A block with several sections pasted into a bullet becomes headings and fresh numbered
+// lists after this list, and the empty bullet it was dropped into is cleared away.
+function onListPasteStructure(block: Extract<Block, { type: 'list' }>, itemIndex: number, groups: PasteGroup[]) {
+  void itemIndex
+  const lastId = insertStructure(block.id, groups, block.ordered)
+  if (block.items.length === 1 && plainText(block.items[0]).trim() === '') documentStore.removeBlock(block.id)
+  documentStore.requestFocus(lastId)
+}
+// Backspace at the start of a bullet joins it onto the line above: the bullet before it, or,
+// for the first bullet, the paragraph or list that sits above the whole list. The caret rests
+// at the seam.
+function onListMergeBack(block: Extract<Block, { type: 'list' }>, itemIndex: number, runs: TextRun[]) {
+  if (itemIndex > 0) {
+    const joinAt = plainText(block.items[itemIndex - 1]).length
+    block.items[itemIndex - 1] = mergeRuns(block.items[itemIndex - 1], runs)
+    block.items.splice(itemIndex, 1)
+    documentStore.touch()
+    pendingFocus.value = { key: `list:${block.id}:${itemIndex - 1}`, offset: joinAt }
+    return
+  }
+  const target = joinOntoLineAbove(block.id, runs)
+  if (target) {
+    block.items.splice(0, 1)
+    if (!block.items.length) documentStore.removeBlock(block.id)
+    else documentStore.touch()
+    pendingFocus.value = target
+    return
+  }
+  if (block.items.length === 1 && plainText(runs).trim() === '') documentStore.removeBlock(block.id)
 }
 
 // A gentle hint only where it helps: the empty document invites the first line, and a
@@ -202,10 +314,13 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
         :data-block-id="block.id"
         :style="paragraphStyle(block)"
         :placeholder="placeholderFor(block, page.blocks.indexOf(block))"
+        split-lines
         @update:model-value="updateRuns(block.id, $event)"
         @focus="onFocusBlock(block.id)"
-        @enter="onParagraphEnter(block)"
-        @empty-backspace="onParagraphBackspace(block)"
+        @enter="onParagraphEnter(block, $event)"
+        @paste-lines="onParagraphPasteLines(block, $event)"
+        @paste-structure="onParagraphPasteStructure(block, $event)"
+        @merge-back="onParagraphMergeBack(block, $event)"
         @select-all-note="documentStore.selectWholeNote()"
       />
 
@@ -223,9 +338,12 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
             v-model="block.items[i]"
             class="li-text"
             placeholder="List item"
+            split-lines
             @focus="onFocusBlock(block.id)"
-            @enter="onListEnter(block, i)"
-            @empty-backspace="onListBackspace(block, i)"
+            @enter="onListEnter(block, i, $event)"
+            @paste-lines="onListPasteLines(block, i, $event)"
+            @paste-structure="onListPasteStructure(block, i, $event)"
+            @merge-back="onListMergeBack(block, i, $event)"
             @select-all-note="documentStore.selectWholeNote()"
           />
         </li>

@@ -48,3 +48,19 @@ export function setHighlight(color: string) {
   withCss()
   if (!document.execCommand('hiliteColor', false, color)) document.execCommand('backColor', false, color)
 }
+
+// Change the case of the selected words in place. Title case lowercases first so a line that
+// arrived in shouting capitals comes back down to a clean Capitalised Line.
+export function convertCase(mode: 'upper' | 'lower' | 'title') {
+  const selection = window.getSelection()
+  if (!selection || selection.isCollapsed) return
+  const text = selection.toString()
+  if (!text.trim()) return
+  const out =
+    mode === 'upper'
+      ? text.toUpperCase()
+      : mode === 'lower'
+        ? text.toLowerCase()
+        : text.toLowerCase().replace(/(^|\s|[("'])\p{L}/gu, (m) => m.toUpperCase())
+  document.execCommand('insertText', false, out)
+}

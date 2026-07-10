@@ -108,3 +108,64 @@ export function htmlToRuns(root: HTMLElement): TextRun[] {
 export function textRun(text: string, marks: Partial<TextRun> = {}): TextRun {
   return { text, ...marks }
 }
+
+// Split a line of runs at a character offset, keeping each run's emphasis, so pressing enter
+// in the middle of a line carries the words after the caret onto the next line unchanged.
+export function splitRuns(runs: TextRun[], offset: number): [TextRun[], TextRun[]] {
+  const before: TextRun[] = []
+  const after: TextRun[] = []
+  let remaining = offset
+  for (const run of runs) {
+    if (remaining >= run.text.length) {
+      before.push(run)
+      remaining -= run.text.length
+    } else if (remaining <= 0) {
+      after.push(run)
+    } else {
+      before.push({ ...run, text: run.text.slice(0, remaining) })
+      after.push({ ...run, text: run.text.slice(remaining) })
+      remaining = 0
+    }
+  }
+  return [before.length ? before : [{ text: '' }], after.length ? after : [{ text: '' }]]
+}
+
+// A leading list marker a copy brought along: a number, a letter, or a bullet glyph.
+const LIST_MARKER = /^\s*(?:\d+[.)]|[a-zA-Z][.)]|[-*•·▪◦‣▸►–—])\s+/
+function cleanLine(line: string): string {
+  return line.replace(LIST_MARKER, '').trim()
+}
+
+// Turn pasted text into clean lines: one per line, with any marker and surrounding whitespace
+// stripped, so what lands adopts the note's own formatting rather than the source's.
+export function splitPasteText(text: string): string[] {
+  return text
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map(cleanLine)
+    .filter((line) => line.length > 0)
+}
+
+// A pasted block, grouped by the blank lines between its parts. A part on its own is a
+// heading; a run of parts is a list.
+export interface PasteGroup {
+  heading?: string
+  items?: string[]
+}
+
+// Read the shape out of a pasted block: sections separated by blank lines, where a lone line
+// reads as a heading and a run of lines reads as a list. This lets a copied set of sections
+// land as headings with our own bullets under each, numbering restarting per list.
+export function parsePasteGroups(text: string): PasteGroup[] {
+  const groups: PasteGroup[] = []
+  for (const raw of text.replace(/\r\n?/g, '\n').split(/\n[ \t]*\n+/)) {
+    const lines = raw
+      .split('\n')
+      .map(cleanLine)
+      .filter((line) => line.length > 0)
+    if (!lines.length) continue
+    if (lines.length === 1) groups.push({ heading: lines[0] })
+    else groups.push({ items: lines })
+  }
+  return groups
+}

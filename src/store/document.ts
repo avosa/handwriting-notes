@@ -210,6 +210,28 @@ export const useDocument = defineStore('document', {
       this.pendingFocusId = id
       return id
     },
+    // Turn the line the caret is on into a bullet, so the words already there become the first
+    // item rather than a fresh empty bullet appearing below and pushing the line down. A
+    // paragraph becomes a one item list keeping its words; a list already there switches its
+    // numbered or plain style; anything else, or nothing chosen, starts a new list.
+    convertToList(blockId: string | null, ordered: boolean): string {
+      const at = blockId ? this.locate(blockId) : null
+      if (at?.block.type === 'text') {
+        const runs = at.block.text.runs
+        const list: Block = { id: at.block.id, type: 'list', ordered, items: [runs.length ? runs : [{ text: '' }]] }
+        this.doc.pages[at.pageIndex].blocks.splice(at.blockIndex, 1, list)
+        this.pendingFocusId = list.id
+        this.touch()
+        return list.id
+      }
+      if (at?.block.type === 'list') {
+        at.block.ordered = ordered
+        this.pendingFocusId = at.block.id
+        this.touch()
+        return at.block.id
+      }
+      return this.addList(blockId, ordered)
+    },
     // Remember where the writer last pointed, so the next inserted figure lands there.
     setLastPoint(pageIndex: number, x: number, y: number) {
       this.lastPoint = { pageIndex, x, y }
