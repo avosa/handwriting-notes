@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // A small bar for finding text in the note and, if opened, replacing it. Matches are read
-// from the rendered lines, stepped through with the arrows, and lit by selecting them in
-// place. Replace swaps the one in view; replace all sweeps the whole note at once.
-import { nextTick, onMounted, ref, watch } from 'vue'
+// from the rendered lines, stepped through with the arrows, and lit with the CSS highlight
+// overlay so the found text glows in place without dropping an editable caret into the page.
+// Replace swaps the one in view; replace all sweeps the whole note at once.
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useDocument } from '@/store/document'
 import Icon from './Icon.vue'
 
@@ -36,14 +37,11 @@ function recompute(keepIndex = false) {
   }
   matches.value = found
   current.value = found.length ? (keepIndex ? Math.min(current.value, found.length - 1) : 0) : -1
-  if (current.value >= 0) select(current.value)
+  paint()
 }
 
-// Light the match by selecting its letters in place, so the found text is shown exactly where
-// it sits without changing the page.
-function select(index: number) {
-  const match = matches.value[index]
-  if (!match) return
+// The exact letters of a match, as a DOM range spanning however many text nodes it crosses.
+function rangeFor(match: Match): Range | null {
   const length = query.value.length
   const range = document.createRange()
   const walker = document.createTreeWalker(match.el, NodeFilter.SHOW_TEXT)
@@ -58,29 +56,63 @@ function select(index: number) {
     }
     if (started && pos + len >= match.start + length) {
       range.setEnd(node, match.start + length - pos)
-      break
+      return range
     }
     pos += len
     node = walker.nextNode()
   }
-  if (!started) return
-  match.el.scrollIntoView({ block: 'center', behavior: 'smooth' })
-  const selection = window.getSelection()
-  selection?.removeAllRanges()
-  selection?.addRange(range)
+  return null
+}
+
+const canHighlight = typeof CSS !== 'undefined' && 'highlights' in CSS
+
+// Light every match with the highlight overlay, the one in view brighter than the rest, and
+// bring it into view. The overlay paints over the letters without selecting them, so the page
+// keeps no caret and typing elsewhere never overwrites a found word.
+function paint() {
+  const active = matches.value[current.value]
+  if (canHighlight) {
+    const rest = new Highlight()
+    const here = new Highlight()
+    matches.value.forEach((m, i) => {
+      const range = rangeFor(m)
+      if (range) (i === current.value ? here : rest).add(range)
+    })
+    CSS.highlights.set('find-match', rest)
+    CSS.highlights.set('find-current', here)
+  } else if (active) {
+    // Older browsers without the overlay fall back to a plain selection of the current match.
+    const range = rangeFor(active)
+    const selection = window.getSelection()
+    selection?.removeAllRanges()
+    if (range) selection?.addRange(range)
+  }
+  active?.el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
+
+function clearPaint() {
+  if (canHighlight) {
+    CSS.highlights.delete('find-match')
+    CSS.highlights.delete('find-current')
+  }
 }
 
 function step(delta: number) {
   if (!matches.value.length) return
   current.value = (current.value + delta + matches.value.length) % matches.value.length
-  select(current.value)
+  paint()
 }
 
 function replaceOne() {
   if (current.value < 0) return
-  select(current.value)
-  // Swap the selected match in place; the line serialises the change back into the note.
+  const range = rangeFor(matches.value[current.value])
+  if (!range) return
+  // Select just this match for the swap, then let recompute repaint the overlay.
+  const selection = window.getSelection()
+  selection?.removeAllRanges()
+  selection?.addRange(range)
   document.execCommand('insertText', false, replacement.value)
+  selection?.removeAllRanges()
   void nextTick(() => recompute(true))
 }
 function replaceAll() {
@@ -92,6 +124,7 @@ watch(query, () => recompute())
 onMounted(() => {
   void nextTick(() => field.value?.focus())
 })
+onUnmounted(clearPaint)
 </script>
 
 <template>
@@ -203,5 +236,17 @@ button:disabled {
   padding: 0 10px;
   font-size: 13px;
   font-weight: 600;
+}
+</style>
+
+<style>
+/* The find overlay. Named highlights are registered per document, so these rules must be
+   global rather than scoped to the bar. */
+::highlight(find-match) {
+  background-color: rgba(255, 214, 82, 0.4);
+}
+::highlight(find-current) {
+  background-color: rgba(255, 170, 24, 0.85);
+  color: #1b1b1b;
 }
 </style>
