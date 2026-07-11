@@ -699,6 +699,30 @@ export const useDocument = defineStore('document', {
       table.widths = widths
       this.touch()
     },
+    // Merge a cell with the one to its right, or split a merged cell back apart. Row 0 is the
+    // header; 1+ are body rows. A merge grows the cell's column span and hides the cell it swallows.
+    mergeCellRight(blockId: string, row: number, col: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'table') return
+      const table = loc.block
+      const n = table.header.length
+      const spans = { ...(table.colspans ?? {}) }
+      const key = `${row}-${col}`
+      const current = spans[key] ?? 1
+      if (col + current >= n) return // nothing to the right to merge
+      spans[key] = current + 1
+      table.colspans = spans
+      this.touch()
+    },
+    splitCell(blockId: string, row: number, col: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'table') return
+      const table = loc.block
+      const spans = { ...(table.colspans ?? {}) }
+      delete spans[`${row}-${col}`]
+      table.colspans = spans
+      this.touch()
+    },
     // Set a column's text alignment, so figures can sit right and labels left.
     setTableColumnAlign(blockId: string, col: number, align: 'left' | 'center' | 'right') {
       const loc = this.locate(blockId)

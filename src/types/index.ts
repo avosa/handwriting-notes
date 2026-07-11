@@ -192,6 +192,10 @@ export type Block =
       /** Relative column widths as flex fractions; a missing or short array reads as equal
        *  columns, so an older table simply keeps its even grid. */
       widths?: number[]
+      /** How many columns a cell spans, keyed by "row-col" where row 0 is the header and 1+ are
+       *  body rows. A value of 2+ merges the cell with the ones to its right; the covered cells
+       *  are not shown. A missing entry reads as a single cell. */
+      colspans?: Record<string, number>
       float?: FloatPos
       scale?: FontScale
     }

@@ -40,7 +40,10 @@ function onPageClick(event: MouseEvent) {
   documentStore.setLastPoint(props.pageIndex, rawX, clickYMm)
 
   const target = event.target as HTMLElement
-  if (target.closest('.editable, .cell')) return
+  // A click that lands on any content — a line, a cell, a section body, a code or math box, a
+  // button — is handled by that element, so no free note is dropped over it. A note is only for a
+  // click on the bare page. Without this, clicking a section's body box made a note float over it.
+  if (target.closest('.text-layer, .editable, .cell, textarea, button, a, [contenteditable]')) return
   // Write anywhere: a click on empty page drops a free note at the nearest ruled line, so the
   // writer can jot beside a figure or in a margin, not only in the flowing column.
   const xMm = Math.min(Math.max(rawX, p.text.left), p.text.right - 6)

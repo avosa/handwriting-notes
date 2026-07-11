@@ -51,20 +51,70 @@ const edges = computed(() => {
   return out // fraction 0..1 of the right edge of each column
 })
 
+// How many columns a cell spans. Row 0 is the header; 1+ are body rows.
+function spanAt(rowIdx: number, col: number): number {
+  return props.block.colspans?.[`${rowIdx}-${col}`] ?? 1
+}
+// The cells hidden because a neighbour to their left spans over them.
+const coveredCells = computed(() => {
+  const set = new Set<string>()
+  for (let r = 0; r < rowCount.value; r++) {
+    for (let c = 0; c < cols.value; c++) {
+      const s = spanAt(r, c)
+      for (let k = 1; k < s; k++) set.add(`${r}-${c + k}`)
+    }
+  }
+  return set
+})
+function isCovered(rowIdx: number, col: number): boolean {
+  return coveredCells.value.has(`${rowIdx}-${col}`)
+}
+
 const grid = computed(() => {
   const w = props.widthMm
   const h = heightMm.value
+  const rows = rowCount.value
   const paths: string[] = [rect(1, 1, w - 2, h - 2, seed.value)]
-  for (let c = 1; c < cols.value; c++) {
-    const x = w * edges.value[c - 1]
-    paths.push(line(x, 1, x, h - 1, seed.value + c * 7))
-  }
-  for (let r = 1; r < rowCount.value; r++) {
-    const y = (h / rowCount.value) * r
+  // Horizontal rules run the full width; only vertical borders are broken by a merge.
+  for (let r = 1; r < rows; r++) {
+    const y = (h / rows) * r
     paths.push(line(1, y, w - 1, y, seed.value + r * 13 + 100))
+  }
+  // A vertical border is drawn per cell at its right edge, skipping the table edge and any edge a
+  // merged cell spans across, so the ruling matches the merged layout.
+  for (let r = 0; r < rows; r++) {
+    const y1 = Math.max(1, (h / rows) * r)
+    const y2 = Math.min(h - 1, (h / rows) * (r + 1))
+    let c = 0
+    while (c < cols.value) {
+      const rightCol = c + spanAt(r, c) - 1
+      if (rightCol < cols.value - 1) {
+        const x = w * edges.value[rightCol]
+        paths.push(line(x, y1, x, y2, seed.value + r * 7 + c * 3))
+      }
+      c = rightCol + 1
+    }
   }
   return paths
 })
+
+// The last cell the caret was in, kept after blur so the merge control acts on it. Row 0 is the
+// header; 1+ are body rows.
+const focusedCell = ref<{ row: number; col: number } | null>(null)
+const canMergeRight = computed(() => {
+  const f = focusedCell.value
+  if (!f) return false
+  return f.col + spanAt(f.row, f.col) < cols.value
+})
+const isMerged = computed(() => !!focusedCell.value && spanAt(focusedCell.value.row, focusedCell.value.col) > 1)
+function mergeRight() {
+  const f = focusedCell.value
+  if (f) documentStore.mergeCellRight(props.block.id, f.row, f.col)
+}
+function splitFocused() {
+  const f = focusedCell.value
+  if (f) documentStore.splitCell(props.block.id, f.row, f.col)
+}
 
 // Drag a column border to resize it and its neighbour. The pixel move is turned into a change in
 // flex fraction using the table's own width, so the handle tracks the pointer exactly.
@@ -153,6 +203,7 @@ function placeCaretEnd(el: HTMLElement) {
 }
 function onCellFocus(r: number, c: number, event: FocusEvent) {
   editingCell.value = `${r}-${c}`
+  focusedCell.value = { row: r + 1, col: c }
   const el = event.target as HTMLElement
   const raw = props.block.rows[r][c] ?? ''
   // Reveal the raw formula for editing, then leave the caret at the end.
@@ -160,6 +211,10 @@ function onCellFocus(r: number, c: number, event: FocusEvent) {
     el.textContent = raw
     placeCaretEnd(el)
   }
+  emit('focus')
+}
+function onHeaderFocus(c: number) {
+  focusedCell.value = { row: 0, col: c }
   emit('focus')
 }
 </script>
@@ -195,31 +250,33 @@ function onCellFocus(r: number, c: number, event: FocusEvent) {
         fontSize: `${scale}em`,
       }"
     >
-      <div
-        v-for="(h, c) in block.header"
-        :key="`h${c}`"
-        v-cell-text="h"
-        class="cell head"
-        :contenteditable="editable"
-        spellcheck="false"
-        :style="cellStyle(c)"
-        @focus="emit('focus')"
-        @input="editHeader(c, $event)"
-      ></div>
-      <template v-for="(row, r) in block.rows" :key="`r${r}`">
+      <template v-for="(h, c) in block.header" :key="`h${c}`">
         <div
-          v-for="(cell, c) in row"
-          :key="`c${r}-${c}`"
-          v-cell-text="cellDisplay(r, c)"
-          class="cell"
-          :class="{ formula: isFormula(cell) }"
+          v-if="!isCovered(0, c)"
+          v-cell-text="h"
+          class="cell head"
           :contenteditable="editable"
           spellcheck="false"
-          :style="cellStyle(c)"
-          @focus="onCellFocus(r, c, $event)"
-          @blur="editingCell = null"
-          @input="editCell(r, c, $event)"
+          :style="{ ...cellStyle(c), gridColumn: `span ${spanAt(0, c)}` }"
+          @focus="onHeaderFocus(c)"
+          @input="editHeader(c, $event)"
         ></div>
+      </template>
+      <template v-for="(row, r) in block.rows" :key="`r${r}`">
+        <template v-for="(cell, c) in row" :key="`c${r}-${c}`">
+          <div
+            v-if="!isCovered(r + 1, c)"
+            v-cell-text="cellDisplay(r, c)"
+            class="cell"
+            :class="{ formula: isFormula(cell) }"
+            :contenteditable="editable"
+            spellcheck="false"
+            :style="{ ...cellStyle(c), gridColumn: `span ${spanAt(r + 1, c)}` }"
+            @focus="onCellFocus(r, c, $event)"
+            @blur="editingCell = null"
+            @input="editCell(r, c, $event)"
+          ></div>
+        </template>
       </template>
     </div>
 
@@ -263,6 +320,20 @@ function onCellFocus(r: number, c: number, event: FocusEvent) {
       <button class="ctl add add-row" title="Add row" @click="documentStore.addTableRow(block.id)">
         <Icon name="plus" :size="13" />
       </button>
+      <!-- Merge the last-focused cell with the one to its right, or split it back. -->
+      <div v-if="focusedCell" class="merge-tools">
+        <button
+          v-if="canMergeRight"
+          class="ctl merge"
+          title="Merge cell with the one to its right"
+          @mousedown.prevent="mergeRight"
+        >
+          Merge →
+        </button>
+        <button v-if="isMerged" class="ctl merge" title="Split merged cell" @mousedown.prevent="splitFocused">
+          Split
+        </button>
+      </div>
     </template>
   </div>
 </template>
@@ -387,6 +458,29 @@ function onCellFocus(r: number, c: number, event: FocusEvent) {
 }
 .mini.del:hover {
   background: var(--danger, #b73b3a);
+}
+/* The merge control appears at the table's foot while a cell is focused. */
+.merge-tools {
+  position: absolute;
+  bottom: -26px;
+  left: 0;
+  display: flex;
+  gap: 4px;
+  z-index: 3;
+}
+.merge {
+  position: static;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--accent, #4a72b0);
+  color: #fff;
+  opacity: 1;
+}
+.merge:hover {
+  filter: brightness(1.08);
 }
 .ctl:disabled {
   opacity: 0;

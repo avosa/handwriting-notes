@@ -491,6 +491,24 @@ describe('document store', () => {
     expect(table().widths![1]).toBeCloseTo(0.2)
   })
 
+  it('merges a cell with the one to its right and splits it back', () => {
+    const doc = useDocument()
+    const first = doc.doc.pages[0].blocks[0].id
+    const id = doc.addTable(first, 3, 1)
+    const table = () => doc.locate(id)!.block as Extract<Block, { type: 'table' }>
+    // Merge the header's first cell across two columns.
+    doc.mergeCellRight(id, 0, 0)
+    expect(table().colspans).toEqual({ '0-0': 2 })
+    doc.mergeCellRight(id, 0, 0)
+    expect(table().colspans!['0-0']).toBe(3)
+    // Cannot merge past the last column.
+    doc.mergeCellRight(id, 0, 0)
+    expect(table().colspans!['0-0']).toBe(3)
+    // Split it back to a single cell.
+    doc.splitCell(id, 0, 0)
+    expect(table().colspans!['0-0']).toBeUndefined()
+  })
+
   it('adds a math block, edits its LaTeX, and reaches it with find and replace', () => {
     const doc = useDocument()
     const first = doc.doc.pages[0].blocks[0].id
