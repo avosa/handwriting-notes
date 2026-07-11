@@ -29,6 +29,8 @@ import OutlinePanel from './ui/OutlinePanel.vue'
 import VersionHistory from './ui/VersionHistory.vue'
 import LinksPanel from './ui/LinksPanel.vue'
 import GraphView from './ui/GraphView.vue'
+import PwaPrompts from './ui/PwaPrompts.vue'
+import StoragePanel from './ui/StoragePanel.vue'
 import FindBar from './ui/FindBar.vue'
 import { APP_DOMAIN } from './brand'
 import { exportNoteAsText } from './export/toText'
@@ -59,6 +61,7 @@ const showOutline = ref(false)
 const showHistory = ref(false)
 const showLinks = ref(false)
 const showGraph = ref(false)
+const showStorage = ref(false)
 const showFind = ref(false)
 
 // Open a note chosen in the links panel or the map, then leave those overlays.
@@ -548,6 +551,13 @@ const commands = computed<Command[]>(() => [
     icon: 'diagram',
     run: () => (showGraph.value = true),
   },
+  {
+    id: 'storage',
+    title: 'Storage',
+    hint: 'usage, clean up space',
+    icon: 'device',
+    run: () => (showStorage.value = true),
+  },
   { id: 'whats-new', title: "What's new", run: () => (showWhatsNew.value = true) },
   { id: 'feedback', title: 'Send feedback', icon: 'send', run: sendFeedback },
 ])
@@ -877,7 +887,11 @@ function addPage() {
 
     <GraphView v-if="showGraph" @close="showGraph = false" @open="openNoteById" />
 
+    <StoragePanel v-if="showStorage" @close="showStorage = false" />
+
     <FindBar v-if="showFind" @close="showFind = false" />
+
+    <PwaPrompts />
 
     <Transition name="home-fade">
       <HomeScreen v-if="showHome" @close="showHome = false" />

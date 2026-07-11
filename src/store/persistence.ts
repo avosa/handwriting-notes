@@ -188,6 +188,62 @@ export async function deleteVersionsFor(noteId: string): Promise<void> {
   for (const v of await listVersions(noteId)) await database.delete('versions', v.id)
 }
 
+// The keys of every attachment blob a note points at, across all its pages.
+function blobRefsInDoc(doc: NoteDocument): string[] {
+  const refs: string[] = []
+  for (const page of doc.pages) {
+    for (const block of page.blocks) {
+      if (block.type === 'image' && block.blobRef) refs.push(block.blobRef)
+    }
+  }
+  return refs
+}
+
+// Blob keys held in storage that no note or saved version points at any more — left behind when
+// an image was removed or a note purged. Version snapshots count as references, so undoing a
+// delete from the history never finds its picture gone.
+export async function findOrphanBlobs(): Promise<string[]> {
+  const database = await db()
+  const referenced = new Set<string>()
+  for (const doc of await database.getAll('document')) {
+    if (isValidDocument(doc)) for (const ref of blobRefsInDoc(doc)) referenced.add(ref)
+  }
+  for (const version of await database.getAll('versions')) {
+    for (const ref of blobRefsInDoc(version.doc)) referenced.add(ref)
+  }
+  const keys = (await database.getAllKeys('blobs')) as string[]
+  return keys.filter((key) => !referenced.has(key))
+}
+
+// Delete every orphaned blob and report how many were freed.
+export async function cleanupOrphanBlobs(): Promise<number> {
+  const database = await db()
+  const orphans = await findOrphanBlobs()
+  for (const key of orphans) await database.delete('blobs', key)
+  return orphans.length
+}
+
+// How much on-device storage the app is using and how much the browser allows, when it will say.
+export async function storageEstimate(): Promise<{ usage: number; quota: number } | null> {
+  if (navigator.storage?.estimate) {
+    const estimate = await navigator.storage.estimate()
+    return { usage: estimate.usage ?? 0, quota: estimate.quota ?? 0 }
+  }
+  return null
+}
+
+// Ask the browser to keep this site's data from being evicted under pressure. Returns whether
+// storage is persistent afterwards.
+export async function requestPersistentStorage(): Promise<boolean> {
+  if (navigator.storage?.persist) return navigator.storage.persist()
+  return false
+}
+
+export async function isStoragePersisted(): Promise<boolean> {
+  if (navigator.storage?.persisted) return navigator.storage.persisted()
+  return false
+}
+
 export async function deleteNote(id: string): Promise<void> {
   await (await db()).delete('document', id)
 }
