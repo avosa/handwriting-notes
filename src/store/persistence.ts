@@ -10,7 +10,7 @@ import { useSettings } from './settings'
 import { useLibrary } from './library'
 
 const DB_NAME = 'handwriting-notes'
-const DB_VERSION = 3
+const DB_VERSION = 4
 const SETTINGS_KEY = 'current'
 const API_KEY_KEY = 'anthropic-api-key'
 const LIBRARY_KEY = 'library'
@@ -56,17 +56,17 @@ let dbPromise: Promise<IDBPDatabase<Stores>> | null = null
 function db(): Promise<IDBPDatabase<Stores>> {
   if (!dbPromise) {
     dbPromise = openDB<Stores>(DB_NAME, DB_VERSION, {
-      upgrade(database, oldVersion) {
-        if (oldVersion < 1) {
-          database.createObjectStore('document')
-          database.createObjectStore('settings')
-          database.createObjectStore('blobs')
-          database.createObjectStore('meta')
+      upgrade(database) {
+        // Create any store that is missing, by name rather than by version number. This is
+        // self-healing: a database left in a partial state by an interrupted earlier upgrade
+        // (for example a store that never got created) is repaired on the next open, instead of
+        // being stuck missing a store its version says it should have.
+        //   document/settings/blobs/meta — the originals
+        //   versions — per-note history snapshots
+        //   vectors  — the local semantic index, one embedding per block
+        for (const name of ['document', 'settings', 'blobs', 'meta', 'versions', 'vectors'] as const) {
+          if (!database.objectStoreNames.contains(name)) database.createObjectStore(name)
         }
-        // Version 2 adds the history store: past snapshots of each note, keyed by their own id.
-        if (oldVersion < 2) database.createObjectStore('versions')
-        // Version 3 adds the local semantic index: one embedding per block, keyed "noteId::blockId".
-        if (oldVersion < 3) database.createObjectStore('vectors')
       },
     })
   }
