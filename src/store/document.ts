@@ -437,6 +437,35 @@ export const useDocument = defineStore('document', {
         this.touch()
       }
     },
+    // Indent or outdent one list item, nesting it under the item above. An item can go at most one
+    // level deeper than the item before it, so the tree never skips a rung; the first item cannot
+    // indent since it has nothing to nest under. Outdenting stops at the margin. Returns the new
+    // depth so the caller can keep the caret where it is.
+    indentListItem(blockId: string, index: number, dir: 1 | -1): number {
+      const at = this.locate(blockId)
+      if (at?.block.type !== 'list' || index < 0 || index >= at.block.items.length) return 0
+      const block = at.block
+      const levels = block.levels ?? block.items.map(() => 0)
+      // A missing or short array is filled out to match the items before it is changed.
+      while (levels.length < block.items.length) levels.push(0)
+      const prev = index > 0 ? levels[index - 1] : -1
+      const current = levels[index]
+      const next = dir > 0 ? Math.min(current + 1, prev + 1) : Math.max(0, current - 1)
+      levels[index] = next
+      block.levels = levels
+      this.touch()
+      return next
+    },
+    // Indent or outdent a paragraph by a whole column step, so Tab shifts a line in and out the
+    // way a document does, clamped so it never marches off the page.
+    indentParagraph(blockId: string, dir: 1 | -1) {
+      const at = this.locate(blockId)
+      if (at?.block.type !== 'text') return
+      const step = 8
+      const current = at.block.text.indent ?? 0
+      at.block.text.indent = Math.max(0, Math.min(64, current + dir * step))
+      this.touch()
+    },
     // Turn the line the caret is on into a bullet, so the words already there become the first
     // item rather than a fresh empty bullet appearing below and pushing the line down. A
     // paragraph becomes a one item list keeping its words; a list already there switches its

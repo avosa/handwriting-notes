@@ -168,6 +168,9 @@ export type Block =
       /** Present only on a task list: one tick state per item, kept the same length as items.
        *  A plain bullet or numbered list leaves this unset. */
       checked?: boolean[]
+      /** Nesting depth per item, 0 at the margin. Kept the same length as items; a missing or
+       *  short array reads as depth 0, so an older note simply shows a flat list. */
+      levels?: number[]
       indent?: number
       float?: FloatPos
       scale?: FontScale

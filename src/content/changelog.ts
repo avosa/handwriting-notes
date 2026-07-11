@@ -12,6 +12,7 @@ export const changelog: Release[] = [
     date: 'July 2026',
     items: [
       'Type / on an empty line to turn it into a heading, list, quote, code, or divider.',
+      'Tab nests a list item deeper and shift-Tab lifts it out, numbered by level and exported nested.',
       'Find and replace on the command or control key plus F, with matches lit in place.',
       'Right-click a page for a page break anywhere, and pages flow and merge like a document.',
       'Backspace at the start of a line now pulls it up past a divider or figure above.',

@@ -71,6 +71,27 @@ describe('note text export', () => {
     expect(html).toContain('<input type="checkbox" disabled> call mum')
   })
 
+  it('nests an indented list by depth in Markdown and HTML', () => {
+    const d = doc()
+    d.pages[0].blocks.push({
+      id: 'nested',
+      type: 'list',
+      ordered: true,
+      items: [[{ text: 'one' }], [{ text: 'one-a' }], [{ text: 'one-a-i' }], [{ text: 'two' }]],
+      levels: [0, 1, 2, 0],
+    })
+    const md = toMarkdown(d)
+    // Two spaces of indent per level, and numbering restarts within each level.
+    expect(md).toContain('1. one')
+    expect(md).toContain('  1. one-a')
+    expect(md).toContain('    1. one-a-i')
+    expect(md).toContain('2. two')
+    const html = toHtml(d)
+    // A child list opens inside the item it nests under.
+    expect(html).toContain('<li>one<ol><li>one-a<ol><li>one-a-i</li></ol></li></ol></li>')
+    expect(html).toContain('<li>two</li>')
+  })
+
   it('writes a quote, a code block, and a divider in each format', () => {
     const d = doc()
     d.pages[0].blocks.push(

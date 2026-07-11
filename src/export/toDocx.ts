@@ -177,12 +177,16 @@ async function blockToChildren(
   }
   if (block.type === 'list') {
     return block.items.map((item, i) => {
+      // Each item's nesting depth, capped at Word's nine list levels.
+      const level = Math.min(block.levels?.[i] ?? 0, 8)
       // A task list writes a plain checkbox marker before each line rather than a bullet, so
-      // the tick state travels into the document even where a checkbox control cannot.
+      // the tick state travels into the document even where a checkbox control cannot; the depth
+      // is carried as a left indent since it has no list numbering of its own.
       if (block.checked) {
         const box = block.checked[i] ? '[x] ' : '[ ] '
         return new Paragraph({
           spacing: { line: lineTwip, lineRule: 'exact' },
+          indent: level ? { left: twip(6 * level) } : undefined,
           children: [
             new DocxTextRun({
               text: box,
@@ -196,10 +200,9 @@ async function blockToChildren(
       }
       return new Paragraph({
         spacing: { line: lineTwip, lineRule: 'exact' },
-        bullet: block.ordered ? undefined : { level: 0 },
-        numbering: block.ordered ? { reference: 'ordered', level: 0 } : undefined,
+        bullet: block.ordered ? undefined : { level },
+        numbering: block.ordered ? { reference: 'ordered', level } : undefined,
         children: runs(item, bodyFont, sized(ROLE_SIZE.body), palette.ink),
-        ...(block.ordered ? { text: `${i + 1}.` } : {}),
       })
     })
   }
@@ -399,7 +402,15 @@ export async function documentToDocx(doc: NoteDocument): Promise<Blob> {
         config: [
           {
             reference: 'ordered',
-            levels: [{ level: 0, format: 'decimal', text: '%1.', alignment: AlignmentType.START }],
+            // Nine levels so nested numbered lists count within their depth, cycling the same
+            // decimal, letter, roman styles the page shows and indenting each level further in.
+            levels: Array.from({ length: 9 }, (_, l) => ({
+              level: l,
+              format: (['decimal', 'lowerLetter', 'lowerRoman'] as const)[l % 3],
+              text: `%${l + 1}.`,
+              alignment: AlignmentType.START,
+              style: { paragraph: { indent: { left: twip(6 * l), hanging: twip(4) } } },
+            })),
           },
         ],
       },

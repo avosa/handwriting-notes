@@ -10,6 +10,7 @@ import { getHandwriting, bodyFontStack, headerFontStack } from '@/handwriting/re
 import { plainText, type PasteGroup } from '@/ui/richText'
 import { uid } from '@/util/id'
 import { useDocument, lineKey } from '@/store/document'
+import { listMarkers } from '@/util/listMarker'
 import { useSettings } from '@/store/settings'
 import { hashSeed } from '@/diagrams/wobble'
 import EditableText from './EditableText.vue'
@@ -449,20 +450,57 @@ function onParagraphMergeBack(block: Extract<Block, { type: 'text' }>, runs: Tex
   }
 }
 
+// Keep the per-item nesting depths lined up with the items as they are inserted and removed.
+// A flat list carries no depths at all, so there is nothing to keep in step there.
+function spliceLevels(block: Extract<Block, { type: 'list' }>, start: number, remove: number, ...add: number[]) {
+  if (block.levels) block.levels.splice(start, remove, ...add)
+}
+function levelOf(block: Extract<Block, { type: 'list' }>, index: number): number {
+  return block.levels?.[index] ?? 0
+}
+
+// A nested list steps in a fixed amount per level, so its shape reads at a glance.
+const INDENT_MM = 6
+function itemStyle(block: Extract<Block, { type: 'list' }>, index: number): CSSProperties {
+  const level = levelOf(block, index)
+  return level ? { marginLeft: `${level * INDENT_MM * props.pxPerMm}px` } : {}
+}
+
+// The marker each list item shows, numbering restarting under every new parent. Computed for the
+// whole list at once and cached by identity, so the template can ask per item cheaply.
+function markersOf(block: Extract<Block, { type: 'list' }>): string[] {
+  return listMarkers(
+    block.ordered,
+    block.items.map((_, i) => levelOf(block, i)),
+  )
+}
+function markerFor(block: Extract<Block, { type: 'list' }>, index: number): string {
+  return markersOf(block)[index] ?? (block.ordered ? '1.' : '•')
+}
+
 function onListEnter(block: Extract<Block, { type: 'list' }>, itemIndex: number, after: TextRun[]) {
   // Enter on an empty bullet ends the list: the empty bullet is dropped and the writing
-  // carries on as a normal paragraph after the list, so pressing enter twice escapes it.
+  // carries on as a normal paragraph after the list, so pressing enter twice escapes it. An
+  // indented empty bullet steps out one level first, the way a nested list unwinds.
   if (plainText(block.items[itemIndex]).trim() === '' && plainText(after).trim() === '') {
+    if (levelOf(block, itemIndex) > 0) {
+      documentStore.indentListItem(block.id, itemIndex, -1)
+      pendingFocus.value = { key: `list:${block.id}:${itemIndex}` }
+      return
+    }
     block.items.splice(itemIndex, 1)
     block.checked?.splice(itemIndex, 1)
+    spliceLevels(block, itemIndex, 1)
     const id = documentStore.addParagraphAfter(block.id, 'body')
     if (!block.items.length) documentStore.removeBlock(block.id)
     documentStore.touch()
     pendingFocus.value = { key: `text:${id}` }
     return
   }
+  // The new line starts at the same depth as the one it splits from.
   block.items.splice(itemIndex + 1, 0, after.length ? after : [{ text: '' }])
   block.checked?.splice(itemIndex + 1, 0, false)
+  spliceLevels(block, itemIndex + 1, 0, levelOf(block, itemIndex))
   documentStore.touch()
   pendingFocus.value = { key: `list:${block.id}:${itemIndex + 1}` }
 }
@@ -471,6 +509,7 @@ function onListEnter(block: Extract<Block, { type: 'list' }>, itemIndex: number,
 function onListPasteLines(block: Extract<Block, { type: 'list' }>, itemIndex: number, lines: string[]) {
   block.items.splice(itemIndex + 1, 0, ...lines.map((line) => [{ text: line }]))
   block.checked?.splice(itemIndex + 1, 0, ...lines.map(() => false))
+  spliceLevels(block, itemIndex + 1, 0, ...lines.map(() => levelOf(block, itemIndex)))
   documentStore.touch()
   pendingFocus.value = { key: `list:${block.id}:${itemIndex + lines.length}` }
 }
@@ -491,6 +530,7 @@ function onListMergeBack(block: Extract<Block, { type: 'list' }>, itemIndex: num
     block.items[itemIndex - 1] = mergeRuns(block.items[itemIndex - 1], runs)
     block.items.splice(itemIndex, 1)
     block.checked?.splice(itemIndex, 1)
+    spliceLevels(block, itemIndex, 1)
     documentStore.touch()
     pendingFocus.value = { key: `list:${block.id}:${itemIndex - 1}`, offset: joinAt }
     return
@@ -499,6 +539,7 @@ function onListMergeBack(block: Extract<Block, { type: 'list' }>, itemIndex: num
   if (target) {
     block.items.splice(0, 1)
     block.checked?.splice(0, 1)
+    spliceLevels(block, 0, 1)
     if (!block.items.length) documentStore.removeBlock(block.id)
     else documentStore.touch()
     pendingFocus.value = target
@@ -637,6 +678,7 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
         @merge-back="onParagraphMergeBack(block, $event)"
         @slash="onSlash(block.id, $event)"
         @slash-close="closeSlash(block.id)"
+        @indent="documentStore.indentParagraph(block.id, $event)"
         @select-all-note="documentStore.selectWholeNote()"
       />
 
@@ -647,7 +689,7 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
         :data-block-id="block.id"
         :style="listStyle(block)"
       >
-        <li v-for="(_, i) in block.items" :key="i" :class="{ task: !!block.checked }">
+        <li v-for="(_, i) in block.items" :key="i" :class="{ task: !!block.checked }" :style="itemStyle(block, i)">
           <button
             v-if="block.checked"
             class="check"
@@ -657,7 +699,7 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
           >
             <Icon v-if="block.checked[i]" name="check" :size="13" />
           </button>
-          <span v-else class="marker">{{ block.ordered ? `${i + 1}.` : '•' }}</span>
+          <span v-else class="marker">{{ markerFor(block, i) }}</span>
           <EditableText
             :ref="bindEditable(`list:${block.id}:${i}`)"
             v-model="block.items[i]"
@@ -674,6 +716,7 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
             @paste-lines="onListPasteLines(block, i, $event)"
             @paste-structure="onListPasteStructure(block, i, $event)"
             @merge-back="onListMergeBack(block, i, $event)"
+            @indent="documentStore.indentListItem(block.id, i, $event)"
             @select-all-note="documentStore.selectWholeNote()"
           />
         </li>

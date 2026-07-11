@@ -12,6 +12,7 @@ import { renderDiagram } from '@/diagrams/render'
 import { rect as wobbleRect, line as wobbleLine, hashSeed } from '@/diagrams/wobble'
 import { penProfile } from '@/tools/penTypes'
 import { useSettings } from '@/store/settings'
+import { listMarkers } from '@/util/listMarker'
 
 const MM_TO_PT = 72 / 25.4
 const mm = (v: number) => v * MM_TO_PT
@@ -395,21 +396,28 @@ function layoutBlocks(
     } else if (block.type === 'list') {
       const size = metrics.fontSize.body * (block.scale ?? 1)
       const face = fonts.body
+      const levels = block.items.map((_, i) => block.levels?.[i] ?? 0)
+      const markers = listMarkers(block.ordered, levels)
+      const INDENT_MM = 6
       block.items.forEach((item, i) => {
-        const marker = block.checked ? (block.checked[i] ? '[x]' : '[ ]') : block.ordered ? `${i + 1}.` : '•'
+        // Nesting steps the whole item in, marker and words together, and narrows its wrap.
+        const inset = INDENT_MM * levels[i]
+        const marker = block.checked ? (block.checked[i] ? '[x]' : '[ ]') : markers[i]
         if (pdfPage)
           drawShaped(
             pdfPage,
             face,
             marker,
             mm(size),
-            mm(left),
+            mm(left + inset),
             mm(cursor + lineH * 0.78),
             color(handwriting.palette.ink),
             false,
           )
         const words = runsToWords(item)
-        const lines = words.length ? wrapWords(face, words, mm(size), mm(colWidth - 6)) : [[]]
+        const textLeft = left + inset + 6
+        const textWidth = colWidth - inset - 6
+        const lines = words.length ? wrapWords(face, words, mm(size), mm(textWidth)) : [[]]
         lines.forEach((line, li) => {
           if (pdfPage && line.length)
             drawWordLine(
@@ -417,9 +425,9 @@ function layoutBlocks(
               face,
               line,
               mm(size),
-              mm(left + 6),
+              mm(textLeft),
               mm(cursor + lineH * 0.78),
-              mm(colWidth - 6),
+              mm(textWidth),
               handwriting.palette.ink,
               'left',
             )

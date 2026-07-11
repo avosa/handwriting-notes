@@ -307,6 +307,38 @@ describe('document store', () => {
     expect(a.type === 'text' && a.text.runs.map((r) => r.text).join('')).toBe('alpha')
   })
 
+  it('nests a list item at most one level deeper than the item above, and outdents to the margin', () => {
+    const doc = useDocument()
+    const first = doc.doc.pages[0].blocks[0].id
+    const id = doc.convertToList(first, false)
+    const list = () => doc.locate(id)!.block as Extract<Block, { type: 'list' }>
+    list().items = [[{ text: 'one' }], [{ text: 'two' }], [{ text: 'three' }]]
+
+    // The first item cannot indent, having nothing to nest under.
+    expect(doc.indentListItem(id, 0, 1)).toBe(0)
+    // The second can go one deeper than the first.
+    expect(doc.indentListItem(id, 1, 1)).toBe(1)
+    // It cannot go deeper than one below the item above it (still at level 0).
+    expect(doc.indentListItem(id, 1, 1)).toBe(1)
+    // The third nests under the second: one deeper, then two.
+    expect(doc.indentListItem(id, 2, 1)).toBe(1)
+    expect(doc.indentListItem(id, 2, 1)).toBe(2)
+    expect(list().levels).toEqual([0, 1, 2])
+    // Outdent steps back one and stops at the margin.
+    expect(doc.indentListItem(id, 2, -1)).toBe(1)
+    expect(doc.indentListItem(id, 0, -1)).toBe(0)
+  })
+
+  it('steps a paragraph in and out by a whole column, clamped at the margin', () => {
+    const doc = useDocument()
+    const id = doc.doc.pages[0].blocks[0].id
+    doc.indentParagraph(id, 1)
+    expect((doc.locate(id)!.block as { text: { indent?: number } }).text.indent).toBe(8)
+    doc.indentParagraph(id, -1)
+    doc.indentParagraph(id, -1)
+    expect((doc.locate(id)!.block as { text: { indent?: number } }).text.indent).toBe(0)
+  })
+
   it('fills a stroke by id', () => {
     const doc = useDocument()
     doc.addStroke(0, { id: 's1', tool: 'fine', color: '#000', width: 1, points: [{ x: 0, y: 0, pressure: 1 }] })

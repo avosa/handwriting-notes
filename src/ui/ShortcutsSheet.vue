@@ -21,6 +21,8 @@ const groups = computed(() => [
       { keys: [`${mod}`, 'K'], label: 'Open the command bar' },
       { keys: [`${mod}`, 'F'], label: 'Find and replace in the note' },
       { keys: ['/'], label: 'Open the block menu on an empty line' },
+      { keys: ['Tab'], label: 'Nest a list item deeper, or indent a line' },
+      { keys: [`${shift}`, 'Tab'], label: 'Lift a list item out, or outdent a line' },
       { keys: [`${mod}`, 'Z'], label: 'Undo' },
       { keys: [`${shift}${mod}`, 'Z'], label: 'Redo' },
       { keys: ['?'], label: 'Show this help' },

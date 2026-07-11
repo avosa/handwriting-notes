@@ -30,6 +30,7 @@ const emit = defineEmits<{
   (e: 'select-all-note'): void
   (e: 'slash', payload: { query: string; x: number; y: number }): void
   (e: 'slash-close'): void
+  (e: 'indent', dir: 1 | -1): void
 }>()
 
 const el = ref<HTMLElement | null>(null)
@@ -157,6 +158,13 @@ function onKeydown(event: KeyboardEvent) {
     const selected = window.getSelection()?.toString().length ?? 0
     if (full > 0 && selected >= full) emit('select-all-note')
     else selectAll()
+    return
+  }
+  // Tab nests a line deeper, shift-Tab lifts it back out, the way a document indents. The caret
+  // stays put, so it never steals focus to the next control.
+  if (event.key === 'Tab') {
+    event.preventDefault()
+    emit('indent', event.shiftKey ? -1 : 1)
     return
   }
   if (event.key === 'Enter' && !event.shiftKey) {

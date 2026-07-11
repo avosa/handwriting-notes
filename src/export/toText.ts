@@ -39,6 +39,53 @@ function htmlRuns(runs: TextRun[]): string {
 
 type Dress = { runs: (r: TextRun[]) => string }
 
+// One list item ready to write out: its text, how deep it nests, and, on a task list, its tick.
+interface ListRow {
+  text: string
+  level: number
+  done?: boolean
+}
+function listRows(block: Extract<Block, { type: 'list' }>, d: Dress): ListRow[] {
+  return block.items
+    .map((it, i) => ({ text: d.runs(it).trim(), level: block.levels?.[i] ?? 0, done: block.checked?.[i] }))
+    .filter((r) => r.text)
+}
+// Nest the flat rows into <ul>/<ol> by depth. Depths only ever step in by one, so a row deeper
+// than the level being built opens a child list under the item just written.
+function nestedHtml(rows: ListRow[], ordered: boolean, task: boolean): string {
+  let i = 0
+  const build = (level: number): string => {
+    const tag = task ? 'ul' : ordered ? 'ol' : 'ul'
+    let html = `<${tag}${task ? ' class="task"' : ''}>`
+    while (i < rows.length && rows[i].level >= level) {
+      if (rows[i].level > level) {
+        html += build(rows[i].level)
+        continue
+      }
+      const row = rows[i]
+      i += 1
+      const box = task ? `<input type="checkbox" disabled${row.done ? ' checked' : ''}> ` : ''
+      let li = `<li>${box}${row.text}`
+      if (i < rows.length && rows[i].level > level) li += build(rows[i].level)
+      html += `${li}</li>`
+    }
+    return `${html}</${tag}>`
+  }
+  return rows.length ? build(rows[0].level) : ''
+}
+// Plain-text and Markdown lines: each row indented two spaces per level, so the nesting reads
+// and a Markdown reader rebuilds the tree. Ordered items number within their own level.
+function nestedTextLines(rows: ListRow[], ordered: boolean, task: boolean): string[] {
+  const counters: number[] = []
+  return rows.map((row) => {
+    const pad = '  '.repeat(row.level)
+    counters[row.level] = (counters[row.level] ?? 0) + 1
+    for (let d = row.level + 1; d < counters.length; d++) counters[d] = 0
+    if (task) return `${pad}- [${row.done ? 'x' : ' '}] ${row.text}`
+    return ordered ? `${pad}${counters[row.level]}. ${row.text}` : `${pad}- ${row.text}`
+  })
+}
+
 function blockLines(block: Block, d: Dress, kind: 'text' | 'md' | 'html'): string[] {
   const out: string[] = []
   if (block.type === 'text') {
@@ -57,30 +104,13 @@ function blockLines(block: Block, d: Dress, kind: 'text' | 'md' | 'html'): strin
       out.push(text)
     }
   } else if (block.type === 'list' && block.checked) {
-    const checked = block.checked
-    if (kind === 'html') {
-      const lis = block.items
-        .map((it, i) => {
-          const t = d.runs(it).trim()
-          return t ? `<li><input type="checkbox" disabled${checked[i] ? ' checked' : ''}> ${t}</li>` : ''
-        })
-        .filter(Boolean)
-        .join('')
-      out.push(`<ul>${lis}</ul>`)
-    } else {
-      block.items.forEach((it, i) => {
-        const t = d.runs(it).trim()
-        if (t) out.push(`- [${checked[i] ? 'x' : ' '}] ${t}`)
-      })
-    }
+    const rows = listRows(block, d)
+    if (kind === 'html') out.push(nestedHtml(rows, block.ordered, true))
+    else out.push(...nestedTextLines(rows, block.ordered, true))
   } else if (block.type === 'list') {
-    const items = block.items.map((it) => d.runs(it).trim()).filter(Boolean)
-    if (kind === 'html') {
-      const tag = block.ordered ? 'ol' : 'ul'
-      out.push(`<${tag}>${items.map((t) => `<li>${t}</li>`).join('')}</${tag}>`)
-    } else {
-      items.forEach((t, i) => out.push(block.ordered ? `${i + 1}. ${t}` : `- ${t}`))
-    }
+    const rows = listRows(block, d)
+    if (kind === 'html') out.push(nestedHtml(rows, block.ordered, false))
+    else out.push(...nestedTextLines(rows, block.ordered, false))
   } else if (block.type === 'table') {
     if (kind === 'html') {
       const head = `<tr>${block.header.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr>`
