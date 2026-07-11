@@ -3,12 +3,13 @@
 // works with no API key. It shows whether the device can run one, lets the writer pick a size,
 // and downloads the chosen model once (cached after). Where the hardware can't run a model, the
 // app falls back to a connected key, so AI is always available.
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useSettings } from '@/store/settings'
 import { LOCAL_MODELS, DEFAULT_LOCAL_MODEL, modelById } from '@/ai/local/localModels'
 import {
   webgpuAvailable,
   preloadLocalModel,
+  isModelCached,
   localStatus,
   localProgress,
   localError,
@@ -30,6 +31,14 @@ const enabled = computed({
 })
 const selectedId = computed(() => settings.localModelId || DEFAULT_LOCAL_MODEL)
 const selectedModel = computed(() => modelById(selectedId.value))
+// Whether the selected model's weights are already downloaded to this device, checked against the
+// browser cache so a refresh still knows it is here. The in-memory "loaded" state is separate.
+const cached = ref(false)
+async function refreshCached() {
+  cached.value = await isModelCached(selectedModel.value.mlcId)
+}
+watch(selectedId, refreshCached, { immediate: true })
+
 const ready = computed(() => localStatus.value === 'ready' && loadedModel.value === selectedModel.value.mlcId)
 const percent = computed(() => (localProgress.value != null ? Math.round(localProgress.value * 100) : null))
 
@@ -39,6 +48,7 @@ function select(id: string) {
 
 async function load() {
   await preloadLocalModel(selectedModel.value.mlcId)
+  await refreshCached()
 }
 </script>
 
@@ -91,10 +101,13 @@ async function load() {
             <span v-else-if="localError" class="err"
               >Could not load the model. It may be too large for this device.</span
             >
+            <span v-else-if="cached" class="ready"
+              ><Icon name="check" :size="14" /> Downloaded — loads instantly when you use it</span
+            >
             <span v-else>Download {{ selectedModel.label }} ({{ selectedModel.sizeGB }} GB, once)</span>
           </div>
           <button class="btn" :disabled="localStatus === 'loading' || ready" @click="load">
-            {{ ready ? 'Ready' : 'Download' }}
+            {{ ready ? 'Ready' : cached ? 'Load now' : 'Download' }}
           </button>
         </div>
         <div v-if="localStatus === 'loading' && percent != null" class="bar">
