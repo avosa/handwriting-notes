@@ -6,6 +6,8 @@ import { onMounted, ref } from 'vue'
 import { useDocument } from '@/store/document'
 import { useLibrary } from '@/store/library'
 import { buildLinkIndex, useLinkGraph, type GraphNode } from '@/home/linkGraph'
+import { indexAll, relatedNotes, indexing } from '@/ai/embeddings/semanticIndex'
+import { embedStatus, embedProgress } from '@/ai/embeddings/embedder'
 import Icon from './Icon.vue'
 import { useFocusTrap } from './useFocusTrap'
 
@@ -28,6 +30,36 @@ onMounted(async () => {
   outgoing.value = linksOut(documentStore.doc.id)
   incoming.value = backlinks(documentStore.doc.id)
 })
+
+// Related-by-meaning is opt-in, since it may download the on-device model the first time. Once
+// asked, it indexes the library and ranks other notes by overall similarity to this one.
+const related = ref<GraphNode[]>([])
+const relatedTried = ref(false)
+const relatedBusy = ref(false)
+
+function titleOf(id: string): string {
+  return library.entries.find((e) => e.id === id)?.title || 'Untitled'
+}
+
+async function findRelated() {
+  relatedBusy.value = true
+  try {
+    await indexAll()
+    const hits = await relatedNotes(documentStore.doc.id, 6)
+    const liveIds = new Set(library.recent.map((e) => e.id))
+    related.value = hits.filter((h) => liveIds.has(h.noteId)).map((h) => ({ id: h.noteId, title: titleOf(h.noteId) }))
+    relatedTried.value = true
+  } finally {
+    relatedBusy.value = false
+  }
+}
+
+const relatedStatus = () => {
+  if (embedStatus.value === 'loading')
+    return `Preparing on-device model${embedProgress.value != null ? ` … ${Math.round(embedProgress.value * 100)}%` : '…'}`
+  if (indexing.value) return 'Reading your notes…'
+  return 'Finding related notes…'
+}
 </script>
 
 <template>
@@ -64,6 +96,20 @@ onMounted(async () => {
             </button>
           </div>
           <p v-else class="empty">No other note links here yet.</p>
+        </section>
+
+        <section>
+          <h3>Related by meaning</h3>
+          <p v-if="relatedBusy" class="empty">{{ relatedStatus() }}</p>
+          <div v-else-if="related.length" class="list">
+            <button v-for="n in related" :key="n.id" class="item" @click="emit('open', n.id)">
+              <Icon name="sparkleEdit" :size="14" /><span>{{ n.title || 'Untitled' }}</span>
+            </button>
+          </div>
+          <p v-else-if="relatedTried" class="empty">No related notes found yet — add more notes and try again.</p>
+          <button v-else class="find-related" @click="findRelated">
+            <Icon name="sparkleEdit" :size="14" /> Find related notes (on your device)
+          </button>
         </section>
       </div>
     </aside>
@@ -182,5 +228,22 @@ h3 {
   color: var(--text-muted);
   font-size: 13px;
   line-height: 1.4;
+}
+.find-related {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--accent);
+  border-radius: 9px;
+  padding: 8px 11px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.find-related:hover {
+  background: var(--accent-wash);
+  border-color: var(--accent);
 }
 </style>
