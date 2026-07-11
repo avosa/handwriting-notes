@@ -187,7 +187,12 @@ describe('library bulk actions and saved searches', () => {
   it('favourites a whole set, then unfavourites once all are favourites', () => {
     const lib = seed()
     lib.favoriteNotes(['a', 'b'])
-    expect(lib.entries.filter((e) => e.favorite).map((e) => e.id).sort()).toEqual(['a', 'b', 'c'])
+    expect(
+      lib.entries
+        .filter((e) => e.favorite)
+        .map((e) => e.id)
+        .sort(),
+    ).toEqual(['a', 'b', 'c'])
     // a and b are now favourites, so a second call clears just those two.
     lib.favoriteNotes(['a', 'b'])
     expect(lib.entries.filter((e) => e.favorite).map((e) => e.id)).toEqual(['c'])
@@ -205,7 +210,12 @@ describe('library bulk actions and saved searches', () => {
     const lib = seed()
     const fol = lib.createFolder('Box', null)
     lib.moveNotesToFolder(['a', 'b'], fol)
-    expect(lib.entries.filter((e) => e.folderId === fol).map((e) => e.id).sort()).toEqual(['a', 'b'])
+    expect(
+      lib.entries
+        .filter((e) => e.folderId === fol)
+        .map((e) => e.id)
+        .sort(),
+    ).toEqual(['a', 'b'])
     await lib.archiveNotes(['a', 'b'])
     expect(lib.archived.map((e) => e.id).sort()).toEqual(['a', 'b'])
   })
