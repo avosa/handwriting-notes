@@ -26,9 +26,13 @@ import Icon from '@/ui/Icon.vue'
 import Popover from '@/ui/Popover.vue'
 import ColorPicker from '@/ui/ColorPicker.vue'
 import ToolInstrument from '@/tools/ToolInstrument.vue'
+import VoiceButton from './VoiceButton.vue'
 
 const props = defineProps<{ mode: 'write' | 'draw' }>()
-const emit = defineEmits<{ (e: 'update:mode', value: 'write' | 'draw'): void }>()
+const emit = defineEmits<{
+  (e: 'update:mode', value: 'write' | 'draw'): void
+  (e: 'need-key'): void
+}>()
 
 const documentStore = useDocument()
 const settings = useSettings()
@@ -250,6 +254,10 @@ function imageRatio(file: Blob): Promise<number> {
           <button title="Align left" @click="applyAlign('left')"><Icon name="alignLeft" :size="18" /></button>
           <button title="Centre" @click="applyAlign('center')"><Icon name="alignCenter" :size="18" /></button>
           <button title="Justify" @click="applyAlign('justify')"><Icon name="alignJustify" :size="18" /></button>
+        </div>
+
+        <div class="group">
+          <VoiceButton @need-key="emit('need-key')" />
         </div>
 
         <Popover align="center">

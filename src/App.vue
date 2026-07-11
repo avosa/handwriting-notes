@@ -990,7 +990,7 @@ function addPage() {
       </Transition>
 
       <div class="dock-wrap" :class="{ tucked: dockTucked }">
-        <EditorBar :mode="mode" @update:mode="mode = $event" />
+        <EditorBar :mode="mode" @update:mode="mode = $event" @need-key="showKey = true" />
       </div>
 
       <div class="live-wrap">

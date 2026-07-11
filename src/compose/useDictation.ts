@@ -15,11 +15,11 @@ interface SpeechResultList {
   length: number
   [index: number]: SpeechResult
 }
-interface SpeechRecognitionEvent {
+export interface SpeechRecognitionEvent {
   resultIndex: number
   results: SpeechResultList
 }
-interface SpeechRecognition {
+export interface SpeechRecognition {
   lang: string
   continuous: boolean
   interimResults: boolean
@@ -29,9 +29,12 @@ interface SpeechRecognition {
   start(): void
   stop(): void
 }
-type SpeechRecognitionCtor = new () => SpeechRecognition
+export type SpeechRecognitionCtor = new () => SpeechRecognition
 
-function recognitionCtor(): SpeechRecognitionCtor | null {
+// The browser's speech-recognition constructor, or null where it is not supported. Shared so
+// every voice feature — question dictation, live page dictation, meeting capture — reads speech
+// the same way rather than each re-declaring the Web Speech types.
+export function recognitionCtor(): SpeechRecognitionCtor | null {
   const w = window as unknown as {
     SpeechRecognition?: SpeechRecognitionCtor
     webkitSpeechRecognition?: SpeechRecognitionCtor
