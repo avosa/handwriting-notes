@@ -165,3 +165,41 @@ export async function searchNotes(query: string, k = 20): Promise<SemanticHit[]>
   }
   return [...best.values()].sort((a, b) => b.score - a.score).slice(0, k)
 }
+
+// The centre of a set of unit vectors: their sum, renormalised. It represents a note as a whole
+// so two notes can be compared by overall meaning rather than any single block.
+function centroid(vectors: number[][]): number[] {
+  const width = vectors[0]?.length ?? 0
+  const c = new Array<number>(width).fill(0)
+  for (const v of vectors) for (let i = 0; i < width; i++) c[i] += v[i]
+  let mag = 0
+  for (const x of c) mag += x * x
+  mag = Math.sqrt(mag) || 1
+  return c.map((x) => x / mag)
+}
+
+export interface RelatedNote {
+  noteId: string
+  score: number
+}
+
+// The notes closest in overall meaning to a given note — the engine behind "related notes" and
+// semantic link suggestions. Compares note centroids, so it is about the whole note, not a word.
+// Returns nothing until the note has been indexed (its blocks embedded).
+export async function relatedNotes(noteId: string, k = 6): Promise<RelatedNote[]> {
+  const byNote = new Map<string, number[][]>()
+  for (const v of await getAllVectors()) {
+    const list = byNote.get(v.noteId)
+    if (list) list.push(v.vector)
+    else byNote.set(v.noteId, [v.vector])
+  }
+  const mine = byNote.get(noteId)
+  if (!mine || !mine.length) return []
+  const cMine = centroid(mine)
+  const out: RelatedNote[] = []
+  for (const [id, vectors] of byNote) {
+    if (id === noteId) continue
+    out.push({ noteId: id, score: dot(cMine, centroid(vectors)) })
+  }
+  return out.sort((a, b) => b.score - a.score).slice(0, k)
+}
