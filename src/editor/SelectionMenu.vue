@@ -2,7 +2,7 @@
 // A small menu that appears over a text selection, the way a phone shows actions when
 // you long-press a word. It offers emphasis, a colour, turning the line into a title or
 // heading, and asking the AI to rewrite the line. It never steals the selection.
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { TextRole } from '@/types'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
@@ -59,6 +59,12 @@ function insideEditor(node: Node | null): boolean {
 
 function update() {
   if (asking.value) return
+  // When the whole note is selected, its own bar takes over; the per-selection menu stands
+  // down so the two never crowd the screen together.
+  if (documentStore.allSelected) {
+    visible.value = false
+    return
+  }
   const sel = window.getSelection()
   if (!sel || sel.isCollapsed || sel.rangeCount === 0 || !insideEditor(sel.anchorNode)) {
     visible.value = false
@@ -79,6 +85,11 @@ function onSelectionChange() {
 }
 onMounted(() => document.addEventListener('selectionchange', onSelectionChange))
 onBeforeUnmount(() => document.removeEventListener('selectionchange', onSelectionChange))
+
+// Selecting or clearing the whole note does not always move the text selection, so react to
+// it directly: hide the menu the moment the note is wholly selected, and let it come back
+// when that clears if a selection is still standing.
+watch(() => documentStore.allSelected, update)
 
 function makeRole(role: TextRole) {
   documentStore.setSelectionRole(role)
