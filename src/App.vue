@@ -142,6 +142,14 @@ function drawerSave(kind: 'pdf' | 'docx') {
   drawerOpen.value = false
   void saveAs(kind)
 }
+function drawerChat() {
+  drawerOpen.value = false
+  showChat.value = true
+}
+function drawerMap() {
+  drawerOpen.value = false
+  showGraph.value = true
+}
 
 // Start a run and step back so the AI is watched writing onto the page. Working on the
 // current note carries its words along as context so the AI can build on them; starting a
@@ -676,6 +684,8 @@ function addPage() {
         @save-docx="drawerSave('docx')"
         @api-key="drawerKey"
         @compose="drawerCompose"
+        @chat="drawerChat"
+        @map="drawerMap"
       />
     </aside>
 
@@ -772,6 +782,9 @@ function addPage() {
           </Popover>
           <button class="icon-btn hide-mobile" title="Claude API key" @click="showKey = true">
             <Icon name="key" :size="18" />
+          </button>
+          <button class="chip" title="Chat with your notes — grounded, cited answers" @click="showChat = true">
+            <Icon name="sparkleEdit" :size="18" /><span class="chip-text">Ask AI</span>
           </button>
           <button v-if="generating" class="chip primary stop" title="Stop the AI" @click="stop">
             <Icon name="stop" :size="18" /><span class="chip-text">Stop</span>
