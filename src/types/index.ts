@@ -275,6 +275,15 @@ export interface Folder {
   createdAt: number
 }
 
+/** A named, saved view of the library: a search text and/or a tag the writer keeps to return
+ *  to, like a smart collection. */
+export interface SavedSearch {
+  id: string
+  name: string
+  query: string
+  tag: string | null
+}
+
 /** One row in the notes library: enough to list and open a note without loading it. */
 export interface LibraryEntry {
   id: string
