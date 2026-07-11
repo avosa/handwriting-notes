@@ -1,7 +1,8 @@
 <script setup lang="ts">
-// A table of contents for the open note. It gathers every title and heading across the
-// pages, in order, and lets the reader jump straight to one. Indentation follows the
-// heading level, so the shape of a long note is read at a glance.
+// A collapsible table of contents for the open note. It gathers every title and heading across the
+// pages in order, indents by heading level so the shape of a long note reads at a glance, and folds
+// a section away when it has sub-headings — so a big note can be surveyed from the top down. Picking
+// a heading jumps straight to it in the note.
 import { computed, ref } from 'vue'
 import { useDocument } from '@/store/document'
 import type { TextRole } from '@/types'
@@ -57,6 +58,43 @@ const items = computed<OutlineItem[]>(() => {
   return out
 })
 
+// A heading has children when the next heading sits deeper than it.
+function hasChildren(index: number): boolean {
+  const next = items.value[index + 1]
+  return !!next && next.depth > items.value[index].depth
+}
+
+const collapsed = ref(new Set<string>())
+function toggle(id: string) {
+  const next = new Set(collapsed.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  collapsed.value = next
+}
+
+// Every heading that owns a section, so collapse-all can fold the whole note to its top level.
+const foldable = computed(() => items.value.filter((_, i) => hasChildren(i)).map((it) => it.id))
+const allCollapsed = computed(() => foldable.value.length > 0 && foldable.value.every((id) => collapsed.value.has(id)))
+function toggleAll() {
+  collapsed.value = allCollapsed.value ? new Set() : new Set(foldable.value)
+}
+
+// The rows to show: an item is hidden while it sits under a collapsed ancestor. Each visible row
+// carries whether it can fold and whether it currently is.
+const visible = computed(() => {
+  const rows: (OutlineItem & { children: boolean; folded: boolean })[] = []
+  let hideDeeperThan = Infinity
+  items.value.forEach((it, i) => {
+    if (it.depth > hideDeeperThan) return
+    hideDeeperThan = Infinity
+    const children = hasChildren(i)
+    const folded = collapsed.value.has(it.id)
+    rows.push({ ...it, children, folded })
+    if (children && folded) hideDeeperThan = it.depth
+  })
+  return rows
+})
+
 function jump(id: string) {
   emit('jump', id)
   emit('close')
@@ -68,12 +106,27 @@ function jump(id: string) {
     <aside ref="card" class="panel" role="dialog" aria-modal="true" aria-label="Outline" tabindex="-1">
       <header class="head">
         <h2>Outline</h2>
-        <button class="close" title="Close" @click="emit('close')"><Icon name="close" :size="16" /></button>
+        <div class="head-right">
+          <button v-if="foldable.length" class="fold-all" @click="toggleAll">
+            {{ allCollapsed ? 'Expand all' : 'Collapse all' }}
+          </button>
+          <button class="close" title="Close" @click="emit('close')"><Icon name="close" :size="16" /></button>
+        </div>
       </header>
       <div v-if="items.length" class="list">
-        <button v-for="item in items" :key="item.id" class="item" :class="`d${item.depth}`" @click="jump(item.id)">
-          {{ item.text }}
-        </button>
+        <div v-for="item in visible" :key="item.id" class="row" :class="`d${item.depth}`">
+          <button
+            v-if="item.children"
+            class="twist"
+            :class="{ folded: item.folded }"
+            :title="item.folded ? 'Expand' : 'Collapse'"
+            @click="toggle(item.id)"
+          >
+            <Icon name="chevronDown" :size="14" />
+          </button>
+          <span v-else class="twist spacer" />
+          <button class="item" @click="jump(item.id)">{{ item.text }}</button>
+        </div>
       </div>
       <p v-else class="empty">No headings yet. Make a line a title or heading to build the outline.</p>
     </aside>
@@ -112,6 +165,25 @@ function jump(id: string) {
   font-size: 16px;
   font-weight: 700;
 }
+.head-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.fold-all {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 8px;
+}
+.fold-all:hover {
+  background: var(--surface-sunken);
+  color: var(--text);
+}
 .close {
   border: none;
   background: transparent;
@@ -130,7 +202,39 @@ function jump(id: string) {
   flex-direction: column;
   gap: 1px;
 }
+.row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 8px;
+}
+.row:hover {
+  background: var(--accent-wash);
+}
+.twist {
+  flex-shrink: 0;
+  width: 22px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  border-radius: 6px;
+  transition: transform 0.15s ease;
+}
+.twist.folded {
+  transform: rotate(-90deg);
+}
+.twist.spacer {
+  cursor: default;
+}
 .item {
+  flex: 1;
+  min-width: 0;
   border: none;
   background: transparent;
   text-align: left;
@@ -138,23 +242,22 @@ function jump(id: string) {
   color: var(--text);
   font: inherit;
   font-size: 14px;
-  padding: 8px 10px;
+  padding: 8px 10px 8px 2px;
   border-radius: 8px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.item:hover {
-  background: var(--accent-wash);
-}
-.item.d0 {
+.row.d0 .item {
   font-weight: 700;
 }
-.item.d1 {
-  padding-left: 22px;
+.row.d1 {
+  padding-left: 18px;
 }
-.item.d2 {
+.row.d2 {
   padding-left: 34px;
+}
+.row.d2 .item {
   color: var(--text-soft, var(--text-muted));
 }
 .empty {

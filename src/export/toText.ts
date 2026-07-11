@@ -258,6 +258,18 @@ export function toHtml(doc: NoteDocument): string {
   ].join('\n')
 }
 
+// The note as a fragment of clean, semantic HTML — the title heading then every block — for a
+// reading view that shows the writing as plain typography instead of handwriting. Reuses the same
+// block-to-HTML conversion as the full export, so every kind of block renders the same way here.
+export function noteBodyHtml(doc: NoteDocument): string {
+  doc = joinSplitParagraphs(doc)
+  const d = { runs: htmlRuns }
+  const title = escapeHtml(doc.title.trim() || 'Note')
+  const body: string[] = [`<h1>${title}</h1>`]
+  for (const page of doc.pages) body.push(...pageLines(page, d, 'html', doc.comments))
+  return body.join('\n')
+}
+
 // Turn a note title into a safe file stem, so a saved file is named after the note without
 // stray slashes or spaces tripping up the download.
 export function fileStem(title: string): string {

@@ -33,6 +33,7 @@ import PwaPrompts from './ui/PwaPrompts.vue'
 import StoragePanel from './ui/StoragePanel.vue'
 import LocalAiSheet from './ui/LocalAiSheet.vue'
 import StudyPanel from './ui/StudyPanel.vue'
+import ReadingView from './ui/ReadingView.vue'
 import NotesChat from './ui/NotesChat.vue'
 import FindBar from './ui/FindBar.vue'
 import { APP_DOMAIN } from './brand'
@@ -78,6 +79,7 @@ const showGraph = ref(false)
 const showStorage = ref(false)
 const showLocalAi = ref(false)
 const showStudy = ref(false)
+const showReading = ref(false)
 const showChat = ref(false)
 const showFind = ref(false)
 
@@ -650,9 +652,16 @@ const commands = computed<Command[]>(() => [
   {
     id: 'outline',
     title: 'Outline',
-    hint: 'jump to a heading',
+    hint: 'collapsible headings, jump',
     icon: 'listBullet',
     run: () => (showOutline.value = true),
+  },
+  {
+    id: 'reading',
+    title: 'Reading mode',
+    hint: 'distraction-free reader',
+    icon: 'eye',
+    run: () => (showReading.value = true),
   },
   {
     id: 'history',
@@ -1082,6 +1091,8 @@ function addPage() {
     <LocalAiSheet v-if="showLocalAi" @close="showLocalAi = false" />
 
     <StudyPanel v-if="showStudy" @close="showStudy = false" />
+
+    <ReadingView v-if="showReading" @close="showReading = false" />
 
     <!-- A floating button to chat with your notes, kept out of the crowded top bar. It tucks
          away while the chat, the home screen, or a full-screen overlay is open. -->
