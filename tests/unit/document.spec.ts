@@ -280,6 +280,33 @@ describe('document store', () => {
     expect(a.type === 'text' && a.text.runs.map((r) => r.text).join('')).toBe('alphabeta')
   })
 
+  it('flows any formatted line up whole, not just headings, so a caption keeps its look', () => {
+    const doc = useDocument()
+    doc.doc.pages = [
+      {
+        id: 'p0',
+        index: 0,
+        presetId: '1C',
+        blocks: [{ id: 'a', type: 'text', text: { id: 'ta', role: 'body', runs: [{ text: 'alpha' }] } }],
+        strokes: [],
+      },
+      {
+        id: 'p1',
+        index: 1,
+        presetId: '1C',
+        blocks: [{ id: 'c', type: 'text', text: { id: 'tc', role: 'caption', runs: [{ text: 'a note' }] } }],
+        strokes: [],
+      },
+    ] as never
+    doc.mergeToPrevPageEnd('c', [{ text: 'a note' }])
+    expect(doc.doc.pages).toHaveLength(1)
+    const moved = doc.locate('c')!.block
+    expect(moved.type === 'text' && moved.text.role).toBe('caption')
+    // The caption was not flattened into the body line above it.
+    const a = doc.locate('a')!.block
+    expect(a.type === 'text' && a.text.runs.map((r) => r.text).join('')).toBe('alpha')
+  })
+
   it('fills a stroke by id', () => {
     const doc = useDocument()
     doc.addStroke(0, { id: 's1', tool: 'fine', color: '#000', width: 1, points: [{ x: 0, y: 0, pressure: 1 }] })

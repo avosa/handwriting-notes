@@ -719,10 +719,12 @@ export const useDocument = defineStore('document', {
       this.touch()
       return true
     },
-    // Backspace at the very top of a page joins it onto the page above. A plain body line runs
-    // its words onto the last line there for a seamless join; a titled or headed line keeps its
-    // own look and moves up whole so its formatting is never flattened into the line above. A
-    // page left empty by this gives its space back. Returns where the caret should come to rest.
+    // Backspace at the very top of a page joins it onto the page above. Only a plain body line —
+    // default role, alignment, and no indent — runs its words onto the last line there for a
+    // seamless join. Any line that carries a look of its own — a title, subtitle, heading,
+    // subheading, or caption, or a custom alignment or indent — moves up whole instead, so its
+    // formatting is never flattened into the line above. A page left empty by this gives its
+    // space back. Returns where the caret should come to rest.
     mergeToPrevPageEnd(blockId: string, runs: TextRun[]): { blockId: string; offset: number } | null {
       const at = this.locate(blockId)
       if (!at || at.pageIndex === 0 || at.blockIndex !== 0) return null
@@ -730,8 +732,8 @@ export const useDocument = defineStore('document', {
       const prev = this.doc.pages[at.pageIndex - 1]
       const last = prev.blocks[prev.blocks.length - 1] as Block | undefined
       const words = runs.filter((r) => r.text.length)
-      const isPlainLine =
-        at.block.type === 'text' && (at.block.text.role === 'body' || at.block.text.role === 'caption')
+      const p = at.block.type === 'text' ? at.block.text : null
+      const isPlainLine = !!p && p.role === 'body' && (p.align === undefined || p.align === 'left') && !p.indent
       let result: { blockId: string; offset: number }
       if (isPlainLine && last?.type === 'text') {
         const offset = last.text.runs.reduce((n, r) => n + r.text.length, 0)
