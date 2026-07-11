@@ -9,12 +9,16 @@ import { indexing } from '@/ai/embeddings/semanticIndex'
 import { localStatus, localProgress } from '@/ai/local/localLlm'
 import Icon from './Icon.vue'
 import AnswerMarkdown from './AnswerMarkdown.vue'
+import { useDictation } from '@/compose/useDictation'
 
 const emit = defineEmits<{ (e: 'close'): void; (e: 'open', id: string): void; (e: 'need-key'): void }>()
 const { messages, busy, error, needsKey, ask, stop } = useNotesChat()
 
 const draft = ref('')
 const scroller = ref<HTMLElement | null>(null)
+
+// Talk to your notes: dictation fills the field as you speak, so a question can be asked by voice.
+const { listening, supported: canDictate, toggle: toggleMic } = useDictation((text) => (draft.value = text))
 
 const SUGGESTIONS = [
   'Summarise what I know about this topic',
@@ -107,6 +111,16 @@ const statusLine = () => {
 
     <form class="composer" @submit.prevent="send()">
       <textarea v-model="draft" rows="1" placeholder="Ask, or tell me to edit…" @keydown.enter.exact.prevent="send()" />
+      <button
+        v-if="canDictate"
+        type="button"
+        class="mic"
+        :class="{ on: listening }"
+        :title="listening ? 'Stop dictation' : 'Speak your question'"
+        @click="toggleMic"
+      >
+        <Icon name="mic" :size="17" />
+      </button>
       <button v-if="busy" type="button" class="go stop" title="Stop" @click="stop">
         <Icon name="stop" :size="16" />
       </button>
@@ -359,6 +373,33 @@ textarea:focus {
 }
 .go.stop {
   background: var(--danger, #c0392b);
+}
+.mic {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  color: var(--text-muted);
+  background: var(--surface);
+}
+.mic:hover {
+  color: var(--text);
+  background: var(--accent-wash);
+}
+.mic.on {
+  color: #fff;
+  border-color: transparent;
+  background: var(--danger, #c0392b);
+  animation: micpulse 1.2s ease-in-out infinite;
+}
+@keyframes micpulse {
+  50% {
+    filter: brightness(1.15);
+  }
 }
 
 /* On a phone the chat fills the width below the top bar, so no rounded corner or side border. */
