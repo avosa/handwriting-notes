@@ -8,8 +8,9 @@ draft a whole note for you using those same tools.
 
 Everything runs in the browser. There is no backend and nothing to deploy or pay for.
 Your work is saved locally in the browser. The app and all of its tools are free; the
-AI drafting feature calls the provider you choose (Claude, ChatGPT, Gemini, or DeepSeek)
-with a key you enter once, which stays on your device and is sent only to that provider.
+AI drafting feature calls the provider you choose (Claude, ChatGPT, Gemini, DeepSeek, or
+Manus) with a key you enter once, which stays on your device and is sent only to that
+provider.
 
 ## Running it
 
@@ -58,11 +59,16 @@ vendor. You can connect more than one and switch which is in use; Claude is the 
 | **ChatGPT** (OpenAI) | text, images, PDF, Word and other documents | [platform.openai.com](https://platform.openai.com/api-keys) | `gpt-5.5` (`VITE_OPENAI_MODEL`) |
 | **Gemini** (Google) | text, images, PDF | [aistudio.google.com](https://aistudio.google.com/app/apikey) | `gemini-flash-latest` (`VITE_GEMINI_MODEL`) |
 | **DeepSeek** | text only | [platform.deepseek.com](https://platform.deepseek.com/api_keys) | `deepseek-v4-flash` (`VITE_DEEPSEEK_MODEL`) |
+| **Manus** | text only | [manus.im](https://manus.im/app?show_settings=integrations&app_name=api) | `manus-1.6` agent (`VITE_MANUS_PROFILE`) |
 
 Attachments are matched to what the chosen model can read: images go to the ones with
 vision, a PDF goes to the ones that open PDFs, ChatGPT also reads Word, PowerPoint, Excel,
 and CSV files, and a plain text file is readable by all of them. Anything a model cannot
 take is summarised in a line instead, so the request still goes through.
+
+Manus runs the request as a task and answers when it settles, so its note arrives all at
+once after a short wait rather than streaming line by line; everything else about it works
+the same. Its `VITE_MANUS_PROFILE` override picks which Manus agent answers.
 
 To pin a different model, set the matching `VITE_*_MODEL` variable in a `.env.local` file.
 Model names move quickly; these defaults were current in mid 2026, and the override lets
@@ -90,7 +96,7 @@ src/
   ui/        icons, colour picker, popovers, dialogs
   compose/   the AI panel, attachments, voice notes, and the provider call
   ai/        prompt, attachment encoding, output parsing, dash lint
-  ai/providers/  Claude, ChatGPT, Gemini, and DeepSeek behind one interface
+  ai/providers/  Claude, ChatGPT, Gemini, DeepSeek, and Manus behind one interface
   store/     document and settings stores, local persistence
   export/    PDF and Word exporters
 ```
