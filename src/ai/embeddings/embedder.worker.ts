@@ -36,21 +36,37 @@ async function hasWebGPU(): Promise<boolean> {
   }
 }
 
-// Load the model the first time it is needed, reporting download progress, and remember it.
+function makePipeline(dev: 'webgpu' | 'wasm'): Promise<FeatureExtractionPipeline> {
+  return pipeline('feature-extraction', MODEL, {
+    device: dev,
+    // A quantised model keeps the one-time download small and runs well on both backends.
+    dtype: 'q8',
+    progress_callback: (p: { status: string; loaded?: number; total?: number }) => {
+      if (p.status === 'progress' && p.total) post({ type: 'progress', loaded: p.loaded ?? 0, total: p.total })
+    },
+  }) as Promise<FeatureExtractionPipeline>
+}
+
+// Load the model the first time it is needed, reporting download progress, and remember it. The
+// GPU is preferred, but some GPUs fail to build the model even when WebGPU is present — so a
+// failed GPU load falls back to WASM rather than giving up, which keeps embedding (and therefore
+// semantic search and chat) working on every device.
 async function load(): Promise<FeatureExtractionPipeline> {
   if (extractor) return extractor
   if (loading) return loading
   loading = (async () => {
-    device = (await hasWebGPU()) ? 'webgpu' : 'wasm'
-    const pipe = await pipeline('feature-extraction', MODEL, {
-      device,
-      // A quantised model keeps the one-time download small and runs well on both backends.
-      dtype: 'q8',
-      progress_callback: (p: { status: string; loaded?: number; total?: number }) => {
-        if (p.status === 'progress' && p.total) post({ type: 'progress', loaded: p.loaded ?? 0, total: p.total })
-      },
-    })
-    extractor = pipe as FeatureExtractionPipeline
+    if (await hasWebGPU()) {
+      try {
+        extractor = await makePipeline('webgpu')
+        device = 'webgpu'
+      } catch {
+        extractor = await makePipeline('wasm')
+        device = 'wasm'
+      }
+    } else {
+      extractor = await makePipeline('wasm')
+      device = 'wasm'
+    }
     post({ type: 'ready', device })
     return extractor
   })()
