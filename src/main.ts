@@ -2,6 +2,9 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import { installPersistence } from './store/persistence'
+// Bring up the notes kernel: registers the tools a human's UI and an agent both act through, and
+// exposes it for agent/console access.
+import './kernel'
 import './assets/fonts.css'
 import './assets/main.css'
 
