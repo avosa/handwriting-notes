@@ -181,20 +181,35 @@ watch(
 
 const pageCount = computed(() => documentStore.doc.pages.length)
 
-// Right-clicking a page, or tapping its menu button, opens page actions at that spot.
-const pageMenu = ref<{ index: number; x: number; y: number } | null>(null)
+// Right-clicking or long-pressing a page, or tapping its menu button, opens page actions at
+// that spot. A right-click that lands on a line also remembers it, so the same menu can offer a
+// page break there; the menu button on the page count carries no line, so it shows only the
+// whole-page actions.
+const pageMenu = ref<{ index: number; x: number; y: number; blockId: string | null } | null>(null)
 function openPageMenu(index: number, event: MouseEvent) {
   event.preventDefault()
   event.stopPropagation()
+  const blockEl = (event.target as HTMLElement).closest?.('[data-block-id]') as HTMLElement | null
   // Keep the menu on screen: flip it up near the bottom, and in from the right edge.
   const menuW = 200
-  const menuH = 170
+  const menuH = 210
   const x = Math.min(event.clientX, window.innerWidth - menuW)
   const y = event.clientY + menuH > window.innerHeight ? event.clientY - menuH : event.clientY
-  pageMenu.value = { index, x: Math.max(8, x), y: Math.max(8, y) }
+  pageMenu.value = {
+    index,
+    x: Math.max(8, x),
+    y: Math.max(8, y),
+    blockId: blockEl?.getAttribute('data-block-id') ?? null,
+  }
 }
 function closePageMenu() {
   pageMenu.value = null
+}
+// Start a new page at the line the menu was opened on: everything from there down moves onto a
+// fresh sheet, the way a manual page break works in a word processor.
+function insertPageBreak() {
+  if (pageMenu.value?.blockId) documentStore.setActivePage(documentStore.breakPageAt(pageMenu.value.blockId))
+  closePageMenu()
 }
 function pageAction(fn: (i: number) => void) {
   if (pageMenu.value) fn(pageMenu.value.index)
@@ -494,6 +509,9 @@ function addPage() {
           <div class="page-menu" :style="{ left: `${pageMenu.x}px`, top: `${pageMenu.y}px` }" @click.stop>
             <button @click="pageAction((i) => documentStore.setActivePage(documentStore.addPageAfter(i)))">
               <Icon name="pageAdd" :size="17" /><span>Add page after</span>
+            </button>
+            <button v-if="pageMenu.blockId" @click="insertPageBreak">
+              <Icon name="pageBreak" :size="17" /><span>Page break here</span>
             </button>
             <button @click="pageAction((i) => documentStore.setActivePage(documentStore.duplicatePage(i)))">
               <Icon name="copy" :size="17" /><span>Duplicate page</span>

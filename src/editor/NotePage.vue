@@ -59,10 +59,13 @@ function measure() {
   if (layer) contentBottomPx.value = layer.offsetTop + layer.scrollHeight
 }
 
-// Grow the page to the next whole rule below the writing, never past a full sheet up.
+// A page is a single fixed sheet; writing that outgrows it flows onto the next page. While the
+// AI is writing the page is allowed to grow so its words are never clipped mid-run, and the
+// content is paginated back into whole sheets once the run ends.
 const heightMm = computed(() => {
-  const contentMm = contentBottomPx.value / pxPerMm.value + 16
   const p = preset.value
+  if (!documentStore.generating) return p.height
+  const contentMm = contentBottomPx.value / pxPerMm.value + 16
   const grown = p.rule.topGap + Math.ceil(Math.max(0, contentMm - p.rule.topGap) / p.rule.spacing) * p.rule.spacing
   return Math.max(p.height, grown)
 })

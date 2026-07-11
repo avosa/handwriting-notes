@@ -17,6 +17,9 @@ interface DocumentState {
   selectedNote: { pageIndex: number; id: string } | null
   /** A block just created that the editor should move the caret into. */
   pendingFocusId: string | null
+  /** Where along the pending-focus block the caret should land, for keeping it in place when
+   *  a block flows to another page. Null means the editor picks the natural spot. */
+  pendingFocusOffset: number | null
   /** True while Claude is writing onto the page, so the UI can show it live. */
   generating: boolean
   /** The last block Claude wrote, where the writing caret rests. */
@@ -85,6 +88,7 @@ export const useDocument = defineStore('document', {
     selectedBlockId: null,
     selectedNote: null,
     pendingFocusId: null,
+    pendingFocusOffset: null,
     generating: false,
     writingBlockId: null,
     past: [],
@@ -367,12 +371,15 @@ export const useDocument = defineStore('document', {
       this.touch()
     },
 
-    /** Ask the editor to move the caret into a block once it renders. */
-    requestFocus(blockId: string) {
+    /** Ask the editor to move the caret into a block once it renders, optionally at a given
+     *  character offset so the caret can be kept where it was when a block moves pages. */
+    requestFocus(blockId: string, offset?: number) {
       this.pendingFocusId = blockId
+      this.pendingFocusOffset = offset ?? null
     },
     clearPendingFocus() {
       this.pendingFocusId = null
+      this.pendingFocusOffset = null
     },
     addParagraphAfter(blockId: string | null, role: TextRole = 'body'): string {
       const block: Block = { id: uid('b'), type: 'text', text: { id: uid('t'), role, runs: [{ text: '' }] } }
@@ -677,6 +684,56 @@ export const useDocument = defineStore('document', {
       return at.pageIndex + 1
     },
 
+    // Move a block and everything after it on its page onto the start of the following page,
+    // making a new page when it is the last one. Used to flow writing that no longer fits a
+    // page onto the next, so a page never grows past a single sheet.
+    movePageTail(blockId: string): boolean {
+      const at = this.locate(blockId)
+      if (!at || at.blockIndex === 0) return false
+      const page = this.doc.pages[at.pageIndex]
+      const moved = page.blocks.splice(at.blockIndex)
+      if (!moved.length) return false
+      let next = this.doc.pages[at.pageIndex + 1]
+      if (!next) {
+        next = { id: uid('p'), index: at.pageIndex + 1, presetId: page.presetId, blocks: [], strokes: [] }
+        this.doc.pages.splice(at.pageIndex + 1, 0, next)
+      }
+      next.blocks.unshift(...moved)
+      this.doc.pages.forEach((p, i) => (p.index = i))
+      this.touch()
+      return true
+    },
+    // Backspace at the very top of a page joins it onto the page above: the block's words merge
+    // onto the last line there, or, if that line cannot take them, the block moves up whole. A
+    // page left empty by this gives its space back. Returns where the caret should come to rest.
+    mergeToPrevPageEnd(blockId: string, runs: TextRun[]): { blockId: string; offset: number } | null {
+      const at = this.locate(blockId)
+      if (!at || at.pageIndex === 0 || at.blockIndex !== 0) return null
+      const page = this.doc.pages[at.pageIndex]
+      const prev = this.doc.pages[at.pageIndex - 1]
+      const last = prev.blocks[prev.blocks.length - 1] as Block | undefined
+      const words = runs.filter((r) => r.text.length)
+      let result: { blockId: string; offset: number }
+      if (last?.type === 'text') {
+        const offset = last.text.runs.reduce((n, r) => n + r.text.length, 0)
+        const merged = [...last.text.runs, ...words].filter((r) => r.text.length)
+        last.text.runs = merged.length ? merged : [{ text: '' }]
+        page.blocks.splice(0, 1)
+        result = { blockId: last.id, offset }
+      } else {
+        // Nothing above to merge into, so the whole line moves up to sit below what is there.
+        const [moved] = page.blocks.splice(0, 1)
+        prev.blocks.push(moved)
+        result = { blockId: moved.id, offset: 0 }
+      }
+      if (!page.blocks.length && (page.strokes?.length ?? 0) === 0 && (page.notes?.length ?? 0) === 0) {
+        this.doc.pages.splice(at.pageIndex, 1)
+      }
+      this.doc.pages.forEach((p, i) => (p.index = i))
+      if (this.selectedBlockId === blockId) this.selectedBlockId = null
+      this.touch()
+      return result
+    },
     updateBlock(blockId: string, patch: Partial<Block>) {
       const at = this.locate(blockId)
       if (!at) return

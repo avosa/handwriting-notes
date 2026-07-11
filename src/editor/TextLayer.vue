@@ -129,7 +129,7 @@ watch(
     await nextTick()
     const target = editables.value.get(`text:${id}`) ?? editables.value.get(`list:${id}:0`)
     if (target) {
-      target.focus()
+      target.focus(documentStore.pendingFocusOffset ?? undefined)
       documentStore.clearPendingFocus()
       return
     }
@@ -169,7 +169,63 @@ function onParagraphEnter(block: Extract<Block, { type: 'text' }>, after: TextRu
   const nextRole = block.text.role === 'body' || block.text.role === 'caption' ? block.text.role : 'body'
   const id = documentStore.addParagraphAfter(block.id, nextRole)
   documentStore.setRuns(id, after)
+  // Focus the new line at once so fast typing never loses a keystroke, then, only if it landed
+  // past the foot of the page, carry it onto the next sheet and follow the caret over.
   pendingFocus.value = { key: `text:${id}` }
+  flowToNextPage(id)
+}
+// A little room left at the foot of a page, so writing stops short of the edge like real paper.
+const PAGE_FOOT_MM = 12
+// After a line is added to a page, carry whatever no longer fits onto the next sheet, then keep
+// the caret on the line that was just written. This works whether the new line is at the bottom
+// of a full page or inserted into the middle of one, so a page never grows past a single sheet.
+function flowToNextPage(caretId: string) {
+  void nextTick(() => {
+    const caretEl = document.querySelector(`[data-block-id="${CSS.escape(caretId)}"]`) as HTMLElement | null
+    const pageEl = caretEl?.closest('.note-page') as HTMLElement | null
+    if (!pageEl) return
+    const limit = pageEl.clientHeight - (PAGE_FOOT_MM * pageEl.clientWidth) / 210
+    const top = pageEl.getBoundingClientRect().top
+    const blocks = Array.from(pageEl.querySelectorAll('.text-layer > [data-block-id]')) as HTMLElement[]
+    // Never move a lone first block, so a block taller than a page cannot loop off it forever.
+    for (let j = 1; j < blocks.length; j++) {
+      if (blocks[j].getBoundingClientRect().bottom - top > limit) {
+        documentStore.movePageTail(blocks[j].getAttribute('data-block-id')!)
+        // Focus the caret line directly once the layout has re-rendered, rather than through
+        // the shared focus request, which would not fire again for a line already asked for.
+        void nextTick(() => focusBlockCaret(caretId, 0))
+        return
+      }
+    }
+  })
+}
+// Put the caret at a character offset within a block's editable, wherever the block now lives.
+function focusBlockCaret(id: string, offset: number) {
+  const el = document.querySelector(`[data-block-id="${CSS.escape(id)}"]`) as HTMLElement | null
+  const editable = (el?.classList.contains('editable') ? el : el?.querySelector('.editable')) as HTMLElement | null
+  if (!editable) return
+  editable.focus()
+  const selection = window.getSelection()
+  const range = document.createRange()
+  let remaining = offset
+  const walker = document.createTreeWalker(editable, NodeFilter.SHOW_TEXT)
+  let node = walker.nextNode()
+  while (node) {
+    const length = (node.textContent ?? '').split('​').join('').length
+    if (remaining <= length) {
+      range.setStart(node, Math.min(remaining, node.textContent?.length ?? 0))
+      range.collapse(true)
+      selection?.removeAllRanges()
+      selection?.addRange(range)
+      return
+    }
+    remaining -= length
+    node = walker.nextNode()
+  }
+  range.selectNodeContents(editable)
+  range.collapse(true)
+  selection?.removeAllRanges()
+  selection?.addRange(range)
 }
 // Each pasted line becomes its own paragraph after this one, so a copied block of lines lands
 // as a run of paragraphs rather than a wall of text in one.
@@ -180,6 +236,31 @@ function onParagraphPasteLines(block: Extract<Block, { type: 'text' }>, lines: s
     documentStore.setRuns(afterId, [{ text: line }])
   }
   pendingFocus.value = { key: `text:${afterId}` }
+  // Paste can drop many lines at once and overrun the page; flow the overflow onto the next.
+  flowPageRepeatedly(afterId)
+}
+// Paste and other bulk changes can push several lines off a page at once, so the overflow is
+// flowed onto the next page again and again until the page fits within a single sheet.
+function flowPageRepeatedly(caretId: string, guard = 0) {
+  if (guard > 40) return
+  void nextTick(() => {
+    const caretEl = document.querySelector(`[data-block-id="${CSS.escape(caretId)}"]`) as HTMLElement | null
+    const pageEl = caretEl?.closest('.note-page') as HTMLElement | null
+    if (!pageEl) return
+    const limit = pageEl.clientHeight - (PAGE_FOOT_MM * pageEl.clientWidth) / 210
+    const top = pageEl.getBoundingClientRect().top
+    const blocks = Array.from(pageEl.querySelectorAll('.text-layer > [data-block-id]')) as HTMLElement[]
+    for (let j = 1; j < blocks.length; j++) {
+      if (blocks[j].getBoundingClientRect().bottom - top > limit) {
+        documentStore.movePageTail(blocks[j].getAttribute('data-block-id')!)
+        void nextTick(() => {
+          focusBlockCaret(caretId, 0)
+          flowPageRepeatedly(caretId, guard + 1)
+        })
+        return
+      }
+    }
+  })
 }
 // Lay a pasted block out by its sections: a lone line becomes a red heading, a run of lines
 // becomes a numbered list under it, numbering restarting for each list, so a copied set of
@@ -238,7 +319,16 @@ function onParagraphMergeBack(block: Extract<Block, { type: 'text' }>, runs: Tex
   if (target) {
     documentStore.removeBlock(block.id)
     pendingFocus.value = target
-  } else if (plainText(runs).trim() === '' && props.page.blocks.findIndex((b) => b.id === block.id) > 0) {
+    return
+  }
+  // The first line of a page: backspace here joins it onto the page above, and a page left
+  // empty gives its space back. The caret rests where the two lines meet on the new page.
+  const up = documentStore.mergeToPrevPageEnd(block.id, runs)
+  if (up) {
+    void nextTick(() => focusBlockCaret(up.blockId, up.offset))
+    return
+  }
+  if (plainText(runs).trim() === '' && props.page.blocks.findIndex((b) => b.id === block.id) > 0) {
     documentStore.removeBlock(block.id)
   }
 }
