@@ -32,6 +32,7 @@ import GraphView from './ui/GraphView.vue'
 import PwaPrompts from './ui/PwaPrompts.vue'
 import StoragePanel from './ui/StoragePanel.vue'
 import LocalAiSheet from './ui/LocalAiSheet.vue'
+import StudyPanel from './ui/StudyPanel.vue'
 import NotesChat from './ui/NotesChat.vue'
 import FindBar from './ui/FindBar.vue'
 import { APP_DOMAIN } from './brand'
@@ -76,6 +77,7 @@ const showLinks = ref(false)
 const showGraph = ref(false)
 const showStorage = ref(false)
 const showLocalAi = ref(false)
+const showStudy = ref(false)
 const showChat = ref(false)
 const showFind = ref(false)
 
@@ -681,6 +683,13 @@ const commands = computed<Command[]>(() => [
     run: () => (showChat.value = true),
   },
   {
+    id: 'study',
+    title: 'Study',
+    hint: 'flashcards, spaced repetition',
+    icon: 'cards',
+    run: () => (showStudy.value = true),
+  },
+  {
     id: 'local-ai',
     title: 'On-device AI',
     hint: 'key-free AI on your GPU',
@@ -930,6 +939,9 @@ function addPage() {
                 <button class="menu-item" @click="showCompose = true">
                   <Icon name="wand" :size="16" /><span>Write with AI</span>
                 </button>
+                <button class="menu-item" @click="showStudy = true">
+                  <Icon name="cards" :size="16" /><span>Study — flashcards</span>
+                </button>
                 <div class="sep" />
                 <button class="menu-item" @click="importInput?.click()">
                   <Icon name="file" :size="16" /><span>Import a document</span>
@@ -1068,6 +1080,8 @@ function addPage() {
     <StoragePanel v-if="showStorage" @close="showStorage = false" />
 
     <LocalAiSheet v-if="showLocalAi" @close="showLocalAi = false" />
+
+    <StudyPanel v-if="showStudy" @close="showStudy = false" />
 
     <!-- A floating button to chat with your notes, kept out of the crowded top bar. It tucks
          away while the chat, the home screen, or a full-screen overlay is open. -->
