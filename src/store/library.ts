@@ -7,7 +7,15 @@ import type { LibraryEntry, NoteDocument } from '@/types'
 import { blankDocument, noteFromTemplate } from '@/content/blankDocument'
 import { uid } from '@/util/id'
 import { useDocument } from './document'
-import { loadNote, saveNote, deleteNote as removeNote, deleteBlob } from './persistence'
+import {
+  loadNote,
+  saveNote,
+  deleteNote as removeNote,
+  deleteBlob,
+  exportAll,
+  importAll,
+  loadLibrary,
+} from './persistence'
 
 interface LibraryState {
   entries: LibraryEntry[]
@@ -130,6 +138,31 @@ export const useLibrary = defineStore('library', {
       if (!entry) return
       const tags = entry.tags ?? []
       entry.tags = tags.includes(clean) ? tags.filter((t) => t !== clean) : [...tags, clean]
+    },
+    // Write the whole library out to a file the writer can keep or move to another device.
+    async exportBackup() {
+      await this.parkCurrent()
+      const data = await exportAll()
+      const blob = new Blob([JSON.stringify(data)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const stamp = new Date(Date.now()).toISOString().slice(0, 10)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `handwriting-notes-backup-${stamp}.json`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    },
+    // Restore a backup file, merging it in, then refresh the list so the restored notes appear.
+    async importBackup(file: File): Promise<boolean> {
+      try {
+        const data = JSON.parse(await file.text())
+        if (!data || typeof data !== 'object' || !Array.isArray(data.notes)) return false
+        await importAll(data)
+        this.entries = await loadLibrary()
+        return true
+      } catch {
+        return false
+      }
     },
   },
 })

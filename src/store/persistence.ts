@@ -70,6 +70,42 @@ export async function loadAllNotes(): Promise<NoteDocument[]> {
   return all.filter(isValidDocument)
 }
 
+// A full, portable backup of the library: every note, the list, and the attachment blobs as
+// base64. API keys are never included, so a backup is safe to store or move. Returns a plain
+// object ready to be written to a file.
+export async function exportAll(): Promise<object> {
+  const { blobToBase64 } = await import('@/ai/attachmentEncoding')
+  const database = await db()
+  const notes = (await database.getAll('document')).filter(isValidDocument)
+  const library = (await database.get('meta', LIBRARY_KEY)) ?? []
+  const keys = await database.getAllKeys('blobs')
+  const blobs: { key: string; mime: string; data: string }[] = []
+  for (const key of keys) {
+    const blob = await database.get('blobs', key as string)
+    if (blob) blobs.push({ key: key as string, mime: blob.type, data: await blobToBase64(blob) })
+  }
+  return { app: 'handwriting-notes', version: 1, exportedAt: Date.now(), notes, library, blobs }
+}
+
+// Restore a backup, merging it into whatever is already saved: notes and blobs are written by id
+// (a matching id is overwritten), and library rows are merged so nothing already there is lost.
+export async function importAll(data: {
+  notes?: NoteDocument[]
+  library?: LibraryEntry[]
+  blobs?: { key: string; mime: string; data: string }[]
+}): Promise<void> {
+  const database = await db()
+  for (const note of data.notes ?? []) if (isValidDocument(note)) await database.put('document', plain(note), note.id)
+  const existing = ((await database.get('meta', LIBRARY_KEY)) ?? []) as LibraryEntry[]
+  const byId = new Map(existing.map((e) => [e.id, e]))
+  for (const e of data.library ?? []) byId.set(e.id, e)
+  await database.put('meta', plain([...byId.values()]), LIBRARY_KEY)
+  for (const b of data.blobs ?? []) {
+    const bytes = Uint8Array.from(atob(b.data), (c) => c.charCodeAt(0))
+    await database.put('blobs', new Blob([bytes], { type: b.mime }), b.key)
+  }
+}
+
 export async function saveNote(doc: NoteDocument): Promise<void> {
   await (await db()).put('document', plain(doc), doc.id)
 }

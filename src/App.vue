@@ -84,6 +84,16 @@ async function newNote() {
   await library.createNote('blank')
 }
 
+// Restore a backup file the writer picks, then reopen the most recent note so the restore shows.
+const backupInput = ref<HTMLInputElement | null>(null)
+async function onRestorePicked(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  ;(event.target as HTMLInputElement).value = ''
+  if (!file) return
+  const ok = await library.importBackup(file)
+  if (ok && library.recent[0]) await library.openNote(library.recent[0].id)
+}
+
 // Drawer actions close the menu first, then run — so the page eases back before a sheet
 // or dialog takes over the screen.
 function drawerHome() {
@@ -426,6 +436,8 @@ const commands = computed<Command[]>(() => [
   { id: 'html', title: 'Export as HTML', icon: 'download', run: () => exportNoteAsText(documentStore.doc, 'html') },
   { id: 'png', title: 'Export page as image', icon: 'image', run: () => void savePageImage() },
   { id: 'keys', title: 'AI keys', icon: 'key', run: () => (showKey.value = true) },
+  { id: 'backup', title: 'Back up all notes to a file', icon: 'download', run: () => void library.exportBackup() },
+  { id: 'restore', title: 'Restore notes from a backup', icon: 'download', run: () => backupInput.value?.click() },
   { id: 'undo', title: 'Undo', hint: `${mod}Z`, icon: 'undo', run: () => documentStore.undo() },
   { id: 'redo', title: 'Redo', hint: `${shiftMod}Z`, icon: 'redo', run: () => documentStore.redo() },
   { id: 'theme-light', title: 'Theme: Light', icon: 'sun', run: () => settings.setTheme('light') },
@@ -799,6 +811,7 @@ function addPage() {
     <ApiKeyDialog v-if="showKey" @close="showKey = false" />
 
     <CommandPalette v-if="showPalette" :commands="commands" @close="showPalette = false" />
+    <input ref="backupInput" type="file" accept="application/json" style="display: none" @change="onRestorePicked" />
 
     <ShortcutsSheet v-if="showShortcuts" @close="showShortcuts = false" />
 
