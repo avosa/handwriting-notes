@@ -52,6 +52,32 @@ function editHeader(index: number, event: Event) {
   props.block.header[index] = (event.target as HTMLElement).innerText
   emit('change')
 }
+// A column's text alignment, defaulting to centre like the rest of the table.
+function colAlign(c: number): 'left' | 'center' | 'right' {
+  return props.block.align?.[c] ?? 'center'
+}
+// The style for a cell: the writing font, its ink, and the column's alignment. The cell is a
+// grid box, so the item is justified as well as the text, to align a single line either way.
+function cellStyle(c: number) {
+  const a = colAlign(c)
+  return {
+    fontFamily: props.fontStack,
+    color: props.ink,
+    textAlign: a,
+    justifyItems: a === 'left' ? 'start' : a === 'right' ? 'end' : 'center',
+  }
+}
+// The sort mark shown on a header: an up or down caret when this column is the one sorted.
+function sortMark(c: number): string {
+  const s = props.block.sort
+  return s && s.col === c ? (s.dir === 'asc' ? '▲' : '▼') : '↕'
+}
+// Cycle a column's alignment left, centre, right on each press.
+function cycleAlign(c: number) {
+  const order = ['left', 'center', 'right'] as const
+  const next = order[(order.indexOf(colAlign(c)) + 1) % order.length]
+  documentStore.setTableColumnAlign(props.block.id, c, next)
+}
 function editCell(r: number, c: number, event: Event) {
   // eslint-disable-next-line vue/no-mutating-props -- the block is a store-owned reactive cell edited in place
   props.block.rows[r][c] = (event.target as HTMLElement).innerText
@@ -86,7 +112,7 @@ function editCell(r: number, c: number, event: Event) {
         class="cell head"
         :contenteditable="editable"
         spellcheck="false"
-        :style="{ fontFamily: fontStack, color: ink }"
+        :style="cellStyle(c)"
         @focus="emit('focus')"
         @input="editHeader(c, $event)"
       >
@@ -99,7 +125,7 @@ function editCell(r: number, c: number, event: Event) {
           class="cell"
           :contenteditable="editable"
           spellcheck="false"
-          :style="{ fontFamily: fontStack, color: ink }"
+          :style="cellStyle(c)"
           @focus="emit('focus')"
           @input="editCell(r, c, $event)"
         >
@@ -110,17 +136,27 @@ function editCell(r: number, c: number, event: Event) {
 
     <!-- Dynamic controls, aligned by fraction so nothing shifts the grid. -->
     <template v-if="editable">
-      <button
-        v-for="c in cols"
-        :key="`dc${c}`"
-        class="ctl del-col"
-        :style="{ left: `${((c - 0.5) / cols) * 100}%` }"
-        :disabled="cols <= 1"
-        title="Delete column"
-        @click="documentStore.removeTableColumn(block.id, c - 1)"
-      >
-        <Icon name="close" :size="11" />
-      </button>
+      <div v-for="c in cols" :key="`hd${c}`" class="col-tools" :style="{ left: `${((c - 0.5) / cols) * 100}%` }">
+        <button
+          class="ctl mini sort"
+          :class="{ on: block.sort && block.sort.col === c - 1 }"
+          title="Sort by this column"
+          @click="documentStore.sortTableByColumn(block.id, c - 1)"
+        >
+          {{ sortMark(c - 1) }}
+        </button>
+        <button class="ctl mini align" :title="`Align ${colAlign(c - 1)}`" @click="cycleAlign(c - 1)">
+          {{ colAlign(c - 1) === 'left' ? '⇤' : colAlign(c - 1) === 'right' ? '⇥' : '⇔' }}
+        </button>
+        <button
+          class="ctl mini del"
+          :disabled="cols <= 1"
+          title="Delete column"
+          @click="documentStore.removeTableColumn(block.id, c - 1)"
+        >
+          <Icon name="close" :size="10" />
+        </button>
+      </div>
       <button
         v-for="r in bodyRows"
         :key="`dr${r}`"
@@ -186,23 +222,50 @@ function editCell(r: number, c: number, event: Event) {
 .table.editable:hover .ctl {
   opacity: 1;
 }
-.del-col,
 .del-row {
   width: 17px;
   height: 17px;
   background: var(--text-muted, #9a9aa8);
 }
-.del-col:hover,
 .del-row:hover {
   background: var(--danger, #b73b3a);
-}
-.del-col {
-  top: -21px;
-  transform: translateX(-50%);
 }
 .del-row {
   left: -21px;
   transform: translateY(-50%);
+}
+/* A small cluster of column tools sitting above each column: sort, align, delete. */
+.col-tools {
+  position: absolute;
+  top: -22px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  z-index: 3;
+}
+.table.editable:hover .col-tools {
+  opacity: 1;
+}
+.mini {
+  position: static;
+  width: 17px;
+  height: 17px;
+  border-radius: 5px;
+  font-size: 10px;
+  line-height: 1;
+  background: var(--text-muted, #9a9aa8);
+}
+.mini.on {
+  background: var(--accent, #4a72b0);
+}
+.mini.sort:hover,
+.mini.align:hover {
+  background: var(--accent, #4a72b0);
+}
+.mini.del:hover {
+  background: var(--danger, #b73b3a);
 }
 .ctl:disabled {
   opacity: 0;

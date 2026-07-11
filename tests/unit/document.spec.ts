@@ -442,6 +442,37 @@ describe('document store', () => {
     expect(block().summary[0].text).toBe('Why it changes')
   })
 
+  it('sorts a table by a column ascending then descending, numbers by value', () => {
+    const doc = useDocument()
+    const first = doc.doc.pages[0].blocks[0].id
+    const id = doc.addTable(first, 2, 3)
+    const table = () => doc.locate(id)!.block as Extract<Block, { type: 'table' }>
+    table().header = ['name', 'score']
+    table().rows = [
+      ['Bea', '9'],
+      ['Al', '10'],
+      ['Cy', '2'],
+    ]
+    doc.sortTableByColumn(id, 1)
+    // Ascending by number: 2, 9, 10 (not lexicographic 10, 2, 9).
+    expect(table().rows.map((r) => r[1])).toEqual(['2', '9', '10'])
+    expect(table().sort).toEqual({ col: 1, dir: 'asc' })
+    doc.sortTableByColumn(id, 1)
+    expect(table().rows.map((r) => r[1])).toEqual(['10', '9', '2'])
+    // Sorting a text column orders it alphabetically.
+    doc.sortTableByColumn(id, 0)
+    expect(table().rows.map((r) => r[0])).toEqual(['Al', 'Bea', 'Cy'])
+  })
+
+  it('sets a table column alignment, filling out the array', () => {
+    const doc = useDocument()
+    const first = doc.doc.pages[0].blocks[0].id
+    const id = doc.addTable(first, 3, 1)
+    const table = () => doc.locate(id)!.block as Extract<Block, { type: 'table' }>
+    doc.setTableColumnAlign(id, 2, 'right')
+    expect(table().align).toEqual(['center', 'center', 'right'])
+  })
+
   it('adds a math block, edits its LaTeX, and reaches it with find and replace', () => {
     const doc = useDocument()
     const first = doc.doc.pages[0].blocks[0].id

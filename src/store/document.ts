@@ -630,6 +630,37 @@ export const useDocument = defineStore('document', {
       loc.block.rows.splice(index, 1)
       this.touch()
     },
+    // Sort the body rows by a column, ascending on the first tap and descending on the next.
+    // Numbers sort by value and everything else by text, so a column of figures orders correctly.
+    sortTableByColumn(blockId: string, col: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'table' || col < 0 || col >= loc.block.header.length) return
+      const table = loc.block
+      const dir = table.sort && table.sort.col === col && table.sort.dir === 'asc' ? 'desc' : 'asc'
+      const compare = (a: string[], b: string[]) => {
+        const av = a[col] ?? ''
+        const bv = b[col] ?? ''
+        const an = Number(av)
+        const bn = Number(bv)
+        const numeric = av.trim() !== '' && bv.trim() !== '' && !Number.isNaN(an) && !Number.isNaN(bn)
+        const order = numeric ? an - bn : av.localeCompare(bv, undefined, { numeric: true, sensitivity: 'base' })
+        return dir === 'asc' ? order : -order
+      }
+      table.rows = [...table.rows].sort(compare)
+      table.sort = { col, dir }
+      this.touch()
+    },
+    // Set a column's text alignment, so figures can sit right and labels left.
+    setTableColumnAlign(blockId: string, col: number, align: 'left' | 'center' | 'right') {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'table' || col < 0 || col >= loc.block.header.length) return
+      const table = loc.block
+      const list = table.align ? [...table.align] : table.header.map(() => 'center' as const)
+      while (list.length < table.header.length) list.push('center')
+      list[col] = align
+      table.align = list
+      this.touch()
+    },
 
     // Callout boxes are added and removed as a set, and each box's lines the same way.
     addCalloutBox(blockId: string, at?: number) {

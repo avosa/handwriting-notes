@@ -185,6 +185,10 @@ export type Block =
       header: string[]
       rows: string[][]
       caption?: string
+      /** Which column the body rows are sorted by, and in which direction; unset means unsorted. */
+      sort?: { col: number; dir: 'asc' | 'desc' }
+      /** Per-column text alignment; a missing entry reads as centre, the table default. */
+      align?: ('left' | 'center' | 'right')[]
       float?: FloatPos
       scale?: FontScale
     }
