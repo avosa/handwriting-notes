@@ -6,6 +6,8 @@
 import { computed, ref } from 'vue'
 import type { PenType, TextRole } from '@/types'
 import { useDocument } from '@/store/document'
+import { putBlob } from '@/store/persistence'
+import { uid } from '@/util/id'
 import { useSettings } from '@/store/settings'
 import { penOrder, penProfile } from '@/tools/penTypes'
 import { toggleBold, toggleItalic, toggleUnderline, setTextColor, setHighlight, rememberSelection } from './marks'
@@ -85,6 +87,43 @@ function insertDiagram(key: string) {
 }
 function addPage() {
   documentStore.setActivePage(documentStore.addBlankPage())
+}
+
+// Roughly how many ruled lines the text column spans across its width, used to turn a
+// picture's shape into a height in whole lines so a full-width picture keeps its proportions.
+const COLUMN_RULES_ACROSS = 16
+
+const imageInput = ref<HTMLInputElement | null>(null)
+function pickImage() {
+  imageInput.value?.click()
+}
+// Read a picture's shape, keep its bytes locally, and drop it into the column after the
+// current line at a height that matches its proportions.
+async function onImagePicked(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !file.type.startsWith('image/')) return
+  const ratio = await imageRatio(file)
+  const key = `img_${uid()}`
+  await putBlob(key, file)
+  const heightRules = Math.max(4, Math.min(40, Math.round(COLUMN_RULES_ACROSS * ratio)))
+  documentStore.select(documentStore.insertImage(selectedId.value, key, file.name, heightRules))
+}
+function imageRatio(file: Blob): Promise<number> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      resolve(img.naturalWidth ? img.naturalHeight / img.naturalWidth : 0.6)
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      resolve(0.6)
+    }
+    img.src = url
+  })
 }
 </script>
 
@@ -195,6 +234,7 @@ function addPage() {
               <button class="menu-item" @click="insertCallouts()">
                 <Icon name="callout" :size="18" /><span>Callout boxes</span>
               </button>
+              <button class="menu-item" @click="pickImage()"><Icon name="image" :size="18" /><span>Image</span></button>
               <div class="menu-divider" />
               <div class="menu-label">Diagram</div>
               <button v-for="p in diagramPresets" :key="p.key" class="menu-item" @click="insertDiagram(p.key)">
@@ -205,6 +245,7 @@ function addPage() {
         </Popover>
 
         <button class="ghost" title="Add page" @click="addPage"><Icon name="pageAdd" :size="18" /></button>
+        <input ref="imageInput" type="file" accept="image/*" class="hidden-input" @change="onImagePicked" />
       </div>
     </template>
 
@@ -254,6 +295,9 @@ function addPage() {
 </template>
 
 <style scoped>
+.hidden-input {
+  display: none;
+}
 .dock {
   display: flex;
   align-items: center;

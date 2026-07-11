@@ -15,6 +15,7 @@ import { hashSeed } from '@/diagrams/wobble'
 import EditableText from './EditableText.vue'
 import TableBlock from './TableBlock.vue'
 import CalloutsBlock from './CalloutsBlock.vue'
+import ImageBlock from './ImageBlock.vue'
 import Diagram from '@/diagrams/Diagram.vue'
 
 const props = defineProps<{
@@ -303,14 +304,14 @@ function updateRuns(blockId: string, runs: TextRun[]) {
   documentStore.setRuns(blockId, runs)
 }
 
-// Drag the handle at a diagram's foot to make it taller or shorter, in whole ruled lines.
+// Drag the handle at a figure's foot to make it taller or shorter, in whole ruled lines.
 function startResize(blockId: string, fromRules: number, event: PointerEvent) {
   event.preventDefault()
   event.stopPropagation()
   const startY = event.clientY
   const perRule = lineHeightPx.value
   function onMove(move: PointerEvent) {
-    documentStore.setDiagramHeight(blockId, fromRules + (move.clientY - startY) / perRule)
+    documentStore.setFigureHeight(blockId, fromRules + (move.clientY - startY) / perRule)
   }
   function onUp() {
     window.removeEventListener('pointermove', onMove)
@@ -423,6 +424,24 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
           <span />
         </button>
       </div>
+
+      <div
+        v-else-if="block.type === 'image'"
+        class="image-slot"
+        :data-block-id="block.id"
+        :style="{ height: `${block.heightRules * lineHeightPx}px` }"
+        @click="onFocusBlock(block.id)"
+      >
+        <ImageBlock :blob-ref="block.blobRef" :alt="block.alt" />
+        <button
+          v-if="editable"
+          class="resize-handle"
+          title="Drag to resize"
+          @pointerdown="startResize(block.id, block.heightRules, $event)"
+        >
+          <span />
+        </button>
+      </div>
     </template>
   </div>
 </template>
@@ -501,9 +520,13 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
 .caption {
   margin-bottom: 2px;
 }
-.diagram-slot {
+.diagram-slot,
+.image-slot {
   position: relative;
   width: 100%;
+}
+.image-slot:hover .resize-handle {
+  opacity: 1;
 }
 /* A quiet grip at the foot of a figure; it appears on hover and drags the height. */
 .resize-handle {

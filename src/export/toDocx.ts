@@ -19,6 +19,7 @@ import type { Block, NoteDocument, Page, TextRole, TextRun } from '@/types'
 import { getPreset, ruleYs, type SheetPreset } from '@/paper/sheetSpec'
 import { getHandwriting } from '@/handwriting/registry'
 import { renderDiagram } from '@/diagrams/render'
+import { getBlob } from '@/store/persistence'
 import { hashSeed } from '@/diagrams/wobble'
 import { useSettings } from '@/store/settings'
 import { triggerDownload } from './toPdf'
@@ -26,6 +27,16 @@ import { triggerDownload } from './toPdf'
 const MM_TO_TWIP = 1440 / 25.4
 const twip = (v: number) => Math.round(v * MM_TO_TWIP)
 const px = (mmValue: number) => Math.round(mmValue * (96 / 25.4))
+
+// The image formats Word can embed, mapped from a blob's mime; anything else is left out
+// rather than embedded as the wrong kind.
+function imageKind(mime: string): 'png' | 'jpg' | 'gif' | 'bmp' | null {
+  if (mime.includes('png')) return 'png'
+  if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg'
+  if (mime.includes('gif')) return 'gif'
+  if (mime.includes('bmp')) return 'bmp'
+  return null
+}
 
 const ROLE_SIZE: Record<TextRole, number> = {
   title: 40,
@@ -233,6 +244,20 @@ async function blockToChildren(
       )
     out.push(new Table({ width: { size: px(colWidthMm) * 15, type: WidthType.DXA }, rows: [row] }))
     return out
+  }
+  if (block.type === 'image') {
+    const blob = await getBlob(block.blobRef)
+    const kind = blob && imageKind(blob.type)
+    if (!blob || !kind) return []
+    const data = new Uint8Array(await blob.arrayBuffer())
+    const imageHeightMm = block.heightRules * preset.rule.spacing * preset.text.leadingRules
+    return [
+      new Paragraph({
+        children: [
+          new ImageRun({ data, type: kind, transformation: { width: px(colWidthMm), height: px(imageHeightMm) } }),
+        ],
+      }),
+    ]
   }
   // diagram
   const heightMm = block.heightRules * preset.rule.spacing * preset.text.leadingRules

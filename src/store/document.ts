@@ -536,12 +536,20 @@ export const useDocument = defineStore('document', {
       this.touch()
     },
 
-    // A diagram is resized by the number of ruled lines it spans, kept within sane bounds.
-    setDiagramHeight(blockId: string, heightRules: number) {
+    // A figure is resized by the number of ruled lines it spans, kept within sane bounds. Both
+    // drawn diagrams and placed pictures stand a whole number of lines tall.
+    setFigureHeight(blockId: string, heightRules: number) {
       const loc = this.locate(blockId)
-      if (!loc || loc.block.type !== 'diagram') return
+      if (!loc || (loc.block.type !== 'diagram' && loc.block.type !== 'image')) return
       loc.block.heightRules = Math.max(4, Math.min(40, Math.round(heightRules)))
       this.touch()
+    },
+    // Drop a picture into the writing column after a line, standing as tall as it is asked to.
+    insertImage(afterBlockId: string | null, blobRef: string, alt: string, heightRules: number): string {
+      const block: Block = { id: uid('b'), type: 'image', blobRef, alt, heightRules }
+      const id = this.insertAfter(afterBlockId, block)
+      this.select(id)
+      return id
     },
     // How large a block's writing is drawn. One dial covers every kind of block: a
     // paragraph, a list, a table's cells, a callout's lines, or a diagram's letters.

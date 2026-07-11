@@ -168,9 +168,9 @@ describe('dynamic diagrams', () => {
       heightRules: 12,
       spec: { kind: 'triangle', direction: 'up', topLabel: 'A', bottomLabel: 'B', color: '#4A72B0' },
     })
-    doc.setDiagramHeight(id, 100)
+    doc.setFigureHeight(id, 100)
     expect((doc.locate(id)!.block as { heightRules: number }).heightRules).toBe(40)
-    doc.setDiagramHeight(id, 1)
+    doc.setFigureHeight(id, 1)
     expect((doc.locate(id)!.block as { heightRules: number }).heightRules).toBe(4)
   })
 

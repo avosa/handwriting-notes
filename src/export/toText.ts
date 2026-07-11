@@ -76,6 +76,9 @@ function blockLines(block: Block, d: Dress, kind: 'text' | 'md' | 'html'): strin
       out.push(block.header.join('\t'))
       for (const row of block.rows) out.push(row.join('\t'))
     }
+  } else if (block.type === 'image') {
+    const label = block.alt?.trim() || 'image'
+    out.push(kind === 'html' ? `<p><em>[${escapeHtml(label)}]</em></p>` : `[${label}]`)
   } else if (block.type === 'callouts') {
     for (const box of block.boxes) {
       const heading = d.runs(box.heading).trim()

@@ -190,6 +190,19 @@ describe('document store', () => {
     expect(doc.lineSelection).toBeNull()
   })
 
+  it('drops a picture into the column after a line and resizes it within bounds', () => {
+    const doc = useDocument()
+    const first = doc.doc.pages[0].blocks[0].id
+    const id = doc.insertImage(first, 'img_1', 'a shell', 10)
+    const block = doc.locate(id)!.block
+    expect(block.type).toBe('image')
+    expect(block.type === 'image' && block.blobRef).toBe('img_1')
+    doc.setFigureHeight(id, 100)
+    expect((doc.locate(id)!.block as { heightRules: number }).heightRules).toBe(40)
+    doc.setFigureHeight(id, 1)
+    expect((doc.locate(id)!.block as { heightRules: number }).heightRules).toBe(4)
+  })
+
   it('fills a stroke by id', () => {
     const doc = useDocument()
     doc.addStroke(0, { id: 's1', tool: 'fine', color: '#000', width: 1, points: [{ x: 0, y: 0, pressure: 1 }] })

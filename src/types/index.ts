@@ -178,6 +178,15 @@ export type Block =
     }
   | { id: string; type: 'callouts'; boxes: CalloutBox[]; caption?: string; float?: FloatPos; scale?: FontScale }
   | { id: string; type: 'diagram'; spec: DiagramSpec; heightRules: number; float?: FloatPos; scale?: FontScale }
+  | {
+      id: string
+      type: 'image'
+      blobRef: string
+      alt?: string
+      heightRules: number
+      float?: FloatPos
+      scale?: FontScale
+    }
 
 /**
  * A line of writing placed anywhere on the page, the way you would jot a note beside a
