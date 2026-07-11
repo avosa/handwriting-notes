@@ -459,6 +459,26 @@ export const useDocument = defineStore('document', {
     stopComment() {
       this.activeCommentId = null
     },
+    // Drop an AI summary in at the top of the note: a "Summary" heading followed by its points as
+    // a bulleted list, so a quick recap sits above the writing it distils.
+    prependSummary(text: string) {
+      const lines = text
+        .split('\n')
+        .map((l) => l.replace(/^\s*[-*•]\s*/, '').trim())
+        .filter(Boolean)
+      if (!lines.length) return
+      const page = this.doc.pages[0]
+      if (!page) return
+      const list: Block = { id: uid('b'), type: 'list', ordered: false, items: lines.map((l) => [{ text: l }]) }
+      const heading: Block = {
+        id: uid('b'),
+        type: 'text',
+        text: { id: uid('t'), role: 'heading', runs: [{ text: 'Summary' }] },
+      }
+      page.blocks.unshift(list)
+      page.blocks.unshift(heading)
+      this.touch()
+    },
     // A collapsible section: a heading that folds a body of notes away, opening on a chevron.
     addToggle(blockId: string | null): string {
       const id = this.insertAfter(blockId, {

@@ -14,6 +14,7 @@ import { parseEdits, isEditReply, type EditOp } from '@/ai/editOps'
 import { commonPrefixLength } from '@/util/textDiff'
 import { prefersReducedMotion } from '@/util/motion'
 import { plainText } from '@/ui/richText'
+import { toPlainText } from '@/export/toText'
 import { uid } from '@/util/id'
 import { loadApiKey } from '@/store/persistence'
 import { useDocument } from '@/store/document'
@@ -263,6 +264,10 @@ async function applyEdits(store: DocStore, edits: EditOp[], signal: AbortSignal)
 
 const REWRITE_SYSTEM =
   'Rewrite the one line of notes the user gives, following their instruction. Reply with only the rewritten line, no quotes and no preamble. Never use a hyphen or dash as punctuation.'
+const SUMMARY_SYSTEM =
+  'Summarise the notes the user gives into 3 to 6 short bullet points capturing the key ideas. Reply with only the points, each on its own line starting with "- ", no heading and no preamble. Never use a hyphen or dash as punctuation within a point.'
+const TITLE_SYSTEM =
+  'Give a short, specific title of 3 to 6 words for the notes the user gives. Reply with only the title: no quotes, no preamble, no trailing punctuation.'
 
 // A failed fetch throws a TypeError with no useful text; the provider's own errors already
 // read well, so only the bare network case needs dressing up.
@@ -460,5 +465,76 @@ export function useAi() {
     }
   }
 
-  return { generating, phase, providerName, error, generate, stop, rewriteLine, refineBlock, refining }
+  // Summarise the open note into a few points and drop them in at the top under a Summary heading.
+  async function summarizeNote(): Promise<boolean> {
+    error.value = null
+    const text = toPlainText(documentStore.doc).trim()
+    if (!text) {
+      error.value = 'Write some notes to summarise first.'
+      return false
+    }
+    const provider = getProvider(settings.activeProvider)
+    const key = await loadApiKey(provider.id)
+    if (!key) {
+      error.value = `Add your ${provider.vendor} API key first, using the key button.`
+      return false
+    }
+    refining.value = true
+    try {
+      const out = await provider.complete(SUMMARY_SYSTEM, text, key, 800)
+      if (!out?.trim()) throw new Error(`${provider.name} returned an empty summary.`)
+      documentStore.prependSummary(stripDashes(out))
+      return true
+    } catch (e) {
+      error.value = reason(e, provider.name, 'The note could not be summarised.')
+      return false
+    } finally {
+      refining.value = false
+    }
+  }
+
+  // Read the note and set a short, specific title from it.
+  async function autoTitle(): Promise<boolean> {
+    error.value = null
+    const text = toPlainText(documentStore.doc).trim()
+    if (!text) {
+      error.value = 'Write some notes to title first.'
+      return false
+    }
+    const provider = getProvider(settings.activeProvider)
+    const key = await loadApiKey(provider.id)
+    if (!key) {
+      error.value = `Add your ${provider.vendor} API key first, using the key button.`
+      return false
+    }
+    refining.value = true
+    try {
+      const out = await provider.complete(TITLE_SYSTEM, text, key, 60)
+      const title = stripDashes(out ?? '')
+        .trim()
+        .replace(/^["']|["']$/g, '')
+      if (!title) throw new Error(`${provider.name} returned an empty title.`)
+      documentStore.setTitle(title)
+      return true
+    } catch (e) {
+      error.value = reason(e, provider.name, 'A title could not be made.')
+      return false
+    } finally {
+      refining.value = false
+    }
+  }
+
+  return {
+    generating,
+    phase,
+    providerName,
+    error,
+    generate,
+    stop,
+    rewriteLine,
+    refineBlock,
+    refining,
+    summarizeNote,
+    autoTitle,
+  }
 }

@@ -39,7 +39,7 @@ import Popover from './ui/Popover.vue'
 const documentStore = useDocument()
 const library = useLibrary()
 const settings = useSettings()
-const { generating, phase, providerName, error: aiError, generate, stop } = useAi()
+const { generating, phase, providerName, error: aiError, generate, stop, summarizeNote, autoTitle } = useAi()
 const { resolved: resolvedTheme } = useTheme()
 
 const mode = ref<'write' | 'draw'>('write')
@@ -415,6 +415,8 @@ const commands = computed<Command[]>(() => [
   { id: 'new', title: 'New note', icon: 'plus', run: () => void newNote() },
   { id: 'home', title: 'All notes', icon: 'grid', run: () => (showHome.value = true) },
   { id: 'compose', title: 'Write with AI', icon: 'wand', run: () => (showCompose.value = true) },
+  { id: 'summarize', title: 'Summarise this note (AI)', icon: 'wand', run: () => void summarizeNote() },
+  { id: 'autotitle', title: 'Title this note (AI)', icon: 'wand', run: () => void autoTitle() },
   { id: 'write', title: 'Write mode', icon: 'write', run: () => (mode.value = 'write') },
   { id: 'draw', title: 'Draw mode', icon: 'draw', run: () => (mode.value = 'draw') },
   { id: 'pdf', title: 'Export as PDF', icon: 'download', run: () => void saveAs('pdf') },

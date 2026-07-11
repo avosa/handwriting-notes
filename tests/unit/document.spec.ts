@@ -534,6 +534,15 @@ describe('document store', () => {
     expect(doc.commentOf(first)).toBeUndefined()
   })
 
+  it('prepends an AI summary as a heading and a bulleted list', () => {
+    const doc = useDocument()
+    doc.prependSummary('- first point\n- second point')
+    const blocks = doc.doc.pages[0].blocks
+    expect(blocks[0].type === 'text' && blocks[0].text.role).toBe('heading')
+    expect(blocks[0].type === 'text' && blocks[0].text.runs[0].text).toBe('Summary')
+    expect(blocks[1].type === 'list' && blocks[1].items.map((i) => i[0].text)).toEqual(['first point', 'second point'])
+  })
+
   it('fills a stroke by id', () => {
     const doc = useDocument()
     doc.addStroke(0, { id: 's1', tool: 'fine', color: '#000', width: 1, points: [{ x: 0, y: 0, pressure: 1 }] })
