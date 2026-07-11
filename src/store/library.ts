@@ -4,7 +4,8 @@
 // this keeps that in step with the list and with what is saved on disk.
 import { defineStore } from 'pinia'
 import type { Folder, LibraryEntry, NoteDocument, SavedSearch } from '@/types'
-import { blankDocument, noteFromTemplate } from '@/content/blankDocument'
+import { blankDocument, noteFromTemplate, documentFromBlocks } from '@/content/blankDocument'
+import type { Block } from '@/types'
 import { uid } from '@/util/id'
 import { APP_SLUG } from '@/brand'
 import { useDocument } from './document'
@@ -125,6 +126,18 @@ export const useLibrary = defineStore('library', {
       const entry = entryFor(doc)
       if (folderId) entry.folderId = folderId
       this.entries.push(entry)
+      documentStore.hydrate(doc)
+      this.currentId = doc.id
+      return doc.id
+    },
+    // Bring in a note built from blocks that came from outside — an imported document, a paste, or
+    // an agent — as a new note, opened. The single seam every ingestion path lands on.
+    async importNote(title: string, blocks: Block[]): Promise<string> {
+      const documentStore = useDocument()
+      await this.parkCurrent()
+      const doc = documentFromBlocks(title, blocks)
+      await saveNote(doc)
+      this.entries.push(entryFor(doc))
       documentStore.hydrate(doc)
       this.currentId = doc.id
       return doc.id

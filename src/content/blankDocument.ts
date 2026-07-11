@@ -26,6 +26,12 @@ export function blankDocument(): NoteDocument {
   return document('Untitled notes', [textBlock('body')])
 }
 
+// A document built from blocks that came from somewhere else — an imported file, a pasted page,
+// or an agent — under a given title. Always has at least one line so it is never empty to edit.
+export function documentFromBlocks(title: string, blocks: Block[]): NoteDocument {
+  return document(title.trim() || 'Imported note', blocks.length ? blocks : [textBlock('body')])
+}
+
 export interface TemplateInfo {
   key: string
   name: string
