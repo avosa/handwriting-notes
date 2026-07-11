@@ -28,6 +28,18 @@ export function localReady(mlcId: string): boolean {
   return localStatus.value === 'ready' && loadedModel.value === mlcId && !!engine
 }
 
+// Whether a model's weights are already on this device, cached from an earlier download. This
+// survives a page reload (the in-memory load state does not), so the UI can show a model as ready
+// to use without asking for the download again.
+export async function isModelCached(mlcId: string): Promise<boolean> {
+  try {
+    const { hasModelInCache } = await import('@mlc-ai/web-llm')
+    return await hasModelInCache(mlcId)
+  } catch {
+    return false
+  }
+}
+
 // Load a model (or switch to a different one), reporting progress. The engine and its worker are
 // created once and reused; switching models reloads weights in place.
 async function ensureLoaded(mlcId: string): Promise<void> {
