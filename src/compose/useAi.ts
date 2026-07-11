@@ -278,11 +278,13 @@ function reason(e: unknown, providerName: string, fallback: string): string {
   return e instanceof Error ? e.message : fallback
 }
 
-let controller: AbortController | null = null
-
 export function useAi() {
   const documentStore = useDocument()
   const settings = useSettings()
+  // Each user of the AI keeps its own in-flight request, so aborting one (the compose sheet, a
+  // line rewrite, or the chat) never cancels another's. This is created per instance rather than
+  // shared, so concurrent AI actions do not stomp each other's cancellation.
+  let controller: AbortController | null = null
   const generating = ref(false)
   const error = ref<string | null>(null)
   // 'thinking' while the reply is being worked out, 'writing' once words reach the paper, so

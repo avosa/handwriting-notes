@@ -22,53 +22,32 @@ type OutMessage =
 const post = (message: OutMessage) => (self as unknown as Worker).postMessage(message)
 
 let extractor: FeatureExtractionPipeline | null = null
-let device: 'webgpu' | 'wasm' = 'wasm'
 let loading: Promise<FeatureExtractionPipeline> | null = null
 
-// Whether this worker can reach a WebGPU adapter. When it cannot, WASM carries the work.
-async function hasWebGPU(): Promise<boolean> {
-  try {
-    const gpu = (navigator as unknown as { gpu?: { requestAdapter(): Promise<unknown> } }).gpu
-    if (!gpu) return false
-    return (await gpu.requestAdapter()) != null
-  } catch {
-    return false
-  }
-}
-
-function makePipeline(dev: 'webgpu' | 'wasm'): Promise<FeatureExtractionPipeline> {
-  return pipeline('feature-extraction', MODEL, {
-    device: dev,
-    // A quantised model keeps the one-time download small and runs well on both backends.
-    dtype: 'q8',
-    progress_callback: (p: { status: string; loaded?: number; total?: number }) => {
-      if (p.status === 'progress' && p.total) post({ type: 'progress', loaded: p.loaded ?? 0, total: p.total })
-    },
-  }) as Promise<FeatureExtractionPipeline>
-}
-
-// Load the model the first time it is needed, reporting download progress, and remember it. The
-// GPU is preferred, but some GPUs fail to build the model even when WebGPU is present — so a
-// failed GPU load falls back to WASM rather than giving up, which keeps embedding (and therefore
-// semantic search and chat) working on every device.
+// Load the sentence model the first time it is needed, reporting download progress, and remember
+// it. Embeddings run on WASM: the model is tiny, WASM is fast enough for it, and it runs reliably
+// on every device without competing with the (larger) generation model for the GPU. The heavy
+// generation model is the one that uses WebGPU. If loading fails, the pending state is cleared so a
+// later request tries again rather than being stuck on a dead promise.
 async function load(): Promise<FeatureExtractionPipeline> {
   if (extractor) return extractor
   if (loading) return loading
   loading = (async () => {
-    if (await hasWebGPU()) {
-      try {
-        extractor = await makePipeline('webgpu')
-        device = 'webgpu'
-      } catch {
-        extractor = await makePipeline('wasm')
-        device = 'wasm'
-      }
-    } else {
-      extractor = await makePipeline('wasm')
-      device = 'wasm'
+    try {
+      extractor = (await pipeline('feature-extraction', MODEL, {
+        device: 'wasm',
+        // A quantised model keeps the one-time download small and runs well on WASM.
+        dtype: 'q8',
+        progress_callback: (p: { status: string; loaded?: number; total?: number }) => {
+          if (p.status === 'progress' && p.total) post({ type: 'progress', loaded: p.loaded ?? 0, total: p.total })
+        },
+      })) as FeatureExtractionPipeline
+      post({ type: 'ready', device: 'wasm' })
+      return extractor
+    } catch (error) {
+      loading = null
+      throw error
     }
-    post({ type: 'ready', device })
-    return extractor
   })()
   return loading
 }
