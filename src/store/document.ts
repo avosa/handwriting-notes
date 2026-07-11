@@ -307,12 +307,19 @@ export const useDocument = defineStore('document', {
       this.selectedBlockId = blockId
       // Moving into a block means the caret is no longer in a free note.
       this.selectedNote = null
+      // Keep the active page in step with the caret, so a toolbar insert lands on this page.
+      if (blockId) {
+        const at = this.locate(blockId)
+        if (at) this.activePageIndex = at.pageIndex
+      }
     },
-    // The caret has moved into a free note; block-scoped formatting should target it now.
+    // The caret has moved into a free note; block-scoped formatting should target it now, and the
+    // note's page becomes active so a toolbar insert lands here rather than on an earlier page.
     selectNote(pageIndex: number, id: string) {
       this.allSelected = false
       this.selectedBlockId = null
       this.selectedNote = { pageIndex, id }
+      this.activePageIndex = pageIndex
     },
     locate(blockId: string): BlockLocation | null {
       for (let p = 0; p < this.doc.pages.length; p++) {
