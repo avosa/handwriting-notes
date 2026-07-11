@@ -3,26 +3,36 @@
 // row of templates, then the notes as ruled cards under Recent and Favourites, each
 // with a star and a small menu to open, rename, duplicate, or delete. Choosing a note
 // or a template opens it in the editor.
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useLibrary } from '@/store/library'
 import { templates } from '@/content/blankDocument'
+import { buildSearchIndex, useNoteSearch } from './noteSearch'
 import NoteThumbnail from './NoteThumbnail.vue'
 import Icon from '@/ui/Icon.vue'
 import Popover from '@/ui/Popover.vue'
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 const library = useLibrary()
+const { matches, snippet } = useNoteSearch()
 
 const tab = ref<'recent' | 'favorites'>('recent')
 const query = ref('')
 const renamingId = ref<string | null>(null)
 const renameInput = ref<HTMLInputElement | null>(null)
 
+// Read every note's words into the search index when the library opens, so a search reaches note
+// contents and not only titles.
+onMounted(() => void buildSearchIndex())
+
 const shown = computed(() => {
   const list = tab.value === 'favorites' ? library.favorites : library.recent
-  const q = query.value.trim().toLowerCase()
-  return q ? list.filter((e) => e.title.toLowerCase().includes(q)) : list
+  const q = query.value.trim()
+  return q ? list.filter((e) => matches(e.id, e.title, q)) : list
 })
+// A short excerpt for a searched note, shown under its title so a match is explained.
+function excerptFor(id: string): string {
+  return query.value.trim() ? snippet(id, query.value) : ''
+}
 
 function when(ts: number): string {
   const diff = Date.now() - ts
@@ -65,7 +75,7 @@ function commitRename(id: string) {
       </button>
       <div class="search">
         <Icon name="search" :size="16" />
-        <input v-model="query" placeholder="Search notes" spellcheck="false" />
+        <input v-model="query" placeholder="Search notes and their contents" spellcheck="false" />
       </div>
     </header>
 
@@ -139,6 +149,7 @@ function commitRename(id: string) {
               </Popover>
             </div>
             <span class="date">{{ when(e.updatedAt) }}</span>
+            <p v-if="excerptFor(e.id)" class="excerpt">{{ excerptFor(e.id) }}</p>
           </div>
         </div>
 
@@ -403,6 +414,17 @@ h2 {
 .date {
   font-size: 12px;
   color: var(--text-muted);
+}
+.excerpt {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .menu {
   display: flex;

@@ -63,6 +63,13 @@ export async function loadNote(id: string): Promise<NoteDocument | undefined> {
   return isValidDocument(doc) ? doc : undefined
 }
 
+// Every saved note, for building the local search index. Only well-formed notes come back, so a
+// stray record cannot break a search over the library.
+export async function loadAllNotes(): Promise<NoteDocument[]> {
+  const all = await (await db()).getAll('document')
+  return all.filter(isValidDocument)
+}
+
 export async function saveNote(doc: NoteDocument): Promise<void> {
   await (await db()).put('document', plain(doc), doc.id)
 }
