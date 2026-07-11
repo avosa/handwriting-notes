@@ -7,7 +7,16 @@ import type { TextRole } from '@/types'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
 import { useAi } from '@/compose/useAi'
-import { toggleBold, toggleItalic, toggleUnderline, setTextColor, rememberSelection, convertCase } from './marks'
+import {
+  toggleBold,
+  toggleItalic,
+  toggleUnderline,
+  setTextColor,
+  rememberSelection,
+  convertCase,
+  setLink,
+  clearLink,
+} from './marks'
 import Icon from '@/ui/Icon.vue'
 import Popover from '@/ui/Popover.vue'
 import ColorPicker from '@/ui/ColorPicker.vue'
@@ -26,6 +35,10 @@ const y = ref(0)
 const asking = ref(false)
 const askText = ref('')
 const askInput = ref<HTMLInputElement | null>(null)
+// Linking keeps the menu open while the address is typed, holding the selection it will link.
+const linking = ref(false)
+const linkText = ref('')
+const linkInput = ref<HTMLInputElement | null>(null)
 // The exact line to rewrite, captured as its editable element so the reply can drop back
 // into whatever it is: a paragraph, a list item, a table cell, or a free note.
 let litLine: HTMLElement | null = null
@@ -58,7 +71,7 @@ function insideEditor(node: Node | null): boolean {
 }
 
 function update() {
-  if (asking.value) return
+  if (asking.value || linking.value) return
   // When the whole note is selected, its own bar takes over; the per-selection menu stands
   // down so the two never crowd the screen together.
   if (documentStore.allSelected) {
@@ -146,6 +159,34 @@ function cancelAsk() {
   error.value = null
   litOff()
 }
+
+async function startLink() {
+  // Hold the selection before focus moves to the address field so the link lands on it.
+  rememberSelection()
+  const selection = window.getSelection()
+  const node = selection?.anchorNode
+  const anchor = (node instanceof Element ? node : (node?.parentElement ?? null))?.closest('a')
+  linkText.value = anchor?.getAttribute('href') ?? ''
+  linking.value = true
+  await nextTick()
+  linkInput.value?.focus()
+}
+function applyLink() {
+  const url = linkText.value.trim()
+  if (url) setLink(url)
+  else clearLink()
+  linking.value = false
+  visible.value = false
+}
+function removeLink() {
+  clearLink()
+  linking.value = false
+  visible.value = false
+}
+function cancelLink() {
+  linking.value = false
+  visible.value = false
+}
 </script>
 
 <template>
@@ -157,7 +198,7 @@ function cancelAsk() {
       @mousedown.prevent
       @touchstart.prevent
     >
-      <template v-if="!asking">
+      <template v-if="!asking && !linking">
         <button class="ai" title="Ask AI to rewrite this line" @click="startAsk">
           <Icon name="sparkleEdit" :size="16" /> Ask AI
         </button>
@@ -165,6 +206,7 @@ function cancelAsk() {
         <button title="Bold" @click="toggleBold"><Icon name="bold" :size="17" /></button>
         <button title="Italic" @click="toggleItalic"><Icon name="italic" :size="17" /></button>
         <button title="Underline" @click="toggleUnderline"><Icon name="underline" :size="17" /></button>
+        <button title="Link" @mousedown.prevent="startLink"><Icon name="external" :size="17" /></button>
         <span class="sep" />
         <button class="size" title="Smaller" @mousedown.prevent="nudgeSize(-0.1)">A−</button>
         <button class="size big" title="Larger" @mousedown.prevent="nudgeSize(0.1)">A+</button>
@@ -195,7 +237,7 @@ function cancelAsk() {
         </Popover>
       </template>
 
-      <template v-else>
+      <template v-else-if="asking">
         <Icon name="sparkleEdit" :size="16" class="ai-glyph" />
         <input
           ref="askInput"
@@ -212,6 +254,20 @@ function cancelAsk() {
         </button>
         <button class="go ghost" @click="cancelAsk"><Icon name="close" :size="15" /></button>
         <span v-if="error" class="ask-error">{{ error }}</span>
+      </template>
+
+      <template v-else>
+        <Icon name="external" :size="16" class="ai-glyph" />
+        <input
+          ref="linkInput"
+          v-model="linkText"
+          class="ask"
+          placeholder="Paste a link…"
+          @keydown.enter.prevent="applyLink"
+          @keydown.esc="cancelLink"
+        />
+        <button class="go" @click="applyLink">Link</button>
+        <button class="go ghost" title="Remove link" @click="removeLink"><Icon name="close" :size="15" /></button>
       </template>
     </div>
   </Transition>

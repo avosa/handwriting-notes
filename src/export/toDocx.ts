@@ -5,6 +5,7 @@
 import {
   AlignmentType,
   Document,
+  ExternalHyperlink,
   ImageRun,
   Packer,
   Paragraph,
@@ -60,21 +61,21 @@ function alignment(a: string | undefined, role: TextRole) {
   return value === 'justify' ? AlignmentType.JUSTIFIED : value === 'center' ? AlignmentType.CENTER : AlignmentType.LEFT
 }
 
-function runs(list: TextRun[], font: string, size: number, fallbackColor: string): DocxTextRun[] {
-  return (list.length ? list : [{ text: '' }]).map(
-    (r) =>
-      new DocxTextRun({
-        text: r.text,
-        font,
-        size,
-        bold: r.bold,
-        italics: r.italic,
-        underline: r.underline ? {} : undefined,
-        color: (r.color ?? fallbackColor).replace('#', ''),
-        highlight: undefined,
-        shading: r.highlight ? { fill: r.highlight.replace('#', '') } : undefined,
-      }),
-  )
+function runs(list: TextRun[], font: string, size: number, fallbackColor: string): (DocxTextRun | ExternalHyperlink)[] {
+  return (list.length ? list : [{ text: '' }]).map((r) => {
+    const textRun = new DocxTextRun({
+      text: r.text,
+      font,
+      size,
+      bold: r.bold,
+      italics: r.italic,
+      underline: r.underline || r.link ? {} : undefined,
+      color: r.link ? '4A72B0' : (r.color ?? fallbackColor).replace('#', ''),
+      highlight: undefined,
+      shading: r.highlight ? { fill: r.highlight.replace('#', '') } : undefined,
+    })
+    return r.link ? new ExternalHyperlink({ children: [textRun], link: r.link }) : textRun
+  })
 }
 
 function sheetSvg(preset: SheetPreset): string {

@@ -49,6 +49,18 @@ function onFocus() {
   editing = true
   emit('focus')
 }
+// A plain click on a link places the caret, so the link can be edited; a modifier-click opens
+// it in a new tab, the way an editor lets you follow a link without leaving the text editable.
+function onClick(event: MouseEvent) {
+  if (!event.metaKey && !event.ctrlKey) return
+  const node = event.target
+  const anchor = node instanceof Element ? node.closest('a[href]') : null
+  const href = anchor?.getAttribute('href')
+  if (href) {
+    event.preventDefault()
+    window.open(href, '_blank', 'noopener,noreferrer')
+  }
+}
 function onBlur() {
   editing = false
   emit('blur')
@@ -213,6 +225,7 @@ defineExpose({
     @blur="onBlur"
     @keydown="onKeydown"
     @paste="onPaste"
+    @click="onClick"
   />
 </template>
 

@@ -49,6 +49,36 @@ export function setHighlight(color: string) {
   if (!document.execCommand('hiliteColor', false, color)) document.execCommand('backColor', false, color)
 }
 
+// A web address the note is willing to link to: an http(s) address, or a mail link. A bare
+// address like example.com is taken as https. Anything else, including a script address, is
+// refused so a note can never carry a link that runs code.
+export function safeUrl(raw: string): string | null {
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  const candidate =
+    /^[a-z][a-z0-9+.-]*:/i.test(trimmed) || trimmed.startsWith('mailto:') ? trimmed : `https://${trimmed}`
+  try {
+    const url = new URL(candidate)
+    if (url.protocol === 'http:' || url.protocol === 'https:' || url.protocol === 'mailto:') return url.href
+  } catch {
+    // Not a parseable address.
+  }
+  return null
+}
+
+// Link the selected words to an address, or clear a link from them. The selection is captured
+// before the field takes focus, then restored so the link lands on the words that were chosen.
+export function setLink(raw: string) {
+  const href = safeUrl(raw)
+  if (!href) return
+  restoreSelection()
+  document.execCommand('createLink', false, href)
+}
+export function clearLink() {
+  restoreSelection()
+  document.execCommand('unlink')
+}
+
 // Change the case of the selected words in place. Title case lowercases first so a line that
 // arrived in shouting capitals comes back down to a clean Capitalised Line.
 export function convertCase(mode: 'upper' | 'lower' | 'title') {

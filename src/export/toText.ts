@@ -14,6 +14,7 @@ function markdownRuns(runs: TextRun[]): string {
       if (!t) return ''
       if (r.bold) t = `**${t}**`
       if (r.italic) t = `*${t}*`
+      if (r.link) t = `[${t}](${r.link})`
       return t
     })
     .join('')

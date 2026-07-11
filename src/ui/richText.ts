@@ -23,6 +23,7 @@ export function runsToHtml(runs: TextRun[]): string {
       if (run.color) styles.push(`color:${run.color}`)
       if (run.highlight) styles.push(`background-color:${run.highlight}`)
       if (styles.length) html = `<span style="${styles.join(';')}">${html}</span>`
+      if (run.link) html = `<a href="${escapeHtml(run.link)}" class="rt-link">${html}</a>`
       return html
     })
     .join('')
@@ -34,6 +35,7 @@ interface Marks {
   underline: boolean
   color?: string
   highlight?: string
+  link?: string
 }
 
 function marksFor(node: Node, root: Node): Marks {
@@ -46,6 +48,10 @@ function marksFor(node: Node, root: Node): Marks {
       if (tag === 'B' || tag === 'STRONG') marks.bold = true
       if (tag === 'I' || tag === 'EM') marks.italic = true
       if (tag === 'U') marks.underline = true
+      if (tag === 'A' && !marks.link) {
+        const href = element.getAttribute('href')
+        if (href) marks.link = href
+      }
       const weight = element.style.fontWeight
       if (weight === 'bold' || Number(weight) >= 600) marks.bold = true
       if (element.style.fontStyle === 'italic') marks.italic = true
@@ -74,7 +80,8 @@ function sameMarks(a: TextRun, b: Marks): boolean {
     !!a.italic === b.italic &&
     !!a.underline === b.underline &&
     (a.color ?? '') === (b.color ?? '') &&
-    (a.highlight ?? '') === (b.highlight ?? '')
+    (a.highlight ?? '') === (b.highlight ?? '') &&
+    (a.link ?? '') === (b.link ?? '')
   )
 }
 
@@ -97,6 +104,7 @@ export function htmlToRuns(root: HTMLElement): TextRun[] {
           ...(marks.underline ? { underline: true } : {}),
           ...(marks.color ? { color: marks.color } : {}),
           ...(marks.highlight ? { highlight: marks.highlight } : {}),
+          ...(marks.link ? { link: marks.link } : {}),
         })
       }
     }

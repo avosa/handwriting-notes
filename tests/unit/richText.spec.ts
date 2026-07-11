@@ -1,5 +1,24 @@
 import { describe, it, expect } from 'vitest'
 import { runsToHtml, htmlToRuns, plainText, splitRuns, splitPasteText, parsePasteGroups } from '@/ui/richText'
+import { safeUrl } from '@/editor/marks'
+
+describe('links', () => {
+  it('accepts web and mail addresses, adds https to a bare domain, and refuses the rest', () => {
+    expect(safeUrl('example.com/x')).toBe('https://example.com/x')
+    expect(safeUrl('https://a.co/y')).toBe('https://a.co/y')
+    expect(safeUrl('mailto:a@b.com')).toBe('mailto:a@b.com')
+    expect(safeUrl('javascript:alert(1)')).toBeNull()
+    expect(safeUrl('  ')).toBeNull()
+  })
+
+  it('round-trips a link through html and back to a run', () => {
+    const html = runsToHtml([{ text: 'docs', link: 'https://a.co/' }])
+    expect(html).toContain('href="https://a.co/"')
+    const host = document.createElement('div')
+    host.innerHTML = html
+    expect(htmlToRuns(host)[0].link).toBe('https://a.co/')
+  })
+})
 
 describe('parsePasteGroups', () => {
   it('reads a pasted block as headings over numbered lists, restarting per section', () => {

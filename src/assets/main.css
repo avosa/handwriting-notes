@@ -161,6 +161,20 @@ button {
    animations are all but removed everywhere at once: things still change state, they just
    do not slide, pulse, or spin. One frame is left so anything that waits on an animation to
    end still fires. The writing beats are quieted separately where the words are typed in. */
+/* A link inside the writing: the accent colour and an underline mark it, and holding the
+   command or control key turns the cursor into a pointer to show it can be followed. */
+.rt-link,
+.editable a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: text;
+}
+.editable:hover .rt-link,
+.editable:hover a {
+  cursor: pointer;
+}
+
 /* A link the keyboard reaches first that jumps past the chrome to the notes. It sits off
    screen until it takes focus, then drops into the top-left corner so it is only ever seen
    by someone tabbing through. */

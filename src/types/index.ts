@@ -38,6 +38,8 @@ export interface TextRun {
   underline?: boolean
   color?: string
   highlight?: string
+  /** An external address the run links to, opened on a modifier-click. */
+  link?: string
 }
 
 /** One line of writing: a role, its runs, and how it sits on the page. */
