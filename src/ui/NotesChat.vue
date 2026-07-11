@@ -17,7 +17,8 @@ const scroller = ref<HTMLElement | null>(null)
 
 const SUGGESTIONS = [
   'Summarise what I know about this topic',
-  'What are the key points across my notes?',
+  'Make this note clearer and better structured',
+  'Add a short summary to the top of this note',
   'Quiz me on my recent notes',
 ]
 
@@ -61,7 +62,8 @@ const statusLine = () => {
     <div ref="scroller" class="scroll">
       <div v-if="!messages.length" class="empty">
         <p class="lead">
-          Ask anything about what you've written. Answers come from <em>your</em> notes, on your device, with citations.
+          Ask about what you've written, or tell me to <em>edit</em> it — rewrite, add, restructure. Answers come from
+          your notes, on your device, with citations.
         </p>
         <div class="suggest">
           <button v-for="s in SUGGESTIONS" :key="s" class="chip" @click="send(s)">{{ s }}</button>
@@ -71,7 +73,7 @@ const statusLine = () => {
       <div v-for="(m, i) in messages" :key="i" class="msg" :class="m.role">
         <div class="bubble">
           <template v-if="m.role === 'assistant' && !m.text && m.streaming">
-            <span class="thinking">{{ statusLine() }}</span>
+            <span class="thinking">{{ m.mode === 'edit' ? 'Editing your note…' : statusLine() }}</span>
           </template>
           <template v-else-if="m.role === 'assistant'">
             <AnswerMarkdown :text="m.text" :sources="m.sources" @open="emit('open', $event)" /><span
@@ -101,7 +103,7 @@ const statusLine = () => {
     <p v-if="error" class="err">{{ error }}</p>
 
     <form class="composer" @submit.prevent="send()">
-      <textarea v-model="draft" rows="1" placeholder="Ask your notes…" @keydown.enter.exact.prevent="send()" />
+      <textarea v-model="draft" rows="1" placeholder="Ask, or tell me to edit…" @keydown.enter.exact.prevent="send()" />
       <button v-if="busy" type="button" class="go stop" title="Stop" @click="stop">
         <Icon name="stop" :size="16" />
       </button>

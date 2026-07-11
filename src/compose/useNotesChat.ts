@@ -8,6 +8,8 @@ import { getProvider } from '@/ai/providers'
 import { loadApiKey } from '@/store/persistence'
 import { useSettings } from '@/store/settings'
 import { useLibrary } from '@/store/library'
+import { useDocument } from '@/store/document'
+import { useAi } from './useAi'
 import { indexAll, searchBlocks } from '@/ai/embeddings/semanticIndex'
 
 export interface ChatSource {
@@ -23,6 +25,8 @@ export interface ChatMessage {
   text: string
   sources?: ChatSource[]
   streaming?: boolean
+  /** Set while the assistant is changing the note rather than answering, so the UI can say so. */
+  mode?: 'edit'
 }
 
 // The answer is bound to the retrieved notes: cite them, and admit when they do not cover the
@@ -35,6 +39,13 @@ Rules:
 - If the notes do not contain enough to answer, say so plainly (for example: "Your notes don't cover this yet") rather than guessing.
 - Be clear and concise, and answer in the user's own terms.`
 
+// Routes a message to the right kind of help: changing the note, or answering about it. The chat
+// can do everything "Write with AI" can — rewrite, add, restructure, tidy — as well as answer.
+const ROUTE_SYSTEM = `You route a message from someone working on their OWN notes. Reply with exactly one word and nothing else:
+EDIT — if they want you to change the note: rewrite, add, insert, fix, shorten, expand, restructure, reword, format, or otherwise modify it.
+ASK — if they want an answer, explanation, summary to read, quiz, or a question answered.
+Reply only EDIT or ASK.`
+
 // How many blocks of context to ground each answer on. Enough to be useful, few enough to keep
 // the prompt tight and the citations legible.
 const TOP_K = 8
@@ -42,6 +53,8 @@ const TOP_K = 8
 export function useNotesChat() {
   const settings = useSettings()
   const library = useLibrary()
+  const documentStore = useDocument()
+  const { generate, error: aiError } = useAi()
 
   const messages = ref<ChatMessage[]>([])
   const busy = ref(false)
@@ -75,8 +88,39 @@ export function useNotesChat() {
     const idx = messages.value.push({ role: 'assistant', text: '', sources: [], streaming: true }) - 1
     busy.value = true
 
-    // Retrieval runs on-device and is a separate failure domain from the model call, so its
-    // errors are reported as retrieval errors — not misattributed to the AI provider.
+    // Decide whether the writer wants the note changed or a question answered. A one-word
+    // classification keeps it natural — they just type — while staying reliable.
+    let intent: 'edit' | 'ask' = 'ask'
+    try {
+      const routed = await provider.complete(ROUTE_SYSTEM, q, key, 4)
+      if (/edit/i.test(routed)) intent = 'edit'
+    } catch {
+      // If routing fails, fall back to answering — never edit a note the writer didn't ask to change.
+    }
+
+    // EDIT: hand off to the same engine "Write with AI" uses, so the chat can rewrite, add to, or
+    // restructure the open note in place. The change is applied to the note beside the chat.
+    if (intent === 'edit') {
+      messages.value[idx].mode = 'edit'
+      try {
+        const { noteToAddressableText } = await import('@/ai/noteContext')
+        const ok = await generate(q, [], noteToAddressableText(documentStore.doc))
+        messages.value[idx].text = ok
+          ? 'Done — I updated your note. You can see the change beside this chat.'
+          : aiError.value || "I couldn't make that change. Check your key and try again."
+      } catch (e) {
+        console.error('Notes chat: note edit failed', e)
+        messages.value[idx].text = "I couldn't make that change. Check your key and try again."
+      } finally {
+        messages.value[idx].streaming = false
+        busy.value = false
+      }
+      return
+    }
+
+    // ASK: ground an answer in the retrieved notes. Retrieval runs on-device and is a separate
+    // failure domain from the model call, so its errors are reported as retrieval errors — not
+    // misattributed to the AI provider.
     let sources: ChatSource[]
     try {
       // Warm and refresh the local index (downloads the embedding model once), then retrieve from
