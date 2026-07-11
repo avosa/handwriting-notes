@@ -6,8 +6,10 @@
 // Manus answers in typed events on a task's message list rather than a single reply body:
 // task.detail carries the task's status, and task.listMessages carries the assistant's words
 // and any error (a spent quota shows up there while the task sits waiting).
-import { attachmentParts } from './content'
 import { describeHttpError } from './errors'
+import { getBlob } from '@/store/persistence'
+import { blobToBase64 } from '@/ai/attachmentEncoding'
+import type { Attachment } from '@/types'
 import type { ChatRequest, Provider } from './types'
 
 const BASE = 'https://api.manus.ai/v2'
@@ -76,11 +78,57 @@ async function getJson(path: string, key: string, signal: AbortSignal): Promise<
   return (await res.json()) as Record<string, unknown>
 }
 
+// The message content Manus is sent: either a plain string, or, when there are attachments, an
+// array of parts mixing the text with the files.
+type ManusPart =
+  | { type: 'text'; text: string }
+  | { type: 'file'; file_data: string; filename: string; mime_type: string }
+  | { type: 'voice'; file_data: string; filename: string; mime_type: string }
+
+// Manus takes files inline as base64 up to 20 MB decoded; a base64 string is about a third
+// larger than its bytes, so anything over ~15 MB of source is too big to inline here.
+const MAX_INLINE_BYTES = 15 * 1024 * 1024
+
+// Build the one message Manus receives: the guidance and prompt as text, then each attachment it
+// can open — images, PDFs, and documents as files, a voice note as voice — inlined as base64.
+// A file too large to inline, or a video, is described in a line (with its transcript when there
+// is one) so the request still stands and the writer knows what was left out.
+export async function buildContent(
+  system: string,
+  prompt: string,
+  attachments: Attachment[],
+): Promise<string | ManusPart[]> {
+  const lead = system ? `${system}\n\n${prompt}` : prompt
+  if (!attachments.length) return lead
+  const parts: ManusPart[] = [{ type: 'text', text: lead }]
+  for (const a of attachments) {
+    const blob = await getBlob(a.blobRef)
+    if (!blob) continue
+    const note = (text: string) => parts.push({ type: 'text', text })
+    const transcript = a.transcript?.trim()
+    if (a.kind === 'video') {
+      note(transcript ? `Transcript of video "${a.name}":\n${transcript}` : `A video "${a.name}" was attached.`)
+      continue
+    }
+    if (blob.size > MAX_INLINE_BYTES) {
+      note(
+        transcript
+          ? `Transcript of "${a.name}" (too large to attach in full):\n${transcript}`
+          : `"${a.name}" was attached but is too large to send (over 15 MB).`,
+      )
+      continue
+    }
+    const file_data = `data:${a.mime};base64,${await blobToBase64(blob)}`
+    if (a.kind === 'audio') parts.push({ type: 'voice', file_data, filename: a.name, mime_type: a.mime })
+    else parts.push({ type: 'file', file_data, filename: a.name, mime_type: a.mime })
+  }
+  return parts.length > 1 ? parts : lead
+}
+
 // Open a task and wait for it to settle, then hand back its text. Both live writing and a
 // single completion go through here, since Manus answers each the same way. Manus has no
 // separate system channel, so the guidance rides at the top of the one message it is sent.
-async function runTask(system: string, prompt: string, key: string, signal: AbortSignal): Promise<string> {
-  const content = system ? `${system}\n\n${prompt}` : prompt
+async function runTask(content: string | ManusPart[], key: string, signal: AbortSignal): Promise<string> {
   const created = await fetch(`${BASE}/task.create`, {
     method: 'POST',
     signal,
@@ -122,17 +170,6 @@ async function runTask(system: string, prompt: string, key: string, signal: Abor
   }
 }
 
-// Attachments Manus cannot open are folded into the prompt as short notes, and any plain
-// text ones are inlined, so the request still stands and the writer knows what was left out.
-async function withAttachments(request: ChatRequest): Promise<string> {
-  const parts = await attachmentParts(request.attachments, { images: false, pdf: false, docs: false })
-  const extra = parts
-    .map((p) => (p.type === 'text' ? p.text : ''))
-    .filter(Boolean)
-    .join('\n\n')
-  return extra ? `${request.prompt}\n\n${extra}` : request.prompt
-}
-
 export const manus: Provider = {
   id: 'manus',
   name: 'Manus',
@@ -146,14 +183,15 @@ export const manus: Provider = {
     "Copy the key. It's shown only once, and needs credits on your Manus plan to run.",
     'Paste it below.',
   ],
-  reads: { images: false, pdf: false, docs: false },
+  reads: { images: true, pdf: true, docs: true },
 
   async *stream(request: ChatRequest, key: string, signal: AbortSignal): AsyncGenerator<string> {
-    const text = await runTask(request.system, await withAttachments(request), key, signal)
+    const content = await buildContent(request.system, request.prompt, request.attachments)
+    const text = await runTask(content, key, signal)
     if (text) yield text
   },
 
   async complete(system: string, user: string, key: string): Promise<string> {
-    return runTask(system, user, key, new AbortController().signal)
+    return runTask(system ? `${system}\n\n${user}` : user, key, new AbortController().signal)
   },
 }

@@ -59,16 +59,18 @@ vendor. You can connect more than one and switch which is in use; Claude is the 
 | **ChatGPT** (OpenAI) | text, images, PDF, Word and other documents | [platform.openai.com](https://platform.openai.com/api-keys) | `gpt-5.5` (`VITE_OPENAI_MODEL`) |
 | **Gemini** (Google) | text, images, PDF | [aistudio.google.com](https://aistudio.google.com/app/apikey) | `gemini-flash-latest` (`VITE_GEMINI_MODEL`) |
 | **DeepSeek** | text only | [platform.deepseek.com](https://platform.deepseek.com/api_keys) | `deepseek-v4-flash` (`VITE_DEEPSEEK_MODEL`) |
-| **Manus** | text only | [manus.im](https://manus.im/app?show_settings=integrations&app_name=api) | `manus-1.6` agent (`VITE_MANUS_PROFILE`) |
+| **Manus** | text, images, PDF, documents, audio | [manus.im](https://manus.im/app?show_settings=integrations&app_name=api) | `manus-1.6` agent (`VITE_MANUS_PROFILE`) |
 
 Attachments are matched to what the chosen model can read: images go to the ones with
-vision, a PDF goes to the ones that open PDFs, ChatGPT also reads Word, PowerPoint, Excel,
-and CSV files, and a plain text file is readable by all of them. Anything a model cannot
-take is summarised in a line instead, so the request still goes through.
+vision, a PDF goes to the ones that open PDFs, ChatGPT and Manus also read Word, PowerPoint,
+Excel, and CSV files, and a plain text file is readable by all of them. Anything a model
+cannot take is summarised in a line instead, so the request still goes through.
 
 Manus runs the request as a task and answers when it settles, so its note arrives all at
 once after a short wait rather than streaming line by line; everything else about it works
-the same. Its `VITE_MANUS_PROFILE` override picks which Manus agent answers.
+the same. It reads images, PDFs, documents, and a voice note directly (each sent inline, up
+to about 15 MB); anything larger falls back to its transcript or a short note. Its
+`VITE_MANUS_PROFILE` override picks which Manus agent answers.
 
 To pin a different model, set the matching `VITE_*_MODEL` variable in a `.env.local` file.
 Model names move quickly; these defaults were current in mid 2026, and the override lets

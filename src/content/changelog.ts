@@ -16,6 +16,8 @@ export const changelog: Release[] = [
       'Find and replace on the command or control key plus F, with matches lit in place.',
       'Right-click a page for a page break anywhere, and pages flow and merge like a document.',
       'Backspace at the start of a line now pulls it up past a divider or figure above.',
+      'Long AI notes flow across as many sheets as they need, and a heading is never left behind.',
+      'Manus now reads attached images, PDFs, documents, and voice notes, not just text.',
     ],
   },
   {

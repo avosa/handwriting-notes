@@ -26,7 +26,7 @@ describe('provider registry', () => {
       openai: { images: true, pdf: true, docs: true },
       gemini: { images: true, pdf: true, docs: true },
       deepseek: { images: false, pdf: false, docs: false },
-      manus: { images: false, pdf: false, docs: false },
+      manus: { images: true, pdf: true, docs: true },
     })
   })
   it('resolves a known id and falls back to Claude for an unknown one', () => {
