@@ -38,7 +38,18 @@ const subfolders = computed(() => library.foldersIn(currentFolder.value))
 const browsingFolders = computed(() => tab.value === 'recent' && !query.value.trim() && !activeTag.value)
 
 const renamingFolderId = ref<string | null>(null)
-const folderRenameInput = ref<HTMLInputElement | null>(null)
+// The text being typed into the folder-name field. Kept in the model rather than read back
+// from the DOM so it works the same for a freshly made folder and an existing one.
+const folderNameDraft = ref('')
+
+// Put the caret in the folder-name field once it has rendered. Only one is ever shown, so
+// finding it in the DOM is reliable and sidesteps template-ref quirks inside a v-for.
+async function focusFolderInput() {
+  await nextTick()
+  const el = document.querySelector('.folder-rename') as HTMLInputElement | null
+  el?.focus()
+  el?.select()
+}
 
 // How many notes and subfolders a folder holds, shown on its card so an empty one is obvious.
 function folderCount(id: string): number {
@@ -50,20 +61,20 @@ function openFolder(id: string | null) {
   currentFolder.value = id
 }
 async function makeFolder() {
+  // Create with the fallback name, but open the field empty so the writer sees a placeholder and
+  // knows to type one. Leaving it blank keeps the fallback name (renameFolder ignores empty).
   const id = library.createFolder('New folder', currentFolder.value)
+  folderNameDraft.value = ''
   renamingFolderId.value = id
-  await nextTick()
-  folderRenameInput.value?.focus()
-  folderRenameInput.value?.select()
+  await focusFolderInput()
 }
 async function startFolderRename(id: string) {
+  folderNameDraft.value = library.folderById(id)?.name ?? ''
   renamingFolderId.value = id
-  await nextTick()
-  folderRenameInput.value?.focus()
-  folderRenameInput.value?.select()
+  await focusFolderInput()
 }
 function commitFolderRename(id: string) {
-  if (folderRenameInput.value) library.renameFolder(id, folderRenameInput.value.value)
+  library.renameFolder(id, folderNameDraft.value)
   renamingFolderId.value = null
 }
 function removeFolder(id: string) {
@@ -373,9 +384,9 @@ function commitRename(id: string) {
             <div v-if="renamingFolderId === f.id" class="folder-open editing">
               <Icon name="folder" :size="22" />
               <input
-                ref="folderRenameInput"
+                v-model="folderNameDraft"
                 class="folder-rename"
-                :value="f.name"
+                placeholder="Name this folder"
                 @blur="commitFolderRename(f.id)"
                 @keydown.enter.prevent="commitFolderRename(f.id)"
                 @keydown.esc.prevent="renamingFolderId = null"
