@@ -24,6 +24,7 @@ import type { Command } from './ui/CommandPalette.vue'
 import ShortcutsSheet from './ui/ShortcutsSheet.vue'
 import WelcomeSheet from './ui/WelcomeSheet.vue'
 import WhatsNewSheet from './ui/WhatsNewSheet.vue'
+import NoteInfo from './ui/NoteInfo.vue'
 import { APP_DOMAIN } from './brand'
 import { exportNoteAsText } from './export/toText'
 import { exportPageAsPng } from './export/toPng'
@@ -48,6 +49,7 @@ const showPalette = ref(false)
 const showShortcuts = ref(false)
 const showWelcome = ref(false)
 const showWhatsNew = ref(false)
+const showInfo = ref(false)
 const drawerOpen = ref(false)
 
 // Open the reader's mail app with a message addressed to the project, so a note of feedback
@@ -223,6 +225,7 @@ const commands = computed<Command[]>(() => [
   { id: 'theme-system', title: 'Theme: System', icon: 'device', run: () => settings.setTheme('system') },
   { id: 'shortcuts', title: 'Keyboard shortcuts', hint: '?', run: () => (showShortcuts.value = true) },
   { id: 'welcome', title: 'Show welcome', icon: 'wand', run: () => (showWelcome.value = true) },
+  { id: 'info', title: 'Note info', hint: 'words, reading time', run: () => (showInfo.value = true) },
   { id: 'whats-new', title: "What's new", run: () => (showWhatsNew.value = true) },
   { id: 'feedback', title: 'Send feedback', icon: 'send', run: sendFeedback },
 ])
@@ -531,6 +534,8 @@ function addPage() {
     <WelcomeSheet v-if="showWelcome" @close="dismissWelcome" />
 
     <WhatsNewSheet v-if="showWhatsNew" @close="showWhatsNew = false" />
+
+    <NoteInfo v-if="showInfo" @close="showInfo = false" />
 
     <Transition name="home-fade">
       <HomeScreen v-if="showHome" @close="showHome = false" />
