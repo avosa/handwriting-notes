@@ -131,7 +131,14 @@ watch(
     if (target) {
       target.focus()
       documentStore.clearPendingFocus()
+      return
     }
+    // A code block edits in a textarea rather than a contenteditable, so it is focused by
+    // reaching for its element directly; clearing the request either way avoids a stale ask
+    // grabbing a later line.
+    const area = document.querySelector(`.code-slot[data-block-id="${CSS.escape(id)}"] .code-text`)
+    if (area instanceof HTMLTextAreaElement) area.focus()
+    if (editables.value.get(`text:${id}`) || area) documentStore.clearPendingFocus()
   },
 )
 
@@ -319,6 +326,31 @@ function onCodeInput(block: Extract<Block, { type: 'code' }>, event: Event) {
   documentStore.setCode(block.id, area.value)
   area.style.height = 'auto'
   area.style.height = `${area.scrollHeight}px`
+}
+// Tab indents inside a code block instead of leaving it, and backspace on an empty block
+// removes it and drops the caret onto the line above, so a code block is never a dead end.
+function onCodeKeydown(block: Extract<Block, { type: 'code' }>, event: KeyboardEvent) {
+  const area = event.target as HTMLTextAreaElement
+  if (event.key === 'Tab') {
+    event.preventDefault()
+    const at = area.selectionStart
+    documentStore.setCode(block.id, `${area.value.slice(0, at)}  ${area.value.slice(area.selectionEnd)}`)
+    void nextTick(() => {
+      area.selectionStart = area.selectionEnd = at + 2
+      area.style.height = 'auto'
+      area.style.height = `${area.scrollHeight}px`
+    })
+  } else if (event.key === 'Backspace' && area.value === '') {
+    event.preventDefault()
+    const target = joinOntoLineAbove(block.id, [])
+    const loc = documentStore.locate(block.id)
+    if (target) {
+      documentStore.removeBlock(block.id)
+      pendingFocus.value = target
+    } else if (loc && loc.blockIndex > 0) {
+      documentStore.removeBlock(block.id)
+    }
+  }
 }
 // Grow a code field to fit its content as it mounts and whenever it changes, so a code block
 // loaded from a note shows all its lines without an inner scrollbar.
@@ -546,6 +578,7 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
           rows="1"
           @focus="onFocusBlock(block.id)"
           @input="onCodeInput(block, $event)"
+          @keydown="onCodeKeydown(block, $event)"
         />
         <button
           v-if="editable"

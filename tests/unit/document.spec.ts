@@ -226,6 +226,14 @@ describe('document store', () => {
     expect((doc.locate(id)!.block as { checked: boolean[] }).checked).toHaveLength(1)
   })
 
+  it('emphasises a quote along with the rest when the whole note is styled', () => {
+    const doc = useDocument()
+    doc.doc.pages[0].blocks.push({ id: 'q', type: 'quote', runs: [{ text: 'a saying' }] })
+    doc.applyMarkToAll('bold')
+    const quote = doc.locate('q')!.block
+    expect(quote.type === 'quote' && quote.runs.every((r) => r.bold)).toBe(true)
+  })
+
   it('fills a stroke by id', () => {
     const doc = useDocument()
     doc.addStroke(0, { id: 's1', tool: 'fine', color: '#000', width: 1, points: [{ x: 0, y: 0, pressure: 1 }] })

@@ -123,6 +123,7 @@ export const useDocument = defineStore('document', {
       for (const page of this.doc.pages) {
         for (const block of page.blocks) {
           if (block.type === 'text') arrays.push(block.text.runs)
+          else if (block.type === 'quote') arrays.push(block.runs)
           else if (block.type === 'list') arrays.push(...block.items)
           else if (block.type === 'callouts') for (const box of block.boxes) arrays.push(box.heading, ...box.items)
         }

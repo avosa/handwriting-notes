@@ -71,6 +71,11 @@ export function noteToText(doc: NoteDocument): string {
         for (const box of block.boxes) {
           lines.push(`[${runsText(box.heading)}] ${box.items.map(runsText).join('; ')}`)
         }
+      } else if (block.type === 'quote') {
+        const text = runsText(block.runs).trim()
+        if (text) lines.push(`> ${text}`)
+      } else if (block.type === 'code') {
+        if (block.text.trim()) lines.push('```', block.text, '```')
       } else if (block.type === 'diagram') {
         const spec = block.spec
         if (spec.kind !== 'scene' && 'caption' in spec && spec.caption) lines.push(`(figure: ${spec.caption})`)
