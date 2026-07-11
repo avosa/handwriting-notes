@@ -6,6 +6,7 @@ import { defineStore } from 'pinia'
 import type { Folder, LibraryEntry, NoteDocument, SavedSearch } from '@/types'
 import { blankDocument, noteFromTemplate } from '@/content/blankDocument'
 import { uid } from '@/util/id'
+import { APP_SLUG } from '@/brand'
 import { useDocument } from './document'
 import {
   loadNote,
@@ -342,7 +343,7 @@ export const useLibrary = defineStore('library', {
       const stamp = new Date(Date.now()).toISOString().slice(0, 10)
       const a = document.createElement('a')
       a.href = url
-      a.download = `handwriting-notes-backup-${stamp}.json`
+      a.download = `${APP_SLUG}-backup-${stamp}.json`
       a.click()
       setTimeout(() => URL.revokeObjectURL(url), 1000)
     },
