@@ -50,10 +50,16 @@ function start() {
   // In development the service worker would sit in front of the dev server and serve stale,
   // cached modules instead of the latest edits — so it is only registered in production builds.
   // Any worker left over from a previous run (or from testing a build locally) is torn down here,
-  // along with its caches, so `bun dev` is always fresh.
+  // along with its OWN shell caches, so `bun dev` is always fresh. Only the app-shell caches are
+  // cleared, never every cache: a downloaded on-device model lives in its own Cache Storage bucket
+  // (webllm/…), and wiping all caches on each dev load was silently deleting that model, so it had
+  // to be downloaded again after every restart.
   if (!import.meta.env.PROD) {
     void navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((reg) => void reg.unregister()))
-    if ('caches' in window) void caches.keys().then((keys) => keys.forEach((key) => void caches.delete(key)))
+    if ('caches' in window)
+      void caches
+        .keys()
+        .then((keys) => keys.filter((key) => key.startsWith('notes-shell')).forEach((key) => void caches.delete(key)))
     return
   }
 
