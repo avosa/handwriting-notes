@@ -3,7 +3,7 @@
 // row of templates, then the notes as ruled cards under Recent and Favourites, each
 // with a star and a small menu to open, rename, duplicate, or delete. Choosing a note
 // or a template opens it in the editor.
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import type { LibraryEntry } from '@/types'
 import { useLibrary } from '@/store/library'
 import { templates } from '@/content/blankDocument'
@@ -116,6 +116,64 @@ function addTag(id: string) {
   if (t) library.toggleTag(id, t)
   newTag.value = ''
 }
+
+// Multi-select for bulk actions. A note is picked with its checkbox; while any are picked a
+// bar of actions replaces the tag row. Selection lives only in the two live tabs.
+const selected = ref(new Set<string>())
+const selecting = computed(() => selected.value.size > 0)
+function toggleSelect(id: string) {
+  const next = new Set(selected.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  selected.value = next
+}
+function clearSelection() {
+  selected.value = new Set()
+}
+function selectAllShown() {
+  selected.value = new Set(shown.value.map((e) => e.id))
+}
+const bulkTag = ref('')
+async function bulkDelete() {
+  await library.deleteNotes([...selected.value])
+  clearSelection()
+}
+async function bulkArchive() {
+  await library.archiveNotes([...selected.value])
+  clearSelection()
+}
+function bulkFavorite() {
+  library.favoriteNotes([...selected.value])
+}
+function bulkMove(folderId: string | null) {
+  library.moveNotesToFolder([...selected.value], folderId)
+  clearSelection()
+}
+function bulkAddTag() {
+  const t = bulkTag.value.trim()
+  if (t) library.tagNotes([...selected.value], t)
+  bulkTag.value = ''
+}
+
+// Saved searches (smart collections): keep the current query and tag under a name, and apply
+// one with a tap. A search is worth saving only when something is actually narrowing the view.
+const canSaveSearch = computed(() => !!(query.value.trim() || activeTag.value))
+function saveCurrentSearch() {
+  if (!canSaveSearch.value) return
+  const name = query.value.trim() || (activeTag.value ? `#${activeTag.value}` : 'Saved search')
+  library.saveSearch(name, query.value.trim(), activeTag.value)
+}
+function applySearch(id: string) {
+  const search = library.savedSearches.find((s) => s.id === id)
+  if (!search) return
+  tab.value = 'recent'
+  query.value = search.query
+  activeTag.value = search.tag
+}
+
+// Selection makes no sense once the view changes under it, so clear it when the tab, folder,
+// or filter moves. Also drop any picked note that has left the shown list.
+watch([tab, currentFolder, query, activeTag], clearSelection)
 // A short excerpt for a searched note, shown under its title so a match is explained.
 function excerptFor(id: string): string {
   return query.value.trim() ? snippet(id, query.value) : ''
@@ -227,6 +285,68 @@ function commitRename(id: string) {
           </button>
         </div>
 
+        <!-- Saved searches (smart collections): apply one with a tap, save the current view, or
+             drop one. Only offered in the live tabs where a search makes sense. -->
+        <div v-if="!filed && (library.savedSearches.length || canSaveSearch)" class="saved-row">
+          <button
+            v-for="s in library.savedSearches"
+            :key="s.id"
+            class="saved-chip"
+            :title="`Apply: ${s.name}`"
+            @click="applySearch(s.id)"
+          >
+            <Icon name="search" :size="12" />
+            {{ s.name }}
+            <span class="saved-x" title="Remove" @click.stop="library.deleteSavedSearch(s.id)">✕</span>
+          </button>
+          <button v-if="canSaveSearch" class="saved-add" @click="saveCurrentSearch">
+            <Icon name="plus" :size="13" /> Save this search
+          </button>
+        </div>
+
+        <!-- Bulk action bar, shown while notes are picked. It replaces nothing; it floats above
+             the grid and clears itself when the view changes. -->
+        <div v-if="selecting" class="bulk-bar">
+          <span class="bulk-count">{{ selected.size }} selected</span>
+          <button class="bulk-btn" @click="selectAllShown">Select all</button>
+          <button class="bulk-btn" @click="clearSelection">Clear</button>
+          <span class="bulk-spacer" />
+          <button class="bulk-btn" @click="bulkFavorite"><Icon name="star" :size="15" /> Favourite</button>
+          <Popover align="left">
+            <template #trigger>
+              <button class="bulk-btn"><Icon name="folder" :size="15" /> Move</button>
+            </template>
+            <template #default>
+              <div class="menu">
+                <button class="menu-item small" @click="bulkMove(null)">
+                  <Icon name="home" :size="15" /><span>Top level</span>
+                </button>
+                <button v-for="c in folderChoices" :key="c.id" class="menu-item small" @click="bulkMove(c.id)">
+                  <Icon name="folder" :size="15" /><span>{{ c.label }}</span>
+                </button>
+              </div>
+            </template>
+          </Popover>
+          <Popover align="left">
+            <template #trigger>
+              <button class="bulk-btn"><Icon name="tag" :size="15" /> Tag</button>
+            </template>
+            <template #default>
+              <div class="menu tag-menu">
+                <input
+                  class="tag-input"
+                  placeholder="Add a tag to all…"
+                  :value="bulkTag"
+                  @input="bulkTag = ($event.target as HTMLInputElement).value"
+                  @keydown.enter.prevent="bulkAddTag"
+                />
+              </div>
+            </template>
+          </Popover>
+          <button class="bulk-btn" @click="bulkArchive"><Icon name="archive" :size="15" /> Archive</button>
+          <button class="bulk-btn danger" @click="bulkDelete"><Icon name="trash" :size="15" /> Delete</button>
+        </div>
+
         <!-- Folder navigation, only while browsing the recent tab. A breadcrumb walks back up,
              and a row of subfolders sits above the notes in the current folder. -->
         <div v-if="browsingFolders" class="folder-bar">
@@ -289,7 +409,12 @@ function commitRename(id: string) {
         </div>
 
         <div v-if="shown.length" class="grid">
-          <div v-for="e in shown" :key="e.id" class="card" :class="{ current: e.id === library.currentId && !filed }">
+          <div
+            v-for="e in shown"
+            :key="e.id"
+            class="card"
+            :class="{ current: e.id === library.currentId && !filed, picked: selected.has(e.id) }"
+          >
             <button v-if="tab === 'trash'" class="open dim" title="Restore" @click="library.restoreNote(e.id)">
               <NoteThumbnail :title="e.title" />
             </button>
@@ -303,7 +428,21 @@ function commitRename(id: string) {
             </button>
             <button v-else class="open" @click="open(e.id)"><NoteThumbnail :title="e.title" /></button>
 
-            <span v-if="!filed && e.pinned" class="pin-badge" title="Pinned"><Icon name="pin" :size="13" /></span>
+            <!-- Selection checkbox for bulk actions, in the live tabs. It shows on hover or once
+                 anything is picked, and toggles this note in the selection. -->
+            <button
+              v-if="!filed"
+              class="pick"
+              :class="{ on: selected.has(e.id), armed: selecting }"
+              :title="selected.has(e.id) ? 'Deselect' : 'Select'"
+              @click.stop="toggleSelect(e.id)"
+            >
+              <Icon v-if="selected.has(e.id)" name="check" :size="13" />
+            </button>
+
+            <span v-if="!filed && e.pinned && !selecting" class="pin-badge" title="Pinned">
+              <Icon name="pin" :size="13" />
+            </span>
             <button
               v-if="!filed"
               class="fav"
@@ -982,6 +1121,134 @@ h2 {
   font: inherit;
   font-size: 13px;
   cursor: pointer;
+}
+.saved-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+.saved-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 4px 6px 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.saved-chip:hover {
+  background: var(--accent-wash);
+}
+.saved-x {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.saved-x:hover {
+  background: var(--surface-sunken);
+  color: var(--danger, #c0392b);
+}
+.saved-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 4px 11px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.saved-add:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 6px;
+  z-index: 5;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--brand, #33334c);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+}
+.bulk-count {
+  font-size: 13px;
+  font-weight: 600;
+}
+.bulk-spacer {
+  flex: 1;
+}
+.bulk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.bulk-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+.bulk-btn.danger:hover {
+  background: var(--danger, #c0392b);
+}
+.tag-menu {
+  padding: 8px;
+  min-width: 200px;
+}
+.pick {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.card:hover .pick,
+.pick.armed {
+  opacity: 1;
+}
+.pick.on {
+  opacity: 1;
+  background: var(--accent, #4a72b0);
+  border-color: var(--accent, #4a72b0);
+}
+.card.picked .open {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 6px 18px var(--accent-shadow);
 }
 .pin-badge {
   position: absolute;

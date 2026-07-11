@@ -167,3 +167,55 @@ describe('library folders', () => {
     expect(lib.folderPath(two).length).toBeLessThanOrEqual(2)
   })
 })
+
+describe('library bulk actions and saved searches', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  function seed() {
+    const lib = useLibrary()
+    lib.hydrate(
+      [
+        { id: 'a', title: 'A', createdAt: 0, updatedAt: 3, favorite: false },
+        { id: 'b', title: 'B', createdAt: 0, updatedAt: 2, favorite: false },
+        { id: 'c', title: 'C', createdAt: 0, updatedAt: 1, favorite: true },
+      ],
+      'x',
+    )
+    return lib
+  }
+
+  it('favourites a whole set, then unfavourites once all are favourites', () => {
+    const lib = seed()
+    lib.favoriteNotes(['a', 'b'])
+    expect(lib.entries.filter((e) => e.favorite).map((e) => e.id).sort()).toEqual(['a', 'b', 'c'])
+    // a and b are now favourites, so a second call clears just those two.
+    lib.favoriteNotes(['a', 'b'])
+    expect(lib.entries.filter((e) => e.favorite).map((e) => e.id)).toEqual(['c'])
+  })
+
+  it('tags every note in a set without duplicating', () => {
+    const lib = seed()
+    lib.tagNotes(['a', 'b'], 'Exam')
+    lib.tagNotes(['a'], 'exam') // same tag lowercased, no duplicate
+    expect(lib.entries.find((e) => e.id === 'a')!.tags).toEqual(['exam'])
+    expect(lib.entries.find((e) => e.id === 'b')!.tags).toEqual(['exam'])
+  })
+
+  it('moves and archives a set in one call', async () => {
+    const lib = seed()
+    const fol = lib.createFolder('Box', null)
+    lib.moveNotesToFolder(['a', 'b'], fol)
+    expect(lib.entries.filter((e) => e.folderId === fol).map((e) => e.id).sort()).toEqual(['a', 'b'])
+    await lib.archiveNotes(['a', 'b'])
+    expect(lib.archived.map((e) => e.id).sort()).toEqual(['a', 'b'])
+  })
+
+  it('saves and removes a search', () => {
+    const lib = seed()
+    const id = lib.saveSearch('Exams', 'final', 'exam')
+    expect(lib.savedSearches).toHaveLength(1)
+    expect(lib.savedSearches[0]).toMatchObject({ name: 'Exams', query: 'final', tag: 'exam' })
+    lib.deleteSavedSearch(id)
+    expect(lib.savedSearches).toEqual([])
+  })
+})

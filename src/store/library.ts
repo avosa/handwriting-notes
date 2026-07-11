@@ -3,7 +3,7 @@
 // deleting, and marking a favourite. The open note itself lives in the document store;
 // this keeps that in step with the list and with what is saved on disk.
 import { defineStore } from 'pinia'
-import type { Folder, LibraryEntry, NoteDocument } from '@/types'
+import type { Folder, LibraryEntry, NoteDocument, SavedSearch } from '@/types'
 import { blankDocument, noteFromTemplate } from '@/content/blankDocument'
 import { uid } from '@/util/id'
 import { useDocument } from './document'
@@ -23,6 +23,7 @@ import {
 interface LibraryState {
   entries: LibraryEntry[]
   folders: Folder[]
+  savedSearches: SavedSearch[]
   currentId: string
 }
 
@@ -31,7 +32,7 @@ function entryFor(doc: NoteDocument, favorite = false): LibraryEntry {
 }
 
 export const useLibrary = defineStore('library', {
-  state: (): LibraryState => ({ entries: [], folders: [], currentId: '' }),
+  state: (): LibraryState => ({ entries: [], folders: [], savedSearches: [], currentId: '' }),
   getters: {
     // The live notes, newest first. Trashed and archived notes are held in `entries` but
     // kept out of the main list, so a note that was deleted or filed away disappears from
@@ -82,9 +83,10 @@ export const useLibrary = defineStore('library', {
     },
   },
   actions: {
-    hydrate(entries: LibraryEntry[], currentId: string, folders: Folder[] = []) {
+    hydrate(entries: LibraryEntry[], currentId: string, folders: Folder[] = [], savedSearches: SavedSearch[] = []) {
       this.entries = entries
       this.folders = folders
+      this.savedSearches = savedSearches
       this.currentId = currentId
     },
     // Keep a note's list row in step as it is edited.
@@ -279,6 +281,46 @@ export const useLibrary = defineStore('library', {
     moveNoteToFolder(noteId: string, folderId: string | null) {
       const entry = this.entries.find((e) => e.id === noteId)
       if (entry) entry.folderId = folderId
+    },
+    // Keep a search — its text and tag — under a name, so a smart collection is one tap away.
+    saveSearch(name: string, query: string, tag: string | null): string {
+      const search: SavedSearch = { id: uid('search'), name: name.trim() || 'Saved search', query, tag }
+      this.savedSearches.push(search)
+      return search.id
+    },
+    deleteSavedSearch(id: string) {
+      this.savedSearches = this.savedSearches.filter((s) => s.id !== id)
+    },
+    // Bulk actions over a set of notes, so a multi-selection can be filed, favourited, or
+    // cleared in one move. Each defers to the single-note action so all the edge handling
+    // (reopening the current note on delete, clearing a pin on archive) stays in one place.
+    async deleteNotes(ids: string[]) {
+      for (const id of ids) await this.deleteNote(id)
+    },
+    async archiveNotes(ids: string[]) {
+      for (const id of ids) await this.archiveNote(id)
+    },
+    moveNotesToFolder(ids: string[], folderId: string | null) {
+      for (const id of ids) this.moveNoteToFolder(id, folderId)
+    },
+    // Favourite every note in the set, or unfavourite them when they are all already favourites,
+    // so the button toggles the whole selection the obvious way.
+    favoriteNotes(ids: string[]) {
+      const allFav = ids.every((id) => this.entries.find((e) => e.id === id)?.favorite)
+      for (const id of ids) {
+        const entry = this.entries.find((e) => e.id === id)
+        if (entry) entry.favorite = !allFav
+      }
+    },
+    tagNotes(ids: string[], tag: string) {
+      const clean = tag.trim().toLowerCase()
+      if (!clean) return
+      for (const id of ids) {
+        const entry = this.entries.find((e) => e.id === id)
+        if (!entry) continue
+        const tags = entry.tags ?? []
+        if (!tags.includes(clean)) entry.tags = [...tags, clean]
+      }
     },
     // Add or remove a label on a note, trimmed and kept unique, so the library can be filtered by it.
     toggleTag(id: string, tag: string) {
