@@ -28,6 +28,8 @@ const emit = defineEmits<{
   (e: 'focus'): void
   (e: 'blur'): void
   (e: 'select-all-note'): void
+  (e: 'slash', payload: { query: string; x: number; y: number }): void
+  (e: 'slash-close'): void
 }>()
 
 const el = ref<HTMLElement | null>(null)
@@ -44,6 +46,27 @@ function onInput() {
   if (!el.value) return
   editing = true
   model.value = htmlToRuns(el.value)
+  reportSlash()
+}
+
+// A slash typed at the very start of an otherwise empty line opens the block menu: while the
+// whole line reads as `/` and the letters after it, the parent is told the query and where the
+// caret sits so it can float the menu there. Anything else — words before the slash, a space,
+// or the slash gone — closes it, so the menu only lives while a command is being typed.
+function reportSlash() {
+  if (!props.splitLines || !el.value) return
+  // Read the line straight from the DOM, which is the source of truth at input time; the model
+  // has not caught up yet. The empty-line placeholder is a zero-width space, so it is stripped.
+  const line = (el.value.textContent ?? '').replace(/\u200B/g, '')
+  const match = /^\/(\w*)$/.exec(line)
+  if (!match || caretOffset() !== line.length) {
+    emit('slash-close')
+    return
+  }
+  const sel = window.getSelection()
+  const rect = sel && sel.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : el.value?.getBoundingClientRect()
+  const box = rect && (rect.width || rect.height) ? rect : el.value?.getBoundingClientRect()
+  emit('slash', { query: match[1], x: box?.left ?? 0, y: box?.bottom ?? 0 })
 }
 function onFocus() {
   editing = true
@@ -64,6 +87,7 @@ function onClick(event: MouseEvent) {
 function onBlur() {
   editing = false
   emit('blur')
+  emit('slash-close')
   // The DOM is normally left as the browser has it: re-rendering would replace the text nodes
   // and detach a selection a colour picker needs to keep. But when the model has moved on while
   // this line was focused, for instance a merge shifted a different line's words into it, the
@@ -206,6 +230,13 @@ defineExpose({
   focus: (offset?: number) => {
     const host = el.value
     if (!host) return
+    // Sync the DOM to the model before focusing: when a slash command emptied this line while it
+    // was still focused, the earlier render was skipped, so the stale `/query` would otherwise
+    // linger under the caret. Redraw only when they actually differ to keep a live selection.
+    if (plainText(htmlToRuns(host)) !== plainText(model.value)) {
+      editing = false
+      render()
+    }
     host.focus()
     if (offset !== undefined) placeCaret(host, offset)
   },

@@ -8,6 +8,16 @@ export interface Release {
 
 export const changelog: Release[] = [
   {
+    version: '0.7',
+    date: 'July 2026',
+    items: [
+      'Type / on an empty line to turn it into a heading, list, quote, code, or divider.',
+      'Find and replace on the command or control key plus F, with matches lit in place.',
+      'Right-click a page for a page break anywhere, and pages flow and merge like a document.',
+      'Backspace at the start of a line now pulls it up past a divider or figure above.',
+    ],
+  },
+  {
     version: '0.6',
     date: 'July 2026',
     items: [

@@ -13,6 +13,7 @@ import { useDocument, lineKey } from '@/store/document'
 import { useSettings } from '@/store/settings'
 import { hashSeed } from '@/diagrams/wobble'
 import EditableText from './EditableText.vue'
+import SlashMenu from './SlashMenu.vue'
 import TableBlock from './TableBlock.vue'
 import CalloutsBlock from './CalloutsBlock.vue'
 import ImageBlock from './ImageBlock.vue'
@@ -119,6 +120,75 @@ watch(pendingFocus, async (target) => {
 function mergeRuns(a: TextRun[], b: TextRun[]): TextRun[] {
   const runs = [...a, ...b].filter((r) => r.text.length)
   return runs.length ? runs : [{ text: '' }]
+}
+
+// The slash block menu: which line opened it, what has been typed after the slash, and where
+// on screen to float it. Null when no menu is open.
+const slash = ref<{ blockId: string; query: string; x: number; y: number } | null>(null)
+function onSlash(blockId: string, payload: { query: string; x: number; y: number }) {
+  slash.value = { blockId, ...payload }
+}
+function closeSlash(blockId: string) {
+  // Only the line that owns the menu may close it, so a stale blur from another line cannot
+  // pull it out from under the one being typed into.
+  if (slash.value?.blockId === blockId) slash.value = null
+}
+
+const SLASH_ROLES: Record<string, TextRole> = {
+  title: 'title',
+  subtitle: 'subtitle',
+  heading: 'heading',
+  subheading: 'subheading',
+  body: 'body',
+  caption: 'caption',
+}
+
+// Turn the line the slash was typed on into the chosen block. The `/query` was the whole line,
+// so it is cleared away as the block takes its place; the caret lands in the new block ready to
+// write. A role just restyles the line in place; a list keeps it a line but reshaped; a quote,
+// code, or divider replaces it, the divider leaving a fresh line below to carry on.
+function applySlash(commandId: string) {
+  const target = slash.value
+  slash.value = null
+  if (!target) return
+  const blockId = target.blockId
+  const role = SLASH_ROLES[commandId]
+  if (role) {
+    documentStore.setRuns(blockId, [{ text: '' }])
+    documentStore.setRole(blockId, role)
+    pendingFocus.value = { key: `text:${blockId}` }
+    return
+  }
+  if (commandId === 'bullet' || commandId === 'numbered') {
+    documentStore.setRuns(blockId, [{ text: '' }])
+    const id = documentStore.convertToList(blockId, commandId === 'numbered')
+    pendingFocus.value = { key: `list:${id}:0` }
+    return
+  }
+  if (commandId === 'task') {
+    const id = documentStore.addTaskList(blockId)
+    documentStore.removeBlock(blockId)
+    pendingFocus.value = { key: `list:${id}:0` }
+    return
+  }
+  if (commandId === 'quote') {
+    const id = documentStore.addQuote(blockId)
+    documentStore.removeBlock(blockId)
+    pendingFocus.value = { key: `text:${id}` }
+    return
+  }
+  if (commandId === 'code') {
+    const id = documentStore.addCode(blockId)
+    documentStore.removeBlock(blockId)
+    documentStore.requestFocus(id)
+    return
+  }
+  if (commandId === 'divider') {
+    const dividerId = documentStore.addDivider(blockId)
+    const lineId = documentStore.addParagraphAfter(dividerId, 'body')
+    documentStore.removeBlock(blockId)
+    pendingFocus.value = { key: `text:${lineId}` }
+  }
 }
 
 // A block inserted from the tool bar asks the editor to place the caret in it.
@@ -517,7 +587,7 @@ function placeholderFor(block: Extract<Block, { type: 'text' }>, index: number):
   if (block.text.role !== 'body') return ROLE_HINT[block.text.role] ?? ''
   const pristine =
     props.pageIndex === 0 && index === 0 && documentStore.doc.pages.length === 1 && props.page.blocks.length === 1
-  return pristine ? 'Start writing' : ''
+  return pristine ? 'Start writing, or press / for blocks' : ''
 }
 
 function diagramFont() {
@@ -565,6 +635,8 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
         @paste-lines="onParagraphPasteLines(block, $event)"
         @paste-structure="onParagraphPasteStructure(block, $event)"
         @merge-back="onParagraphMergeBack(block, $event)"
+        @slash="onSlash(block.id, $event)"
+        @slash-close="closeSlash(block.id)"
         @select-all-note="documentStore.selectWholeNote()"
       />
 
@@ -747,6 +819,7 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
         </button>
       </div>
     </template>
+    <SlashMenu v-if="slash" :query="slash.query" :x="slash.x" :y="slash.y" @pick="applySlash" @close="slash = null" />
   </div>
 </template>
 
