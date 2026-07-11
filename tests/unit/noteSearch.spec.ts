@@ -37,4 +37,22 @@ describe('note search', () => {
     const s = snippet('a', 'mole')
     expect(s.toLowerCase()).toContain('mole')
   })
+
+  it('tolerates a small typo in a longer term', () => {
+    const { matches } = useNoteSearch()
+    // One dropped/added/wrong letter on a long word still finds the note.
+    expect(matches('a', 'Chemistry', 'chemsitry')).toBe(true) // transposed
+    expect(matches('a', 'Chemistry', 'chemistrry')).toBe(true) // doubled letter
+    expect(matches('b', 'History', 'revolotion')).toBe(true) // wrong vowel
+    // A short term must still be exact, so a typo does not match an unrelated word.
+    expect(matches('a', 'Chemistry', 'xxx')).toBe(false)
+    // A far-off word is not dragged in by tolerance.
+    expect(matches('b', 'History', 'chemistry')).toBe(false)
+  })
+
+  it('centres a snippet on a near-miss word when there was no exact hit', () => {
+    const { snippet } = useNoteSearch()
+    const s = snippet('a', 'chemsitry')
+    expect(s.toLowerCase()).toContain('chemistry')
+  })
 })
