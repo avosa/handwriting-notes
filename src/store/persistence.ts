@@ -10,7 +10,7 @@ import { useSettings } from './settings'
 import { useLibrary } from './library'
 
 const DB_NAME = 'handwriting-notes'
-const DB_VERSION = 2
+const DB_VERSION = 3
 const SETTINGS_KEY = 'current'
 const API_KEY_KEY = 'anthropic-api-key'
 const LIBRARY_KEY = 'library'
@@ -32,12 +32,23 @@ export interface VersionRecord {
   doc: NoteDocument
 }
 
+/** One block's on-device embedding, the unit of the local semantic index. Keyed by
+ *  "noteId::blockId"; the hash lets an unchanged block be skipped on re-index. */
+export interface VectorRecord {
+  noteId: string
+  blockId: string
+  text: string
+  hash: string
+  vector: number[]
+}
+
 interface Stores {
   document: NoteDocument
   settings: Settings
   blobs: Blob
   meta: string | LibraryEntry[] | Folder[] | SavedSearch[]
   versions: VersionRecord
+  vectors: VectorRecord
 }
 
 let dbPromise: Promise<IDBPDatabase<Stores>> | null = null
@@ -54,6 +65,8 @@ function db(): Promise<IDBPDatabase<Stores>> {
         }
         // Version 2 adds the history store: past snapshots of each note, keyed by their own id.
         if (oldVersion < 2) database.createObjectStore('versions')
+        // Version 3 adds the local semantic index: one embedding per block, keyed "noteId::blockId".
+        if (oldVersion < 3) database.createObjectStore('vectors')
       },
     })
   }
@@ -186,6 +199,37 @@ export async function saveVersion(doc: NoteDocument, force = false): Promise<boo
 export async function deleteVersionsFor(noteId: string): Promise<void> {
   const database = await db()
   for (const v of await listVersions(noteId)) await database.delete('versions', v.id)
+}
+
+// --- Local semantic index storage -------------------------------------------------------------
+// Each block's embedding lives under "noteId::blockId" so a note's vectors are easy to gather,
+// refresh, and drop. Vectors never leave the device.
+function vectorKey(noteId: string, blockId: string): string {
+  return `${noteId}::${blockId}`
+}
+
+export async function putVector(record: VectorRecord): Promise<void> {
+  await (await db()).put('vectors', plain(record), vectorKey(record.noteId, record.blockId))
+}
+
+export async function getAllVectors(): Promise<VectorRecord[]> {
+  return (await db()).getAll('vectors')
+}
+
+export async function getNoteVectors(noteId: string): Promise<VectorRecord[]> {
+  return (await getAllVectors()).filter((v) => v.noteId === noteId)
+}
+
+export async function deleteVector(noteId: string, blockId: string): Promise<void> {
+  await (await db()).delete('vectors', vectorKey(noteId, blockId))
+}
+
+export async function deleteVectorsForNote(noteId: string): Promise<void> {
+  const database = await db()
+  const keys = (await database.getAllKeys('vectors')) as string[]
+  for (const key of keys) {
+    if (key.startsWith(`${noteId}::`)) await database.delete('vectors', key)
+  }
 }
 
 // The keys of every attachment blob a note points at, across all its pages.

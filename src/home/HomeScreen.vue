@@ -8,6 +8,15 @@ import type { LibraryEntry } from '@/types'
 import { useLibrary } from '@/store/library'
 import { templates } from '@/content/blankDocument'
 import { buildSearchIndex, useNoteSearch } from './noteSearch'
+import {
+  indexAll,
+  searchNotes,
+  indexing,
+  indexedBlocks,
+  totalBlocks,
+  type SemanticHit,
+} from '@/ai/embeddings/semanticIndex'
+import { embedStatus, embedProgress } from '@/ai/embeddings/embedder'
 import NoteThumbnail from './NoteThumbnail.vue'
 import Icon from '@/ui/Icon.vue'
 import Popover from '@/ui/Popover.vue'
@@ -98,9 +107,58 @@ function sortList(list: LibraryEntry[]): LibraryEntry[] {
 // Whether the current tab is one of the filed-away views, which share a compact card.
 const filed = computed(() => tab.value === 'trash' || tab.value === 'archive')
 
+// Meaning-based (semantic) search, run entirely on-device. Off by default so its one-time model
+// download only happens when the writer opts in. When on and a query is present, the shown list
+// is the semantically ranked notes instead of the text-match list.
+const semanticOn = ref(false)
+const semanticHits = ref<SemanticHit[]>([])
+const semanticBusy = ref(false)
+const semanticActive = computed(() => semanticOn.value && !!query.value.trim())
+
+async function toggleSemantic() {
+  semanticOn.value = !semanticOn.value
+  if (semanticOn.value) {
+    // Warm the index on opt-in (downloads the model once, embeds any new blocks), then search.
+    await indexAll()
+    if (query.value.trim()) await runSemantic()
+  }
+}
+
+let semanticTimer: ReturnType<typeof setTimeout> | undefined
+async function runSemantic() {
+  const q = query.value.trim()
+  if (!q) {
+    semanticHits.value = []
+    return
+  }
+  semanticBusy.value = true
+  try {
+    semanticHits.value = await searchNotes(q, 30)
+  } finally {
+    semanticBusy.value = false
+  }
+}
+watch([query, semanticOn], () => {
+  if (!semanticActive.value) return
+  clearTimeout(semanticTimer)
+  semanticTimer = setTimeout(runSemantic, 220)
+})
+
+// The best-matching snippet per note from the last semantic search, for the card excerpt.
+const semanticSnippet = computed(() => new Map(semanticHits.value.map((h) => [h.noteId, h.text])))
+
 const shown = computed(() => {
   if (tab.value === 'trash') return library.trash
   if (tab.value === 'archive') return sortList(library.archived)
+  // Semantic mode: order live notes by meaning, keeping the folder/tag narrowing that is active.
+  if (semanticActive.value) {
+    const byId = new Map(library.recent.map((e) => [e.id, e]))
+    let hits = semanticHits.value.map((h) => byId.get(h.noteId)).filter((e): e is NonNullable<typeof e> => !!e)
+    if (tab.value === 'favorites') hits = hits.filter((e) => e.favorite)
+    if (browsingFolders.value) hits = hits.filter((e) => (e.folderId ?? null) === currentFolder.value)
+    if (activeTag.value) hits = hits.filter((e) => (e.tags ?? []).includes(activeTag.value!))
+    return hits
+  }
   let list = tab.value === 'favorites' ? library.favorites : library.recent
   if (browsingFolders.value) list = list.filter((e) => (e.folderId ?? null) === currentFolder.value)
   if (activeTag.value) list = list.filter((e) => (e.tags ?? []).includes(activeTag.value!))
@@ -185,8 +243,10 @@ function applySearch(id: string) {
 // Selection makes no sense once the view changes under it, so clear it when the tab, folder,
 // or filter moves. Also drop any picked note that has left the shown list.
 watch([tab, currentFolder, query, activeTag], clearSelection)
-// A short excerpt for a searched note, shown under its title so a match is explained.
+// A short excerpt for a searched note, shown under its title so a match is explained. In semantic
+// mode the excerpt is the block that matched by meaning; otherwise it is the text-match snippet.
 function excerptFor(id: string): string {
+  if (semanticActive.value) return semanticSnippet.value.get(id)?.slice(0, 140) ?? ''
   return query.value.trim() ? snippet(id, query.value) : ''
 }
 
@@ -233,8 +293,25 @@ function commitRename(id: string) {
       <div class="search">
         <Icon name="search" :size="16" />
         <input v-model="query" placeholder="Search notes and their contents" spellcheck="false" />
+        <button
+          class="meaning"
+          :class="{ on: semanticOn }"
+          title="Search by meaning, on your device"
+          @click="toggleSemantic"
+        >
+          <Icon name="sparkleEdit" :size="14" /> Meaning
+        </button>
       </div>
     </header>
+
+    <!-- On-device semantic status: model download, indexing progress, and which backend is used. -->
+    <div v-if="semanticOn && (embedStatus === 'loading' || indexing || semanticBusy)" class="sem-status">
+      <span v-if="embedStatus === 'loading'">
+        Preparing on-device model{{ embedProgress != null ? ` … ${Math.round(embedProgress * 100)}%` : '…' }}
+      </span>
+      <span v-else-if="indexing">Indexing notes on your device … {{ indexedBlocks }}/{{ totalBlocks }}</span>
+      <span v-else-if="semanticBusy">Searching by meaning…</span>
+    </div>
 
     <div class="scroll">
       <h1>Your notes</h1>
@@ -662,6 +739,35 @@ function commitRename(id: string) {
 }
 .search input::placeholder {
   color: var(--text-muted);
+}
+.search .meaning {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.search .meaning:hover {
+  color: var(--text);
+}
+.search .meaning.on {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, #4a72b0, #7e3f8a);
+}
+.sem-status {
+  padding: 8px clamp(16px, 5vw, 56px);
+  font-size: 12.5px;
+  color: var(--text-muted);
+  background: var(--accent-wash);
+  border-bottom: 1px solid var(--border-subtle);
 }
 .scroll {
   flex: 1;
