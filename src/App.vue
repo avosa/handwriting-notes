@@ -26,6 +26,7 @@ import WelcomeSheet from './ui/WelcomeSheet.vue'
 import WhatsNewSheet from './ui/WhatsNewSheet.vue'
 import { APP_DOMAIN } from './brand'
 import { exportNoteAsText } from './export/toText'
+import { exportPageAsPng } from './export/toPng'
 import HandwritingPicker from './tools/HandwritingPicker.vue'
 import ThemeSwitch from './ui/ThemeSwitch.vue'
 import NavDrawer from './ui/NavDrawer.vue'
@@ -53,6 +54,13 @@ const drawerOpen = ref(false)
 // is one click away without any account or form.
 function sendFeedback() {
   window.location.href = `mailto:feedback@${APP_DOMAIN}?subject=Feedback`
+}
+
+// Save the page the reader is on as an image, falling back to the first if none is active.
+async function savePageImage() {
+  const pages = document.querySelectorAll<HTMLElement>('.note-page')
+  const page = pages[documentStore.activePageIndex] ?? pages[0]
+  if (page) await exportPageAsPng(page, documentStore.doc.title)
 }
 
 // The welcome card is shown once, the first time the app is opened on this device. A stored
@@ -206,6 +214,7 @@ const commands = computed<Command[]>(() => [
   { id: 'md', title: 'Export as Markdown', icon: 'download', run: () => exportNoteAsText(documentStore.doc, 'md') },
   { id: 'txt', title: 'Export as text', icon: 'download', run: () => exportNoteAsText(documentStore.doc, 'txt') },
   { id: 'html', title: 'Export as HTML', icon: 'download', run: () => exportNoteAsText(documentStore.doc, 'html') },
+  { id: 'png', title: 'Export page as image', icon: 'image', run: () => void savePageImage() },
   { id: 'keys', title: 'AI keys', icon: 'key', run: () => (showKey.value = true) },
   { id: 'undo', title: 'Undo', icon: 'undo', run: () => documentStore.undo() },
   { id: 'redo', title: 'Redo', icon: 'redo', run: () => documentStore.redo() },

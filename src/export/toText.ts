@@ -157,7 +157,7 @@ export function toHtml(doc: NoteDocument): string {
 
 // Turn a note title into a safe file stem, so a saved file is named after the note without
 // stray slashes or spaces tripping up the download.
-function fileStem(title: string): string {
+export function fileStem(title: string): string {
   const stem = title
     .trim()
     .replace(/[^\p{L}\p{N}]+/gu, '-')
