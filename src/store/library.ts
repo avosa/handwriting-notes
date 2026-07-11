@@ -7,7 +7,7 @@ import type { LibraryEntry, NoteDocument } from '@/types'
 import { blankDocument, noteFromTemplate } from '@/content/blankDocument'
 import { uid } from '@/util/id'
 import { useDocument } from './document'
-import { loadNote, saveNote, deleteNote as removeNote } from './persistence'
+import { loadNote, saveNote, deleteNote as removeNote, deleteBlob } from './persistence'
 
 interface LibraryState {
   entries: LibraryEntry[]
@@ -81,7 +81,17 @@ export const useLibrary = defineStore('library', {
       this.entries.push(entryFor(copy))
     },
     async deleteNote(id: string) {
+      // Free the pictures the note held before dropping it, so a deleted note leaves nothing
+      // behind in storage. A deleted note cannot be brought back, so its blobs are safe to go.
+      const doc = await loadNote(id)
       await removeNote(id)
+      if (doc) {
+        for (const page of doc.pages) {
+          for (const block of page.blocks) {
+            if (block.type === 'image') await deleteBlob(block.blobRef)
+          }
+        }
+      }
       this.entries = this.entries.filter((e) => e.id !== id)
       if (id === this.currentId) {
         if (this.entries.length) await this.openInto(this.recent[0].id)

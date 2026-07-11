@@ -16,6 +16,7 @@ import EditableText from './EditableText.vue'
 import TableBlock from './TableBlock.vue'
 import CalloutsBlock from './CalloutsBlock.vue'
 import ImageBlock from './ImageBlock.vue'
+import Icon from '@/ui/Icon.vue'
 import Diagram from '@/diagrams/Diagram.vue'
 
 const props = defineProps<{
@@ -435,6 +436,14 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
         <ImageBlock :blob-ref="block.blobRef" :alt="block.alt" />
         <button
           v-if="editable"
+          class="figure-remove"
+          title="Remove picture"
+          @click.stop="documentStore.removeBlock(block.id)"
+        >
+          <Icon name="trash" :size="15" />
+        </button>
+        <button
+          v-if="editable"
           class="resize-handle"
           title="Drag to resize"
           @pointerdown="startResize(block.id, block.heightRules, $event)"
@@ -527,6 +536,29 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
 }
 .image-slot:hover .resize-handle {
   opacity: 1;
+}
+/* A quiet remove button in the corner of a picture, shown only while it is pointed at. */
+.figure-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 7px;
+  color: #fff;
+  background: rgba(31, 31, 40, 0.72);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.image-slot:hover .figure-remove {
+  opacity: 1;
+}
+.figure-remove:hover {
+  background: var(--danger, #b73b3a);
 }
 /* A quiet grip at the foot of a figure; it appears on hover and drags the height. */
 .resize-handle {
