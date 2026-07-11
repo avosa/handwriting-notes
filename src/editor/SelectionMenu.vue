@@ -219,6 +219,17 @@ async function sendAsk() {
   visible.value = false
   litOff()
 }
+// Run a ready-made instruction (shorter, clearer, more formal) in one tap.
+async function runPreset(instruction: string) {
+  askText.value = instruction
+  await sendAsk()
+}
+// Prefill the field for an instruction the writer finishes, like naming a language to translate to.
+async function prefill(instruction: string) {
+  askText.value = instruction
+  await nextTick()
+  askInput.value?.focus()
+}
 function cancelAsk() {
   asking.value = false
   visible.value = false
@@ -320,6 +331,14 @@ function cancelLink() {
           <span v-else>Go</span>
         </button>
         <button class="go ghost" @click="cancelAsk"><Icon name="close" :size="15" /></button>
+        <div class="presets">
+          <button class="preset" :disabled="!!refining" @click="runPreset('Make it shorter.')">Shorter</button>
+          <button class="preset" :disabled="!!refining" @click="runPreset('Make it clearer and easier to read.')">
+            Clearer
+          </button>
+          <button class="preset" :disabled="!!refining" @click="runPreset('Make it more formal.')">Formal</button>
+          <button class="preset" :disabled="!!refining" @click="prefill('Translate to ')">Translate…</button>
+        </div>
         <span v-if="error" class="ask-error">{{ error }}</span>
       </template>
 
@@ -469,6 +488,30 @@ button:hover {
   to {
     transform: rotate(360deg);
   }
+}
+.presets {
+  flex-basis: 100%;
+  display: flex;
+  gap: 5px;
+  padding: 4px 2px 2px;
+}
+.preset {
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: #f4f4f8;
+  border-radius: 7px;
+  padding: 5px 9px;
+  font-size: 12px;
+  cursor: pointer;
+  min-width: auto;
+  min-height: auto;
+}
+.preset:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22);
+}
+.preset:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 .ask-error {
   flex-basis: 100%;
