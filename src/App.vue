@@ -25,6 +25,7 @@ import ShortcutsSheet from './ui/ShortcutsSheet.vue'
 import WelcomeSheet from './ui/WelcomeSheet.vue'
 import WhatsNewSheet from './ui/WhatsNewSheet.vue'
 import NoteInfo from './ui/NoteInfo.vue'
+import FindBar from './ui/FindBar.vue'
 import { APP_DOMAIN } from './brand'
 import { exportNoteAsText } from './export/toText'
 import { exportPageAsPng } from './export/toPng'
@@ -50,6 +51,7 @@ const showShortcuts = ref(false)
 const showWelcome = ref(false)
 const showWhatsNew = ref(false)
 const showInfo = ref(false)
+const showFind = ref(false)
 const drawerOpen = ref(false)
 
 // Open the reader's mail app with a message addressed to the project, so a note of feedback
@@ -271,6 +273,7 @@ const commands = computed<Command[]>(() => [
     title: 'Paper: Blank',
     run: () => documentStore.setPagePreset(documentStore.activePageIndex, 'blank'),
   },
+  { id: 'find', title: 'Find and replace', hint: '⌘F', run: () => (showFind.value = true) },
   { id: 'info', title: 'Note info', hint: 'words, reading time', run: () => (showInfo.value = true) },
   { id: 'whats-new', title: "What's new", run: () => (showWhatsNew.value = true) },
   { id: 'feedback', title: 'Send feedback', icon: 'send', run: sendFeedback },
@@ -288,6 +291,12 @@ function onKeydown(event: KeyboardEvent) {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault()
     showPalette.value = !showPalette.value
+    return
+  }
+  // Find in the note, in place of the browser's own find which cannot see the handwriting.
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+    event.preventDefault()
+    showFind.value = true
     return
   }
   // A bare question mark opens the shortcut list, as long as the reader is not typing one.
@@ -585,6 +594,8 @@ function addPage() {
     <WhatsNewSheet v-if="showWhatsNew" @close="showWhatsNew = false" />
 
     <NoteInfo v-if="showInfo" @close="showInfo = false" />
+
+    <FindBar v-if="showFind" @close="showFind = false" />
 
     <Transition name="home-fade">
       <HomeScreen v-if="showHome" @close="showHome = false" />

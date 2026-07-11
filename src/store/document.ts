@@ -6,6 +6,7 @@ import type { Block, CalloutBox, NoteDocument, Page, Stroke, TextRole, TextRun }
 import { blankDocument, blankPage } from '@/content/blankDocument'
 import { toScene } from '@/diagrams/diagramSpec'
 import { uid } from '@/util/id'
+import { replaceInRuns } from '@/ui/richText'
 
 interface DocumentState {
   doc: NoteDocument
@@ -733,6 +734,57 @@ export const useDocument = defineStore('document', {
       if (this.selectedBlockId === blockId) this.selectedBlockId = null
       this.touch()
       return result
+    },
+    // Replace every occurrence of a phrase across the whole note at once, in paragraphs, list
+    // items, quotes, callouts, table cells, code, and free notes. Returns how many were changed.
+    replaceAll(query: string, replacement: string): number {
+      if (!query) return 0
+      let total = 0
+      const swap = (runs: TextRun[]): TextRun[] => {
+        const out = replaceInRuns(runs, query, replacement)
+        total += out.count
+        return out.count ? out.runs : runs
+      }
+      const inString = (value: string): string => {
+        const parts = value.toLowerCase().split(query.toLowerCase())
+        if (parts.length === 1) return value
+        // Rebuild from the original text so replacements land at case-insensitive matches.
+        let result = ''
+        let at = 0
+        const needle = query.toLowerCase()
+        const lower = value.toLowerCase()
+        while (at < value.length) {
+          if (lower.startsWith(needle, at)) {
+            result += replacement
+            at += query.length
+            total += 1
+          } else {
+            result += value[at]
+            at += 1
+          }
+        }
+        return result
+      }
+      for (const page of this.doc.pages) {
+        for (const block of page.blocks) {
+          if (block.type === 'text') block.text.runs = swap(block.text.runs)
+          else if (block.type === 'quote') block.runs = swap(block.runs)
+          else if (block.type === 'list') block.items = block.items.map(swap)
+          else if (block.type === 'code') block.text = inString(block.text)
+          else if (block.type === 'table') {
+            block.header = block.header.map(inString)
+            block.rows = block.rows.map((row) => row.map(inString))
+          } else if (block.type === 'callouts') {
+            for (const box of block.boxes) {
+              box.heading = swap(box.heading)
+              box.items = box.items.map(swap)
+            }
+          }
+        }
+        for (const note of page.notes ?? []) note.runs = swap(note.runs)
+      }
+      if (total) this.touch()
+      return total
     },
     updateBlock(blockId: string, patch: Partial<Block>) {
       const at = this.locate(blockId)

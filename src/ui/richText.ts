@@ -117,6 +117,77 @@ export function textRun(text: string, marks: Partial<TextRun> = {}): TextRun {
   return { text, ...marks }
 }
 
+// The emphasis, colour, and link of a run without its text, and whether two runs wear the
+// same, so replaced text can inherit the formatting around it and merge cleanly into a run.
+function formatOf(run: TextRun): Omit<TextRun, 'text'> {
+  const marks: Omit<TextRun, 'text'> = {}
+  if (run.bold) marks.bold = true
+  if (run.italic) marks.italic = true
+  if (run.underline) marks.underline = true
+  if (run.color) marks.color = run.color
+  if (run.highlight) marks.highlight = run.highlight
+  if (run.link) marks.link = run.link
+  return marks
+}
+function sameFormat(a: TextRun, b: TextRun): boolean {
+  return (
+    !!a.bold === !!b.bold &&
+    !!a.italic === !!b.italic &&
+    !!a.underline === !!b.underline &&
+    (a.color ?? '') === (b.color ?? '') &&
+    (a.highlight ?? '') === (b.highlight ?? '') &&
+    (a.link ?? '') === (b.link ?? '')
+  )
+}
+// How many times a query appears in a line of runs, matched without regard to case.
+export function countInRuns(runs: TextRun[], query: string): number {
+  if (!query) return 0
+  const haystack = plainText(runs).toLowerCase()
+  const needle = query.toLowerCase()
+  let count = 0
+  let at = haystack.indexOf(needle)
+  while (at !== -1) {
+    count++
+    at = haystack.indexOf(needle, at + needle.length)
+  }
+  return count
+}
+// Replace every case-insensitive occurrence of a query in a line of runs, giving the new text
+// the formatting of the run it replaces so bold or coloured words keep their look around the
+// edit. Returns the rewritten runs and how many were replaced.
+export function replaceInRuns(runs: TextRun[], query: string, replacement: string): { runs: TextRun[]; count: number } {
+  if (!query) return { runs, count: 0 }
+  const text = plainText(runs)
+  const lower = text.toLowerCase()
+  const needle = query.toLowerCase()
+  const owner: TextRun[] = []
+  for (const run of runs) for (let i = 0; i < run.text.length; i++) owner.push(run)
+
+  const chars: { ch: string; run: TextRun }[] = []
+  let i = 0
+  let count = 0
+  while (i < text.length) {
+    if (lower.startsWith(needle, i)) {
+      const mark = owner[i] ?? runs[0] ?? { text: '' }
+      for (const ch of replacement) chars.push({ ch, run: mark })
+      i += query.length
+      count++
+    } else {
+      chars.push({ ch: text[i], run: owner[i] ?? runs[0] ?? { text: '' } })
+      i++
+    }
+  }
+  if (!count) return { runs, count: 0 }
+
+  const result: TextRun[] = []
+  for (const { ch, run } of chars) {
+    const last = result[result.length - 1]
+    if (last && sameFormat(last, run)) last.text += ch
+    else result.push({ text: ch, ...formatOf(run) })
+  }
+  return { runs: result.length ? result : [{ text: '' }], count }
+}
+
 // Split a line of runs at a character offset, keeping each run's emphasis, so pressing enter
 // in the middle of a line carries the words after the caret onto the next line unchanged.
 export function splitRuns(runs: TextRun[], offset: number): [TextRun[], TextRun[]] {

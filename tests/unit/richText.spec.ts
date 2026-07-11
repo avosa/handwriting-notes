@@ -1,5 +1,35 @@
 import { describe, it, expect } from 'vitest'
-import { runsToHtml, htmlToRuns, plainText, splitRuns, splitPasteText, parsePasteGroups } from '@/ui/richText'
+import {
+  runsToHtml,
+  htmlToRuns,
+  plainText,
+  splitRuns,
+  splitPasteText,
+  parsePasteGroups,
+  replaceInRuns,
+  countInRuns,
+} from '@/ui/richText'
+
+describe('find and replace in runs', () => {
+  it('counts matches without regard to case', () => {
+    expect(countInRuns([{ text: 'Cat cat CAT' }], 'cat')).toBe(3)
+    expect(countInRuns([{ text: 'dog' }], 'cat')).toBe(0)
+  })
+
+  it('replaces every match and keeps the formatting around the edit', () => {
+    const runs = [{ text: 'the ' }, { text: 'cat', bold: true }, { text: ' sat' }]
+    const { runs: out, count } = replaceInRuns(runs, 'cat', 'dog')
+    expect(count).toBe(1)
+    expect(plainText(out)).toBe('the dog sat')
+    // The replaced word inherits the bold of the word it replaced.
+    expect(out.find((r) => r.text.includes('dog'))?.bold).toBe(true)
+  })
+
+  it('leaves runs untouched when there is no match', () => {
+    const runs = [{ text: 'hello' }]
+    expect(replaceInRuns(runs, 'zzz', 'x')).toEqual({ runs, count: 0 })
+  })
+})
 import { safeUrl } from '@/editor/marks'
 
 describe('links', () => {
