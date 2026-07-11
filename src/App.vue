@@ -31,6 +31,7 @@ import LinksPanel from './ui/LinksPanel.vue'
 import GraphView from './ui/GraphView.vue'
 import PwaPrompts from './ui/PwaPrompts.vue'
 import StoragePanel from './ui/StoragePanel.vue'
+import NotesChat from './ui/NotesChat.vue'
 import FindBar from './ui/FindBar.vue'
 import { APP_DOMAIN } from './brand'
 import { exportNoteAsText } from './export/toText'
@@ -62,6 +63,7 @@ const showHistory = ref(false)
 const showLinks = ref(false)
 const showGraph = ref(false)
 const showStorage = ref(false)
+const showChat = ref(false)
 const showFind = ref(false)
 
 // Open a note chosen in the links panel or the map, then leave those overlays.
@@ -69,6 +71,7 @@ async function openNoteById(id: string) {
   await library.openNote(id)
   showLinks.value = false
   showGraph.value = false
+  showChat.value = false
 }
 // Swap the links panel for the full map.
 function openMap() {
@@ -552,6 +555,13 @@ const commands = computed<Command[]>(() => [
     run: () => (showGraph.value = true),
   },
   {
+    id: 'chat',
+    title: 'Chat with your notes',
+    hint: 'grounded, cited answers',
+    icon: 'sparkleEdit',
+    run: () => (showChat.value = true),
+  },
+  {
     id: 'storage',
     title: 'Storage',
     hint: 'usage, clean up space',
@@ -888,6 +898,8 @@ function addPage() {
     <GraphView v-if="showGraph" @close="showGraph = false" @open="openNoteById" />
 
     <StoragePanel v-if="showStorage" @close="showStorage = false" />
+
+    <NotesChat v-if="showChat" @close="showChat = false" @open="openNoteById" @need-key="showKey = true" />
 
     <FindBar v-if="showFind" @close="showFind = false" />
 
