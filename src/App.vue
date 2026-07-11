@@ -2,7 +2,7 @@
 // The application shell. A calm top bar holds the document title and the main actions;
 // the pages sit on a soft desk; the tools float in a dock at the bottom. The layout
 // adapts from a wide desktop down to a phone, keeping every tool within reach.
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Attachment } from './types'
 import { useDocument } from './store/document'
 import { useLibrary } from './store/library'
@@ -162,6 +162,37 @@ function followWriting() {
   }
   if (documentStore.generating) followFrame = requestAnimationFrame(followWriting)
 }
+
+// A little room left at the foot of a page, matching the writing column, so paginated content
+// stops short of the edge like real paper.
+const PAGE_FOOT_MM = 12
+// Carry anything that overruns a fixed page onto the next sheet, page by page, until every page
+// holds only what fits. The AI writes onto a page that grows as it goes; once it finishes and the
+// page snaps back to a single sheet, this splits the overflow across as many pages as it takes,
+// so nothing is ever clipped past the page edge. Whole blocks move, never text, so it cannot
+// corrupt a line. A block taller than a page on its own is left where it is, so it cannot loop.
+function reflowPages(guard = 0) {
+  if (guard > 400) return
+  const pages = Array.from(document.querySelectorAll('.note-page')) as HTMLElement[]
+  for (const pageEl of pages) {
+    // Measure against the page's target height from its inline style, not clientHeight: the page
+    // animates its height when it snaps back from the AI's grown sheet, and clientHeight would
+    // report the mid-animation value, so content would look as if it still fit. The blocks sit at
+    // fixed offsets in the layer regardless of the page's clip height, so their positions are
+    // already the resting ones.
+    const height = parseFloat(pageEl.style.height) || pageEl.clientHeight
+    const limit = height - (PAGE_FOOT_MM * pageEl.clientWidth) / 210
+    const top = pageEl.getBoundingClientRect().top
+    const blocks = Array.from(pageEl.querySelectorAll('.text-layer > [data-block-id]')) as HTMLElement[]
+    for (let j = 1; j < blocks.length; j++) {
+      if (blocks[j].getBoundingClientRect().bottom - top > limit) {
+        documentStore.movePageTail(blocks[j].getAttribute('data-block-id')!)
+        void nextTick(() => reflowPages(guard + 1))
+        return
+      }
+    }
+  }
+}
 watch(
   () => documentStore.generating,
   (now, was) => {
@@ -175,10 +206,23 @@ watch(
     if (was && !now) {
       cancelAnimationFrame(followFrame)
       if (stack) stack.style.scrollBehavior = ''
-      // Come to rest on the last line written, deterministically.
-      scrollToBlock(documentStore.selectedBlockId, 'center')
+      // Split whatever the AI wrote across as many sheets as it needs before coming to rest, so a
+      // long note never spills past the foot of a single page.
+      void nextTick(() => {
+        reflowPages()
+        void nextTick(() => scrollToBlock(documentStore.selectedBlockId, 'center'))
+      })
     }
   },
+)
+
+// When a note first appears or another is opened, split any content a fixed page can no longer
+// hold — for instance a note that was saved while the AI was still growing its page — so nothing
+// is left clipped past the edge.
+watch(
+  () => documentStore.doc.id,
+  () => void nextTick(() => reflowPages()),
+  { immediate: true },
 )
 
 const pageCount = computed(() => documentStore.doc.pages.length)
