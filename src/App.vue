@@ -25,6 +25,7 @@ import ShortcutsSheet from './ui/ShortcutsSheet.vue'
 import WelcomeSheet from './ui/WelcomeSheet.vue'
 import WhatsNewSheet from './ui/WhatsNewSheet.vue'
 import NoteInfo from './ui/NoteInfo.vue'
+import OutlinePanel from './ui/OutlinePanel.vue'
 import FindBar from './ui/FindBar.vue'
 import { APP_DOMAIN } from './brand'
 import { exportNoteAsText } from './export/toText'
@@ -51,6 +52,7 @@ const showShortcuts = ref(false)
 const showWelcome = ref(false)
 const showWhatsNew = ref(false)
 const showInfo = ref(false)
+const showOutline = ref(false)
 const showFind = ref(false)
 const drawerOpen = ref(false)
 
@@ -500,6 +502,13 @@ const commands = computed<Command[]>(() => [
   },
   { id: 'find', title: 'Find and replace', hint: `${mod}F`, run: () => (showFind.value = true) },
   { id: 'info', title: 'Note info', hint: 'words, reading time', run: () => (showInfo.value = true) },
+  {
+    id: 'outline',
+    title: 'Outline',
+    hint: 'jump to a heading',
+    icon: 'listBullet',
+    run: () => (showOutline.value = true),
+  },
   { id: 'whats-new', title: "What's new", run: () => (showWhatsNew.value = true) },
   { id: 'feedback', title: 'Send feedback', icon: 'send', run: sendFeedback },
 ])
@@ -820,6 +829,8 @@ function addPage() {
     <WhatsNewSheet v-if="showWhatsNew" @close="showWhatsNew = false" />
 
     <NoteInfo v-if="showInfo" @close="showInfo = false" />
+
+    <OutlinePanel v-if="showOutline" @close="showOutline = false" @jump="(id) => scrollToBlock(id, 'center')" />
 
     <FindBar v-if="showFind" @close="showFind = false" />
 
