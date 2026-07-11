@@ -61,10 +61,10 @@ onBeforeUnmount(clearTimers)
 
 <template>
   <Transition name="status-fade">
-    <div v-if="visible" class="status" :class="{ writing: phase === 'writing' }">
-      <span class="orb"><span class="pulse" /><Icon name="wand" :size="15" /></span>
+    <div v-if="visible" class="status" :class="{ writing: phase === 'writing' }" role="status" aria-live="polite">
+      <span class="orb" aria-hidden="true"><span class="pulse" /><Icon name="wand" :size="15" /></span>
       <span class="text"
-        >{{ name }} is {{ word }}<span class="dots"><i /><i /><i /></span
+        >{{ name }} is {{ word }}<span class="dots" aria-hidden="true"><i /><i /><i /></span
       ></span>
     </div>
   </Transition>

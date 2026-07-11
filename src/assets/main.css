@@ -161,6 +161,28 @@ button {
    animations are all but removed everywhere at once: things still change state, they just
    do not slide, pulse, or spin. One frame is left so anything that waits on an animation to
    end still fires. The writing beats are quieted separately where the words are typed in. */
+/* A link the keyboard reaches first that jumps past the chrome to the notes. It sits off
+   screen until it takes focus, then drops into the top-left corner so it is only ever seen
+   by someone tabbing through. */
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 200;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  transform: translateY(-160%);
+  transition: transform 0.15s ease;
+}
+.skip-link:focus {
+  transform: translateY(0);
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -15,8 +15,11 @@ import Attachments from './Attachments.vue'
 import VoiceRecorder from './VoiceRecorder.vue'
 import type { Recording } from './useVoiceRecorder'
 import Icon from '@/ui/Icon.vue'
+import { useFocusTrap } from '@/ui/useFocusTrap'
 
 const props = defineProps<{ hasContent: boolean }>()
+const card = ref<HTMLElement | null>(null)
+useFocusTrap(card, () => emit('close'))
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'needs-key'): void
@@ -102,7 +105,7 @@ async function send() {
 
 <template>
   <div class="backdrop" @click.self="emit('close')">
-    <div class="card">
+    <div ref="card" class="card" role="dialog" aria-modal="true" aria-label="Write with AI" tabindex="-1">
       <div class="grip" />
       <header>
         <div class="badge"><Icon name="wand" :size="20" /></div>

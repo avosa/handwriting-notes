@@ -223,10 +223,11 @@ function addPage() {
 
 <template>
   <div class="app-root">
+    <a class="skip-link" href="#main-notes">Skip to notes</a>
     <Transition name="scrim">
       <div v-if="drawerOpen" class="drawer-scrim hide-desktop" @click="drawerOpen = false" />
     </Transition>
-    <aside class="drawer hide-desktop" :class="{ open: drawerOpen }">
+    <aside class="drawer hide-desktop" :class="{ open: drawerOpen }" aria-label="Menu">
       <NavDrawer
         :exporting="exporting"
         @home="drawerHome"
@@ -341,7 +342,13 @@ function addPage() {
         </div>
       </header>
 
-      <main class="stack" :class="{ 'all-selected': documentStore.allSelected }">
+      <main
+        id="main-notes"
+        class="stack"
+        tabindex="-1"
+        aria-label="Note pages"
+        :class="{ 'all-selected': documentStore.allSelected }"
+      >
         <div
           v-for="(page, i) in documentStore.doc.pages"
           :key="page.id"

@@ -4,6 +4,7 @@
 // key, and paste it. Keys stay in this browser and are sent only to their own vendor. The
 // one you connect becomes the one in use, and any connected provider can be switched to.
 import { computed, onMounted, ref } from 'vue'
+import { useFocusTrap } from './useFocusTrap'
 import type { ProviderId } from '@/types'
 import { loadApiKey, saveApiKey, clearApiKey } from '@/store/persistence'
 import { useSettings } from '@/store/settings'
@@ -12,6 +13,9 @@ import { refreshConnections } from '@/compose/aiConnection'
 import Icon from './Icon.vue'
 
 const emit = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>()
+
+const card = ref<HTMLElement | null>(null)
+useFocusTrap(card, () => emit('close'))
 const settings = useSettings()
 
 const viewed = ref<ProviderId>(settings.activeProvider)
@@ -88,7 +92,7 @@ function masked(k: string): string {
 
 <template>
   <div class="backdrop" @click.self="emit('close')">
-    <div class="card">
+    <div ref="card" class="card" role="dialog" aria-modal="true" aria-label="Choose an AI provider" tabindex="-1">
       <div class="grip" />
       <div class="tabhead">
         <span class="tab-title">Choose a provider</span>
