@@ -21,15 +21,15 @@ import { getHandwriting } from '@/handwriting/registry'
 
 // The pace the words appear at: a few characters every short tick, quick but slow enough to
 // watch the writing happen and see the tools being used along the way.
-const TYPE_CHARS_PER_TICK = 4
-const TYPE_TICK_MS = 14
-const FIGURE_BEAT_MS = 160
+const TYPE_CHARS_PER_TICK = 6
+const TYPE_TICK_MS = 9
+const FIGURE_BEAT_MS = 110
 // A diagram draws its strokes and sets its labels down over this long, so the pump holds on
 // it and the next line waits until the figure has been drawn.
-const DIAGRAM_DRAW_MS = 1700
+const DIAGRAM_DRAW_MS = 1100
 // The beat where the AI reaches for a tool and presses it before using it, long enough for
 // the ghost cursor to glide over and the button to react.
-const TOOL_BEAT_MS = 440
+const TOOL_BEAT_MS = 300
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -144,11 +144,11 @@ function toolFor(block: Block, prevRole: string): string | null {
 
 // The pace the eraser rubs a line out at, from the first character that changed rather than
 // the whole line, slow enough to watch the rubbing happen.
-const ERASE_CHARS_PER_TICK = 3
-const ERASE_TICK_MS = 26
+const ERASE_CHARS_PER_TICK = 4
+const ERASE_TICK_MS = 16
 // The beat where the AI picks up the eraser and brings it to the line before rubbing, so a
 // correction reads as a deliberate act even when only a few characters are wrong.
-const ERASE_BEAT_MS = 460
+const ERASE_BEAT_MS = 300
 
 // Correct a line the way a person would: rub out from the first character that changed to the
 // end, then write the corrected words back in their place. The unchanged start is left alone,

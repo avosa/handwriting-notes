@@ -261,7 +261,7 @@ export interface ColorScheme {
 
 export type ThemeChoice = 'system' | 'light' | 'dark'
 
-export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'deepseek'
+export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'deepseek' | 'manus'
 
 export interface Settings {
   activeHandwritingId: string

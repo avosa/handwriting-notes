@@ -44,12 +44,12 @@ watch(
       cycle = setInterval(() => {
         step = (step + 1) % THOUGHTS.length
         word.value = THOUGHTS[step]
-      }, 1500)
+      }, 900)
     } else if (phase === 'writing') {
       word.value = 'writing'
       visible.value = true
-      // Announce the writing, then step aside so the paper is clear to watch.
-      hideTimer = setTimeout(() => (visible.value = false), 1700)
+      // Announce the writing, then step aside quickly so the paper is clear to watch.
+      hideTimer = setTimeout(() => (visible.value = false), 650)
     } else {
       visible.value = false
     }
@@ -99,7 +99,7 @@ onBeforeUnmount(clearTimers)
   inset: 0;
   border-radius: 50%;
   background: var(--accent-grad);
-  animation: pulse 1.4s ease-out infinite;
+  animation: pulse 1s ease-out infinite;
 }
 @keyframes pulse {
   0% {
@@ -129,7 +129,7 @@ onBeforeUnmount(clearTimers)
   border-radius: 50%;
   background: #fff;
   opacity: 0.4;
-  animation: blink 1.2s infinite;
+  animation: blink 0.9s infinite;
 }
 .dots i:nth-child(2) {
   animation-delay: 0.2s;

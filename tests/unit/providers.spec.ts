@@ -16,8 +16,8 @@ import { describeHttpError } from '@/ai/providers/errors'
 import type { Attachment } from '@/types'
 
 describe('provider registry', () => {
-  it('offers Claude, ChatGPT, Gemini, and DeepSeek, with Claude first', () => {
-    expect(providerList.map((p) => p.name)).toEqual(['Claude', 'ChatGPT', 'Gemini', 'DeepSeek'])
+  it('offers Claude, ChatGPT, Gemini, DeepSeek, and Manus, with Claude first', () => {
+    expect(providerList.map((p) => p.name)).toEqual(['Claude', 'ChatGPT', 'Gemini', 'DeepSeek', 'Manus'])
   })
   it('records what each provider can read', () => {
     const reads = Object.fromEntries(providerList.map((p) => [p.id, p.reads]))
@@ -26,12 +26,14 @@ describe('provider registry', () => {
       openai: { images: true, pdf: true, docs: true },
       gemini: { images: true, pdf: true, docs: true },
       deepseek: { images: false, pdf: false, docs: false },
+      manus: { images: false, pdf: false, docs: false },
     })
   })
   it('resolves a known id and falls back to Claude for an unknown one', () => {
     expect(getProvider('openai').vendor).toBe('OpenAI')
     expect(getProvider('gemini').vendor).toBe('Google')
     expect(getProvider('deepseek').vendor).toBe('DeepSeek')
+    expect(getProvider('manus').vendor).toBe('Manus')
     expect(getProvider(undefined).id).toBe('anthropic')
     expect(getProvider('nope').id).toBe('anthropic')
   })

@@ -4,11 +4,12 @@ import { anthropic } from './anthropic'
 import { openai } from './openai'
 import { gemini } from './gemini'
 import { deepseek } from './deepseek'
+import { manus } from './manus'
 import type { Provider, ProviderId } from './types'
 
-export const providerList: Provider[] = [anthropic, openai, gemini, deepseek]
+export const providerList: Provider[] = [anthropic, openai, gemini, deepseek, manus]
 
-const byId: Record<ProviderId, Provider> = { anthropic, openai, gemini, deepseek }
+const byId: Record<ProviderId, Provider> = { anthropic, openai, gemini, deepseek, manus }
 
 export function getProvider(id: string | undefined): Provider {
   return byId[id as ProviderId] ?? anthropic
