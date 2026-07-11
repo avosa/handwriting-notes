@@ -109,6 +109,17 @@ function onFocusShift() {
 const dockTucked = computed(() => dockHiddenByScroll.value && !isEditing.value && !generating.value)
 // The chat button tucks on a phone while scrolling or writing so it never covers the page.
 const fabTucked = computed(() => isPhone.value && (isScrolling.value || isEditing.value))
+// On a wide screen the chat docks beside the notes and the page makes room (a split view, not an
+// overlay), so both are fully visible and clickable. On a phone there is no room to split, so the
+// chat covers the page as a full panel.
+const chatSplit = computed(() => showChat.value && !isPhone.value)
+// The chat docks below the top bar, which stays full width, so only the notes and the panel move.
+// The bar's height is measured and shared, so the panel lines up with its bottom on any layout.
+const topbarEl = ref<HTMLElement | null>(null)
+const topbarH = ref(60)
+function measureTopbar() {
+  if (topbarEl.value) topbarH.value = topbarEl.value.offsetHeight
+}
 
 // Open a note chosen in the links panel or the map, then leave those overlays.
 async function openNoteById(id: string) {
@@ -484,6 +495,10 @@ function pageAction(fn: (i: number) => void) {
 }
 
 const pageWidth = ref(760)
+function fitAndMeasure() {
+  fit()
+  measureTopbar()
+}
 function fit() {
   pageWidth.value = Math.min(800, Math.max(300, window.innerWidth - 56))
 }
@@ -684,6 +699,7 @@ function askAiWholeNote() {
 
 onMounted(() => {
   fit()
+  measureTopbar()
   void refreshConnections()
   try {
     if (!localStorage.getItem(WELCOMED_KEY)) showWelcome.value = true
@@ -691,7 +707,7 @@ onMounted(() => {
     // Without storage the welcome just opens each visit, which is harmless.
   }
 })
-window.addEventListener('resize', fit)
+window.addEventListener('resize', fitAndMeasure)
 window.addEventListener('keydown', onKeydown)
 // Watch scrolling (capturing, so it catches the page's own scroller) and focus, to tuck the
 // floating chat button away on a phone while reading or writing.
@@ -701,7 +717,7 @@ window.addEventListener('scroll', onScrollActivity, { passive: true, capture: tr
 document.addEventListener('focusin', onFocusShift)
 document.addEventListener('focusout', onFocusShift)
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', fit)
+  window.removeEventListener('resize', fitAndMeasure)
   window.removeEventListener('keydown', onKeydown)
   phoneQuery.removeEventListener('change', syncPhone)
   window.removeEventListener('scroll', onScrollActivity, true)
@@ -730,7 +746,7 @@ function addPage() {
 </script>
 
 <template>
-  <div class="app-root">
+  <div class="app-root" :class="{ 'chat-open': chatSplit }" :style="{ '--topbar-h': topbarH + 'px' }">
     <a class="skip-link" href="#main-notes">Skip to notes</a>
     <Transition name="scrim">
       <div v-if="drawerOpen" class="drawer-scrim hide-desktop" @click="drawerOpen = false" />
@@ -763,7 +779,7 @@ function addPage() {
     </button>
 
     <div class="app surface" :class="{ pushed: drawerOpen }">
-      <header class="topbar">
+      <header ref="topbarEl" class="topbar">
         <div class="left">
           <button class="icon-btn hide-mobile" title="All notes" @click="showHome = true">
             <Icon name="grid" :size="18" />
@@ -971,18 +987,22 @@ function addPage() {
 
     <!-- A floating button to chat with your notes, kept out of the crowded top bar. It tucks
          away while the chat, the home screen, or a full-screen overlay is open. -->
-    <button
-      v-if="!showChat && !showHome && !showGraph"
-      class="ai-fab"
-      :class="{ tucked: fabTucked }"
-      title="Chat with your notes"
-      aria-label="Chat with your notes"
-      @click="showChat = true"
-    >
-      <Icon name="aiChat" :size="24" />
-    </button>
+    <Transition name="fab-pop">
+      <button
+        v-if="!showChat && !showHome && !showGraph"
+        class="ai-fab"
+        :class="{ tucked: fabTucked }"
+        title="Chat with your notes"
+        aria-label="Chat with your notes"
+        @click="showChat = true"
+      >
+        <Icon name="aiChat" :size="24" />
+      </button>
+    </Transition>
 
-    <NotesChat v-if="showChat" @close="showChat = false" @open="openNoteFromChat" @need-key="showKey = true" />
+    <Transition name="chat-slide">
+      <NotesChat v-if="showChat" @close="showChat = false" @open="openNoteFromChat" @need-key="showKey = true" />
+    </Transition>
 
     <FindBar v-if="showFind" @close="showFind = false" />
 
@@ -1001,6 +1021,21 @@ function addPage() {
   overflow-x: clip;
   background: var(--desk-3);
   --drawer-w: min(84vw, 320px);
+  /* The width the chat panel takes, shared so the notes area makes exactly that much room. */
+  --chat-w: min(400px, 40vw);
+}
+/* Split view: only the notes area and the dock move — the top bar stays full width across the top,
+   and the chat docks below it on the right. The notes column narrows to make room, and the centred
+   bottom dock shifts with it, so everything stays visible and nothing hides behind the chat. */
+.app-root.chat-open .stack {
+  width: calc(100% - var(--chat-w));
+}
+.app-root.chat-open .dock-wrap,
+.app-root.chat-open .live-wrap {
+  left: calc(50% - var(--chat-w) / 2);
+}
+.stack {
+  transition: width 0.32s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .drawer {
   position: fixed;
@@ -1068,6 +1103,7 @@ function addPage() {
     linear-gradient(180deg, var(--desk-2), var(--desk-3));
   transition:
     transform 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.32s cubic-bezier(0.4, 0, 0.2, 1),
     border-radius 0.32s ease;
 }
 .topbar {
@@ -1303,6 +1339,7 @@ function addPage() {
   z-index: 40;
   transition:
     transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    left 0.32s cubic-bezier(0.4, 0, 0.2, 1),
     opacity 0.2s ease;
 }
 /* While reading (scrolled down, not editing) the dock slides off the bottom so it never covers
@@ -1346,6 +1383,41 @@ function addPage() {
   transform: translateY(120px);
   opacity: 0;
   pointer-events: none;
+}
+.live-wrap {
+  transition: left 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* The chat slides in from the right when opened and back out when closed; the notes column and the
+   dock ease into place at the same time, so the two settle together and return to default on close. */
+.chat-slide-enter-active,
+.chat-slide-leave-active {
+  transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.chat-slide-enter-from,
+.chat-slide-leave-to {
+  transform: translateX(100%);
+}
+/* The floating button pops in when the chat closes and pops away when it opens. */
+.fab-pop-enter-active {
+  transition:
+    transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.2s ease;
+}
+.fab-pop-leave-active {
+  transition:
+    transform 0.16s ease,
+    opacity 0.16s ease;
+}
+.fab-pop-enter-from,
+.fab-pop-leave-to {
+  transform: scale(0.5) translateY(24px);
+  opacity: 0;
+}
+/* A phone cannot split, so the chat covers the width there. */
+@media (max-width: 720px) {
+  .app-root {
+    --chat-w: 100vw;
+  }
 }
 /* On phones the tool dock sits centre-bottom, so lift the button clear of it. */
 @media (max-width: 720px) {
