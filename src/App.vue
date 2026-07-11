@@ -6,6 +6,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Attachment } from './types'
 import { useDocument } from './store/document'
 import { useLibrary } from './store/library'
+import { useSettings } from './store/settings'
 import { useAi } from './compose/useAi'
 import { refreshConnections } from './compose/aiConnection'
 import { useTheme } from './theme/useTheme'
@@ -18,6 +19,8 @@ import AiCursor from './editor/AiCursor.vue'
 import ComposeSheet from './compose/ComposeSheet.vue'
 import AiStatus from './compose/AiStatus.vue'
 import ApiKeyDialog from './ui/ApiKeyDialog.vue'
+import CommandPalette from './ui/CommandPalette.vue'
+import type { Command } from './ui/CommandPalette.vue'
 import HandwritingPicker from './tools/HandwritingPicker.vue'
 import ThemeSwitch from './ui/ThemeSwitch.vue'
 import NavDrawer from './ui/NavDrawer.vue'
@@ -27,6 +30,7 @@ import Popover from './ui/Popover.vue'
 
 const documentStore = useDocument()
 const library = useLibrary()
+const settings = useSettings()
 const { generating, phase, providerName, error: aiError, generate, stop } = useAi()
 const { resolved: resolvedTheme } = useTheme()
 
@@ -34,6 +38,7 @@ const mode = ref<'write' | 'draw'>('write')
 const showKey = ref(false)
 const showCompose = ref(false)
 const showHome = ref(false)
+const showPalette = ref(false)
 const drawerOpen = ref(false)
 const exporting = ref<'pdf' | 'docx' | null>(null)
 
@@ -162,7 +167,31 @@ const themeIcon = computed(() => (resolvedTheme.value === 'dark' ? 'moon' : 'sun
 // steps aside there instead of floating over it.
 const overlayOpen = computed(() => showHome.value || showCompose.value || showKey.value)
 
+// Everything the command bar can reach, each a plain title and the action it runs. Built
+// from the same handlers the chrome uses, so the bar never drifts from what the buttons do.
+const commands = computed<Command[]>(() => [
+  { id: 'new', title: 'New note', icon: 'plus', run: () => void newNote() },
+  { id: 'home', title: 'All notes', icon: 'grid', run: () => (showHome.value = true) },
+  { id: 'compose', title: 'Write with AI', icon: 'wand', run: () => (showCompose.value = true) },
+  { id: 'write', title: 'Write mode', icon: 'write', run: () => (mode.value = 'write') },
+  { id: 'draw', title: 'Draw mode', icon: 'draw', run: () => (mode.value = 'draw') },
+  { id: 'pdf', title: 'Export as PDF', icon: 'download', run: () => void saveAs('pdf') },
+  { id: 'docx', title: 'Export as Word', icon: 'download', run: () => void saveAs('docx') },
+  { id: 'keys', title: 'AI keys', icon: 'key', run: () => (showKey.value = true) },
+  { id: 'undo', title: 'Undo', icon: 'undo', run: () => documentStore.undo() },
+  { id: 'redo', title: 'Redo', icon: 'redo', run: () => documentStore.redo() },
+  { id: 'theme-light', title: 'Theme: Light', icon: 'sun', run: () => settings.setTheme('light') },
+  { id: 'theme-dark', title: 'Theme: Dark', icon: 'moon', run: () => settings.setTheme('dark') },
+  { id: 'theme-system', title: 'Theme: System', icon: 'device', run: () => settings.setTheme('system') },
+])
+
 function onKeydown(event: KeyboardEvent) {
+  // A quiet way to reach any action from the keyboard, from anywhere including inside a line.
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault()
+    showPalette.value = !showPalette.value
+    return
+  }
   if (event.key === 'Escape' && drawerOpen.value) {
     drawerOpen.value = false
     return
@@ -434,6 +463,8 @@ function addPage() {
       @submit="onSubmit"
     />
     <ApiKeyDialog v-if="showKey" @close="showKey = false" />
+
+    <CommandPalette v-if="showPalette" :commands="commands" @close="showPalette = false" />
 
     <Transition name="home-fade">
       <HomeScreen v-if="showHome" @close="showHome = false" />
