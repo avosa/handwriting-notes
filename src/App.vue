@@ -21,6 +21,7 @@ import AiStatus from './compose/AiStatus.vue'
 import ApiKeyDialog from './ui/ApiKeyDialog.vue'
 import CommandPalette from './ui/CommandPalette.vue'
 import type { Command } from './ui/CommandPalette.vue'
+import ShortcutsSheet from './ui/ShortcutsSheet.vue'
 import HandwritingPicker from './tools/HandwritingPicker.vue'
 import ThemeSwitch from './ui/ThemeSwitch.vue'
 import NavDrawer from './ui/NavDrawer.vue'
@@ -39,6 +40,7 @@ const showKey = ref(false)
 const showCompose = ref(false)
 const showHome = ref(false)
 const showPalette = ref(false)
+const showShortcuts = ref(false)
 const drawerOpen = ref(false)
 const exporting = ref<'pdf' | 'docx' | null>(null)
 
@@ -183,13 +185,27 @@ const commands = computed<Command[]>(() => [
   { id: 'theme-light', title: 'Theme: Light', icon: 'sun', run: () => settings.setTheme('light') },
   { id: 'theme-dark', title: 'Theme: Dark', icon: 'moon', run: () => settings.setTheme('dark') },
   { id: 'theme-system', title: 'Theme: System', icon: 'device', run: () => settings.setTheme('system') },
+  { id: 'shortcuts', title: 'Keyboard shortcuts', hint: '?', run: () => (showShortcuts.value = true) },
 ])
+
+// Whether the keyboard focus sits somewhere that owns the keystroke, so app shortcuts that
+// are bare letters do not fire while the reader is typing.
+function inTextEntry(): boolean {
+  const el = document.activeElement as HTMLElement | null
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+}
 
 function onKeydown(event: KeyboardEvent) {
   // A quiet way to reach any action from the keyboard, from anywhere including inside a line.
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault()
     showPalette.value = !showPalette.value
+    return
+  }
+  // A bare question mark opens the shortcut list, as long as the reader is not typing one.
+  if (event.key === '?' && !inTextEntry()) {
+    event.preventDefault()
+    showShortcuts.value = true
     return
   }
   if (event.key === 'Escape' && drawerOpen.value) {
@@ -465,6 +481,8 @@ function addPage() {
     <ApiKeyDialog v-if="showKey" @close="showKey = false" />
 
     <CommandPalette v-if="showPalette" :commands="commands" @close="showPalette = false" />
+
+    <ShortcutsSheet v-if="showShortcuts" @close="showShortcuts = false" />
 
     <Transition name="home-fade">
       <HomeScreen v-if="showHome" @close="showHome = false" />
