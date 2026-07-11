@@ -22,6 +22,7 @@ import ApiKeyDialog from './ui/ApiKeyDialog.vue'
 import CommandPalette from './ui/CommandPalette.vue'
 import type { Command } from './ui/CommandPalette.vue'
 import ShortcutsSheet from './ui/ShortcutsSheet.vue'
+import WelcomeSheet from './ui/WelcomeSheet.vue'
 import HandwritingPicker from './tools/HandwritingPicker.vue'
 import ThemeSwitch from './ui/ThemeSwitch.vue'
 import NavDrawer from './ui/NavDrawer.vue'
@@ -41,7 +42,20 @@ const showCompose = ref(false)
 const showHome = ref(false)
 const showPalette = ref(false)
 const showShortcuts = ref(false)
+const showWelcome = ref(false)
 const drawerOpen = ref(false)
+
+// The welcome card is shown once, the first time the app is opened on this device. A stored
+// mark keeps it from returning; it can still be reopened from the command bar.
+const WELCOMED_KEY = 'welcomed'
+function dismissWelcome() {
+  showWelcome.value = false
+  try {
+    localStorage.setItem(WELCOMED_KEY, '1')
+  } catch {
+    // Private modes can refuse storage; the card simply shows again next time.
+  }
+}
 const exporting = ref<'pdf' | 'docx' | null>(null)
 
 async function newNote() {
@@ -186,6 +200,7 @@ const commands = computed<Command[]>(() => [
   { id: 'theme-dark', title: 'Theme: Dark', icon: 'moon', run: () => settings.setTheme('dark') },
   { id: 'theme-system', title: 'Theme: System', icon: 'device', run: () => settings.setTheme('system') },
   { id: 'shortcuts', title: 'Keyboard shortcuts', hint: '?', run: () => (showShortcuts.value = true) },
+  { id: 'welcome', title: 'Show welcome', icon: 'wand', run: () => (showWelcome.value = true) },
 ])
 
 // Whether the keyboard focus sits somewhere that owns the keystroke, so app shortcuts that
@@ -238,6 +253,11 @@ function askAiWholeNote() {
 onMounted(() => {
   fit()
   void refreshConnections()
+  try {
+    if (!localStorage.getItem(WELCOMED_KEY)) showWelcome.value = true
+  } catch {
+    // Without storage the welcome just opens each visit, which is harmless.
+  }
 })
 window.addEventListener('resize', fit)
 window.addEventListener('keydown', onKeydown)
@@ -483,6 +503,8 @@ function addPage() {
     <CommandPalette v-if="showPalette" :commands="commands" @close="showPalette = false" />
 
     <ShortcutsSheet v-if="showShortcuts" @close="showShortcuts = false" />
+
+    <WelcomeSheet v-if="showWelcome" @close="dismissWelcome" />
 
     <Transition name="home-fade">
       <HomeScreen v-if="showHome" @close="showHome = false" />
