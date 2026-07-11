@@ -78,6 +78,12 @@ function update() {
     visible.value = false
     return
   }
+  // Finding lights each match by selecting it; that is the find bar's own highlight, not a
+  // selection the writer made, so the formatting menu stays out of the way while finding.
+  if (document.querySelector('.find-bar')) {
+    visible.value = false
+    return
+  }
   const sel = window.getSelection()
   if (!sel || sel.isCollapsed || sel.rangeCount === 0 || !insideEditor(sel.anchorNode)) {
     visible.value = false
