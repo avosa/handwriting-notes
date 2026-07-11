@@ -114,6 +114,23 @@ describe('note text export', () => {
     expect(html).toContain('<li>two</li>')
   })
 
+  it('exports a collapsible section open, heading then body, in each format', () => {
+    const d = doc()
+    d.pages[0].blocks.push({
+      id: 'tg',
+      type: 'toggle',
+      summary: [{ text: 'Why the figure varies' }],
+      details: 'The UK spans several hundred kilometres.',
+      open: false,
+    } as never)
+    const md = toMarkdown(d)
+    expect(md).toContain('**Why the figure varies**')
+    expect(md).toContain('The UK spans several hundred kilometres.')
+    const html = toHtml(d)
+    expect(html).toContain('<details open><summary>Why the figure varies</summary>')
+    expect(html).toContain('The UK spans several hundred kilometres.')
+  })
+
   it('writes a quote, a code block, and a divider in each format', () => {
     const d = doc()
     d.pages[0].blocks.push(

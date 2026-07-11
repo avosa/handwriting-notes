@@ -528,6 +528,51 @@ function layoutBlocks(
           )
         cursor += lineH
       }
+    } else if (block.type === 'toggle') {
+      // A collapsible section prints open: a marker and heading, then its notes indented under it.
+      const size = metrics.fontSize.body
+      if (pdfPage)
+        drawShaped(
+          pdfPage,
+          fonts.body,
+          '▾',
+          mm(size),
+          mm(left),
+          mm(cursor + lineH * 0.78),
+          color(handwriting.palette.ink),
+          false,
+        )
+      const sumWords = runsToWords(block.summary)
+      const sumLines = sumWords.length ? wrapWords(fonts.body, sumWords, mm(size), mm(colWidth - 6)) : [[]]
+      for (const line of sumLines) {
+        if (pdfPage && line.length)
+          drawWordLine(
+            pdfPage,
+            fonts.body,
+            line,
+            mm(size),
+            mm(left + 6),
+            mm(cursor + lineH * 0.78),
+            mm(colWidth - 6),
+            handwriting.palette.ink,
+            'left',
+          )
+        cursor += lineH
+      }
+      for (const dLine of block.details ? block.details.split('\n') : []) {
+        if (pdfPage && dLine)
+          drawShaped(
+            pdfPage,
+            fonts.body,
+            dLine,
+            mm(size),
+            mm(left + 8),
+            mm(cursor + lineH * 0.78),
+            color(handwriting.palette.ink),
+            false,
+          )
+        cursor += lineH
+      }
     } else if (block.type === 'divider') {
       if (pdfPage)
         pdfPage.drawLine({

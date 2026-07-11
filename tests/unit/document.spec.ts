@@ -421,6 +421,27 @@ describe('document store', () => {
     expect(whole.type === 'text' && whole.text.runs.map((r) => r.text).join('')).toBe('Hello world')
   })
 
+  it('adds a collapsible section, folds it, and edits its heading and body', () => {
+    const doc = useDocument()
+    const first = doc.doc.pages[0].blocks[0].id
+    const id = doc.addToggle(first)
+    const block = () => doc.locate(id)!.block as Extract<Block, { type: 'toggle' }>
+    expect(block().type).toBe('toggle')
+    expect(block().open).toBe(true)
+    doc.setToggleSummary(id, [{ text: 'Why it varies' }])
+    doc.setToggleDetails(id, 'Several reasons\napply here.')
+    expect(block().summary[0].text).toBe('Why it varies')
+    expect(block().details).toContain('Several reasons')
+    // The chevron folds and unfolds it.
+    doc.toggleOpen(id)
+    expect(block().open).toBe(false)
+    doc.toggleOpen(id)
+    expect(block().open).toBe(true)
+    // Find and replace reaches into a section's heading and body.
+    expect(doc.replaceAll('varies', 'changes')).toBeGreaterThan(0)
+    expect(block().summary[0].text).toBe('Why it changes')
+  })
+
   it('fills a stroke by id', () => {
     const doc = useDocument()
     doc.addStroke(0, { id: 's1', tool: 'fine', color: '#000', width: 1, points: [{ x: 0, y: 0, pressure: 1 }] })

@@ -305,6 +305,36 @@ async function blockToChildren(
         }),
     )
   }
+  if (block.type === 'toggle') {
+    // A collapsible section exports open: a bold heading, then its notes indented under it.
+    const paras = [
+      new Paragraph({
+        spacing: { line: lineTwip, lineRule: 'exact' },
+        children: block.summary.length
+          ? block.summary.map(
+              (r) =>
+                new DocxTextRun({
+                  text: r.text,
+                  bold: true,
+                  font: bodyFont,
+                  size: sized(ROLE_SIZE.body),
+                  color: palette.ink.replace('#', ''),
+                }),
+            )
+          : [new DocxTextRun({ text: '', font: bodyFont })],
+      }),
+    ]
+    for (const line of block.details ? block.details.split('\n') : []) {
+      paras.push(
+        new Paragraph({
+          spacing: { line: lineTwip, lineRule: 'exact' },
+          indent: { left: twip(6) },
+          children: runs([{ text: line }], bodyFont, sized(ROLE_SIZE.body), palette.ink),
+        }),
+      )
+    }
+    return paras
+  }
   if (block.type === 'divider') {
     return [
       new Paragraph({

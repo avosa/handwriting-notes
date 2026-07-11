@@ -130,6 +130,7 @@ export const useDocument = defineStore('document', {
           if (block.type === 'text') arrays.push(block.text.runs)
           else if (block.type === 'quote') arrays.push(block.runs)
           else if (block.type === 'list') arrays.push(...block.items)
+          else if (block.type === 'toggle') arrays.push(block.summary)
           else if (block.type === 'callouts') for (const box of block.boxes) arrays.push(box.heading, ...box.items)
         }
         for (const note of page.notes ?? []) arrays.push(note.runs)
@@ -422,6 +423,39 @@ export const useDocument = defineStore('document', {
       const at = this.locate(blockId)
       if (at?.block.type === 'code') {
         at.block.text = text
+        this.touch()
+      }
+    },
+    // A collapsible section: a heading that folds a body of notes away, opening on a chevron.
+    addToggle(blockId: string | null): string {
+      const id = this.insertAfter(blockId, {
+        id: uid('b'),
+        type: 'toggle',
+        summary: [{ text: '' }],
+        details: '',
+        open: true,
+      })
+      this.pendingFocusId = id
+      return id
+    },
+    toggleOpen(blockId: string) {
+      const at = this.locate(blockId)
+      if (at?.block.type === 'toggle') {
+        at.block.open = at.block.open === false
+        this.touch()
+      }
+    },
+    setToggleSummary(blockId: string, runs: TextRun[]) {
+      const at = this.locate(blockId)
+      if (at?.block.type === 'toggle') {
+        at.block.summary = runs.length ? runs : [{ text: '' }]
+        this.touch()
+      }
+    },
+    setToggleDetails(blockId: string, text: string) {
+      const at = this.locate(blockId)
+      if (at?.block.type === 'toggle') {
+        at.block.details = text
         this.touch()
       }
     },
@@ -892,7 +926,10 @@ export const useDocument = defineStore('document', {
           else if (block.type === 'quote') block.runs = swap(block.runs)
           else if (block.type === 'list') block.items = block.items.map(swap)
           else if (block.type === 'code') block.text = inString(block.text)
-          else if (block.type === 'table') {
+          else if (block.type === 'toggle') {
+            block.summary = swap(block.summary)
+            block.details = inString(block.details)
+          } else if (block.type === 'table') {
             block.header = block.header.map(inString)
             block.rows = block.rows.map((row) => row.map(inString))
           } else if (block.type === 'callouts') {

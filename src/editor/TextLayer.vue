@@ -109,6 +109,22 @@ function bindEditable(key: string) {
     else editables.value.delete(key)
   }
 }
+// A section's body is a plain textarea rather than a rich line, so its element is kept on its own
+// so pressing enter on the heading can drop the caret straight into it.
+const toggleDetails = ref(new Map<string, HTMLTextAreaElement>())
+function bindToggleDetails(id: string) {
+  return (el: unknown) => {
+    if (el) toggleDetails.value.set(id, el as HTMLTextAreaElement)
+    else toggleDetails.value.delete(id)
+  }
+}
+// Enter on a section heading opens it if needed and moves into the body, the way a writer expects
+// to carry on typing the section's notes.
+function focusToggleDetails(id: string) {
+  const at = documentStore.locate(id)
+  if (at?.block.type === 'toggle' && at.block.open === false) documentStore.toggleOpen(id)
+  void nextTick(() => toggleDetails.value.get(id)?.focus())
+}
 // The line to move the caret into next, and where along it the caret should sit, so a merge
 // can drop the caret at the join between the two lines it made one.
 const pendingFocus = ref<{ key: string; offset?: number } | null>(null)
@@ -186,6 +202,12 @@ function applySlash(commandId: string) {
     documentStore.requestFocus(id)
     return
   }
+  if (commandId === 'toggle') {
+    const id = documentStore.addToggle(blockId)
+    documentStore.removeBlock(blockId)
+    pendingFocus.value = { key: `toggle:${id}` }
+    return
+  }
   if (commandId === 'divider') {
     const dividerId = documentStore.addDivider(blockId)
     const lineId = documentStore.addParagraphAfter(dividerId, 'body')
@@ -200,7 +222,8 @@ watch(
   async (id) => {
     if (!id) return
     await nextTick()
-    const target = editables.value.get(`text:${id}`) ?? editables.value.get(`list:${id}:0`)
+    const target =
+      editables.value.get(`text:${id}`) ?? editables.value.get(`list:${id}:0`) ?? editables.value.get(`toggle:${id}`)
     if (target) {
       target.focus(documentStore.pendingFocusOffset ?? undefined)
       documentStore.clearPendingFocus()
@@ -847,6 +870,48 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
         </button>
       </div>
 
+      <div v-else-if="block.type === 'toggle'" class="toggle-slot" :data-block-id="block.id" :style="quoteStyle()">
+        <div class="toggle-head">
+          <button
+            class="toggle-chevron"
+            :class="{ open: block.open !== false }"
+            :title="block.open !== false ? 'Collapse section' : 'Expand section'"
+            @click="documentStore.toggleOpen(block.id)"
+          >
+            <Icon name="chevronDown" :size="16" />
+          </button>
+          <EditableText
+            :ref="bindEditable(`toggle:${block.id}`)"
+            :model-value="block.summary"
+            class="toggle-summary"
+            placeholder="Section heading"
+            @update:model-value="documentStore.setToggleSummary(block.id, $event)"
+            @focus="onFocusBlock(block.id)"
+            @enter="focusToggleDetails(block.id)"
+            @select-all-note="documentStore.selectWholeNote()"
+          />
+        </div>
+        <textarea
+          v-if="block.open !== false"
+          :ref="bindToggleDetails(block.id)"
+          v-auto-grow
+          class="toggle-details"
+          :value="block.details"
+          placeholder="Section notes"
+          rows="1"
+          @focus="onFocusBlock(block.id)"
+          @input="documentStore.setToggleDetails(block.id, ($event.target as HTMLTextAreaElement).value)"
+        />
+        <button
+          v-if="editable"
+          class="figure-remove"
+          title="Remove section"
+          @click.stop="documentStore.removeBlock(block.id)"
+        >
+          <Icon name="trash" :size="15" />
+        </button>
+      </div>
+
       <div
         v-else-if="block.type === 'divider'"
         class="divider-slot"
@@ -997,6 +1062,61 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
 .code-text:focus {
   outline: 2px solid var(--accent-wash-2, rgba(74, 114, 176, 0.2));
 }
+/* A collapsible section: a heading with a chevron that folds its body of notes away. */
+.toggle-slot {
+  position: relative;
+  margin: 2px 0;
+}
+.toggle-head {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.toggle-chevron {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: -4px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0.7;
+  transform: rotate(-90deg);
+  transition: transform 0.15s ease;
+}
+.toggle-chevron.open {
+  transform: rotate(0);
+}
+.toggle-chevron:hover {
+  background: var(--accent-wash-2, rgba(74, 114, 176, 0.14));
+}
+.toggle-summary {
+  flex: 1;
+  font-weight: 600;
+}
+.toggle-details {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  overflow: hidden;
+  border: none;
+  background: transparent;
+  color: inherit;
+  margin: 2px 0 2px 22px;
+  padding: 0;
+  font: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+}
+.toggle-details:focus {
+  outline: none;
+}
 /* A rule across the writing column that parts one section from the next. */
 .divider-slot {
   position: relative;
@@ -1009,6 +1129,7 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
 }
 .quote-slot:hover .figure-remove,
 .code-slot:hover .figure-remove,
+.toggle-slot:hover .figure-remove,
 .divider-slot:hover .figure-remove {
   opacity: 1;
 }

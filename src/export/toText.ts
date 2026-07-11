@@ -133,6 +133,20 @@ function blockLines(block: Block, d: Dress, kind: 'text' | 'md' | 'html'): strin
     if (kind === 'html') out.push(`<pre><code>${escapeHtml(code)}</code></pre>`)
     else if (kind === 'md') out.push('```', code, '```')
     else out.push(...code.split('\n').map((l) => `    ${l}`))
+  } else if (block.type === 'toggle') {
+    // A collapsible section exports open, so its notes are never hidden in a saved copy.
+    const summary = d.runs(block.summary).trim()
+    const details = block.details
+    if (kind === 'html') {
+      const body = details ? `<p>${escapeHtml(details).replace(/\n/g, '<br />')}</p>` : ''
+      out.push(`<details open><summary>${summary || 'Section'}</summary>${body}</details>`)
+    } else if (kind === 'md') {
+      if (summary) out.push(`**${summary}**`)
+      if (details) out.push(details)
+    } else {
+      if (summary) out.push(summary)
+      if (details) out.push(...details.split('\n').map((l) => `  ${l}`))
+    }
   } else if (block.type === 'divider') {
     out.push(kind === 'html' ? '<hr />' : kind === 'md' ? '---' : '⎯⎯⎯⎯⎯⎯⎯⎯')
   } else if (block.type === 'image') {

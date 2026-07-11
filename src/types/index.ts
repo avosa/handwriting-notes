@@ -202,6 +202,18 @@ export type Block =
   | { id: string; type: 'quote'; runs: TextRun[]; float?: FloatPos; scale?: FontScale }
   | { id: string; type: 'code'; text: string; float?: FloatPos; scale?: FontScale }
   | { id: string; type: 'divider'; float?: FloatPos; scale?: FontScale }
+  | {
+      id: string
+      type: 'toggle'
+      /** The always-shown heading of the collapsible section. */
+      summary: TextRun[]
+      /** The body revealed when the section is open, kept as plain lines. */
+      details: string
+      /** Whether the section is expanded. Unset reads as open. */
+      open?: boolean
+      float?: FloatPos
+      scale?: FontScale
+    }
 
 /**
  * A line of writing placed anywhere on the page, the way you would jot a note beside a

@@ -18,6 +18,7 @@ export const changelog: Release[] = [
       'Backspace at the start of a line now pulls it up past a divider or figure above.',
       'Long AI notes flow across as many sheets as they need, and a heading is never left behind.',
       'A paragraph too long for a page now splits at the line, filling the page before it carries on.',
+      'Collapsible sections: a heading with a chevron that folds its notes away, from / or Insert.',
       'Manus now reads attached images, PDFs, documents, and voice notes, not just text.',
     ],
   },
