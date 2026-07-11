@@ -8,13 +8,9 @@ import { embedStatus, embedProgress } from '@/ai/embeddings/embedder'
 import { indexing } from '@/ai/embeddings/semanticIndex'
 import Icon from './Icon.vue'
 import AnswerMarkdown from './AnswerMarkdown.vue'
-import { useFocusTrap } from './useFocusTrap'
 
 const emit = defineEmits<{ (e: 'close'): void; (e: 'open', id: string): void; (e: 'need-key'): void }>()
 const { messages, busy, error, needsKey, ask, stop } = useNotesChat()
-
-const card = ref<HTMLElement | null>(null)
-useFocusTrap(card, () => emit('close'))
 
 const draft = ref('')
 const scroller = ref<HTMLElement | null>(null)
@@ -53,91 +49,88 @@ const statusLine = () => {
 </script>
 
 <template>
-  <div class="backdrop" @click.self="emit('close')">
-    <aside ref="card" class="panel" role="dialog" aria-modal="true" aria-label="Chat with your notes" tabindex="-1">
-      <header class="head">
-        <div class="title">
-          <Icon name="aiChat" :size="17" />
-          <h2>Chat with your notes</h2>
-        </div>
-        <button class="close" title="Close" @click="emit('close')"><Icon name="close" :size="16" /></button>
-      </header>
+  <aside class="panel" role="complementary" aria-label="Chat with your notes">
+    <header class="head">
+      <div class="title">
+        <Icon name="aiChat" :size="17" />
+        <h2>Chat with your notes</h2>
+      </div>
+      <button class="close" title="Close" @click="emit('close')"><Icon name="close" :size="16" /></button>
+    </header>
 
-      <div ref="scroller" class="scroll">
-        <div v-if="!messages.length" class="empty">
-          <p class="lead">
-            Ask anything about what you've written. Answers come from <em>your</em> notes, on your device, with
-            citations.
-          </p>
-          <div class="suggest">
-            <button v-for="s in SUGGESTIONS" :key="s" class="chip" @click="send(s)">{{ s }}</button>
-          </div>
-        </div>
-
-        <div v-for="(m, i) in messages" :key="i" class="msg" :class="m.role">
-          <div class="bubble">
-            <template v-if="m.role === 'assistant' && !m.text && m.streaming">
-              <span class="thinking">{{ statusLine() }}</span>
-            </template>
-            <template v-else-if="m.role === 'assistant'">
-              <AnswerMarkdown :text="m.text" :sources="m.sources" @open="emit('open', $event)" /><span
-                v-if="m.streaming"
-                class="caret"
-                >▍</span
-              >
-            </template>
-            <template v-else>
-              <span class="text">{{ m.text }}</span>
-            </template>
-          </div>
-          <div v-if="m.sources && m.sources.length" class="sources">
-            <span class="src-label">From your notes</span>
-            <button v-for="s in m.sources" :key="s.n" class="src" :title="s.text" @click="emit('open', s.noteId)">
-              <span class="src-n">{{ s.n }}</span
-              >{{ s.title }}
-            </button>
-          </div>
+    <div ref="scroller" class="scroll">
+      <div v-if="!messages.length" class="empty">
+        <p class="lead">
+          Ask anything about what you've written. Answers come from <em>your</em> notes, on your device, with citations.
+        </p>
+        <div class="suggest">
+          <button v-for="s in SUGGESTIONS" :key="s" class="chip" @click="send(s)">{{ s }}</button>
         </div>
       </div>
 
-      <p v-if="needsKey" class="notice">
-        Connect an AI key to answer from your notes.
-        <button class="link" @click="emit('need-key')">Add a key</button>
-      </p>
-      <p v-if="error" class="err">{{ error }}</p>
+      <div v-for="(m, i) in messages" :key="i" class="msg" :class="m.role">
+        <div class="bubble">
+          <template v-if="m.role === 'assistant' && !m.text && m.streaming">
+            <span class="thinking">{{ statusLine() }}</span>
+          </template>
+          <template v-else-if="m.role === 'assistant'">
+            <AnswerMarkdown :text="m.text" :sources="m.sources" @open="emit('open', $event)" /><span
+              v-if="m.streaming"
+              class="caret"
+              >▍</span
+            >
+          </template>
+          <template v-else>
+            <span class="text">{{ m.text }}</span>
+          </template>
+        </div>
+        <div v-if="m.sources && m.sources.length" class="sources">
+          <span class="src-label">From your notes</span>
+          <button v-for="s in m.sources" :key="s.n" class="src" :title="s.text" @click="emit('open', s.noteId)">
+            <span class="src-n">{{ s.n }}</span
+            >{{ s.title }}
+          </button>
+        </div>
+      </div>
+    </div>
 
-      <form class="composer" @submit.prevent="send()">
-        <textarea v-model="draft" rows="1" placeholder="Ask your notes…" @keydown.enter.exact.prevent="send()" />
-        <button v-if="busy" type="button" class="go stop" title="Stop" @click="stop">
-          <Icon name="stop" :size="16" />
-        </button>
-        <button v-else type="submit" class="go" :disabled="!draft.trim()" title="Ask">
-          <Icon name="send" :size="16" />
-        </button>
-      </form>
-    </aside>
-  </div>
+    <p v-if="needsKey" class="notice">
+      Connect an AI key to answer from your notes.
+      <button class="link" @click="emit('need-key')">Add a key</button>
+    </p>
+    <p v-if="error" class="err">{{ error }}</p>
+
+    <form class="composer" @submit.prevent="send()">
+      <textarea v-model="draft" rows="1" placeholder="Ask your notes…" @keydown.enter.exact.prevent="send()" />
+      <button v-if="busy" type="button" class="go stop" title="Stop" @click="stop">
+        <Icon name="stop" :size="16" />
+      </button>
+      <button v-else type="submit" class="go" :disabled="!draft.trim()" title="Ask">
+        <Icon name="send" :size="16" />
+      </button>
+    </form>
+  </aside>
 </template>
 
 <style scoped>
-.backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-  display: flex;
-  justify-content: flex-end;
-  background: rgba(20, 20, 28, 0.32);
-  backdrop-filter: blur(2px);
-}
+/* The chat docks to the right as a real panel beside the notes (not an overlay that blurs them),
+   so the page stays crisp and clickable while chatting. Its width is the shared --chat-w, which the
+   app uses to make room, so the two sit together with nothing hidden. On a phone it fills the width. */
 .panel {
-  width: min(420px, calc(100vw - 12px));
-  height: 100%;
+  position: fixed;
+  top: var(--topbar-h, 60px);
+  right: 0;
+  height: calc(100% - var(--topbar-h, 60px));
+  width: var(--chat-w, min(400px, 40vw));
+  z-index: 66;
   background: var(--surface, #fff);
   color: var(--ink, #23232e);
-  box-shadow: var(--pop-shadow, 0 18px 50px rgba(0, 0, 0, 0.3));
+  border-left: 1px solid var(--border-subtle);
+  border-top-left-radius: 16px;
+  box-shadow: -14px 0 44px rgba(20, 20, 28, 0.16);
   display: flex;
   flex-direction: column;
-  padding-top: max(0px, env(safe-area-inset-top));
+  overflow: hidden;
 }
 .head {
   display: flex;
@@ -361,5 +354,17 @@ textarea:focus {
 }
 .go.stop {
   background: var(--danger, #c0392b);
+}
+
+/* On a phone the chat fills the width below the top bar, so no rounded corner or side border. */
+@media (max-width: 720px) {
+  .panel {
+    border-left: none;
+    border-top-left-radius: 0;
+    box-shadow: none;
+  }
+  textarea {
+    font-size: 16px; /* keeps iOS from zooming when the field is focused */
+  }
 }
 </style>
