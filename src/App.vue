@@ -244,6 +244,12 @@ const themeIcon = computed(() => (resolvedTheme.value === 'dark' ? 'moon' : 'sun
 // steps aside there instead of floating over it.
 const overlayOpen = computed(() => showHome.value || showCompose.value || showKey.value)
 
+// The modifier key drawn in shortcut hints, so they read as the command key on a Mac and the
+// control key elsewhere, matching the keys the handler actually listens for.
+const onMac = typeof navigator !== 'undefined' && /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent)
+const mod = onMac ? '⌘' : 'Ctrl'
+const shiftMod = onMac ? '⇧⌘' : 'Ctrl+Shift'
+
 // Everything the command bar can reach, each a plain title and the action it runs. Built
 // from the same handlers the chrome uses, so the bar never drifts from what the buttons do.
 const commands = computed<Command[]>(() => [
@@ -259,8 +265,8 @@ const commands = computed<Command[]>(() => [
   { id: 'html', title: 'Export as HTML', icon: 'download', run: () => exportNoteAsText(documentStore.doc, 'html') },
   { id: 'png', title: 'Export page as image', icon: 'image', run: () => void savePageImage() },
   { id: 'keys', title: 'AI keys', icon: 'key', run: () => (showKey.value = true) },
-  { id: 'undo', title: 'Undo', icon: 'undo', run: () => documentStore.undo() },
-  { id: 'redo', title: 'Redo', icon: 'redo', run: () => documentStore.redo() },
+  { id: 'undo', title: 'Undo', hint: `${mod}Z`, icon: 'undo', run: () => documentStore.undo() },
+  { id: 'redo', title: 'Redo', hint: `${shiftMod}Z`, icon: 'redo', run: () => documentStore.redo() },
   { id: 'theme-light', title: 'Theme: Light', icon: 'sun', run: () => settings.setTheme('light') },
   { id: 'theme-dark', title: 'Theme: Dark', icon: 'moon', run: () => settings.setTheme('dark') },
   { id: 'theme-system', title: 'Theme: System', icon: 'device', run: () => settings.setTheme('system') },
@@ -286,7 +292,7 @@ const commands = computed<Command[]>(() => [
     title: 'Paper: Blank',
     run: () => documentStore.setPagePreset(documentStore.activePageIndex, 'blank'),
   },
-  { id: 'find', title: 'Find and replace', hint: '⌘F', run: () => (showFind.value = true) },
+  { id: 'find', title: 'Find and replace', hint: `${mod}F`, run: () => (showFind.value = true) },
   { id: 'info', title: 'Note info', hint: 'words, reading time', run: () => (showInfo.value = true) },
   { id: 'whats-new', title: "What's new", run: () => (showWhatsNew.value = true) },
   { id: 'feedback', title: 'Send feedback', icon: 'send', run: sendFeedback },

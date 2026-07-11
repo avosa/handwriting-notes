@@ -19,6 +19,7 @@ const groups = computed(() => [
     name: 'Everywhere',
     rows: [
       { keys: [`${mod}`, 'K'], label: 'Open the command bar' },
+      { keys: [`${mod}`, 'F'], label: 'Find and replace in the note' },
       { keys: [`${mod}`, 'Z'], label: 'Undo' },
       { keys: [`${shift}${mod}`, 'Z'], label: 'Redo' },
       { keys: ['?'], label: 'Show this help' },
