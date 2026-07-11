@@ -65,6 +65,17 @@ async function load() {
         downloads once and is cached.
       </p>
 
+      <div class="facts">
+        <span class="fact"><Icon name="device" :size="13" /> Runs on your device</span>
+        <span class="fact"><Icon name="lockOpen" :size="13" /> Free · private · offline</span>
+        <span class="fact"><Icon name="close" :size="13" /> No web access</span>
+      </div>
+      <p class="explainer">
+        It answers from <strong>your own notes</strong> and its own training — it does not browse the web. It is great
+        for summarising and chatting about what you have written. For hard general-knowledge questions a connected key
+        (like Claude) is stronger; on-device trades some knowledge for being free and private.
+      </p>
+
       <p v-if="!supported" class="warn">
         <Icon name="sun" :size="14" /> This device can't run an on-device model (no WebGPU). The app will use your
         connected AI key instead.
@@ -169,6 +180,31 @@ async function load() {
 }
 .lead strong {
   color: var(--accent);
+}
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--surface-sunken, rgba(0, 0, 0, 0.05));
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+.explainer {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.explainer strong {
+  color: var(--text);
 }
 .warn {
   display: flex;
