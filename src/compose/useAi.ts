@@ -12,6 +12,7 @@ import { systemPrompt } from '@/ai/systemPrompt'
 import { getProvider } from '@/ai/providers'
 import { parseEdits, isEditReply, type EditOp } from '@/ai/editOps'
 import { commonPrefixLength } from '@/util/textDiff'
+import { prefersReducedMotion } from '@/util/motion'
 import { plainText } from '@/ui/richText'
 import { uid } from '@/util/id'
 import { loadApiKey } from '@/store/persistence'
@@ -33,6 +34,13 @@ const TOOL_BEAT_MS = 300
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// A writing beat that a reader who wants little motion does not wait through: the words still
+// arrive, just without the drawn-out reveal. The queue poll keeps its real delay so waiting on
+// the stream never becomes a busy spin.
+function beat(ms: number): Promise<void> {
+  return sleep(prefersReducedMotion() ? 0 : ms)
 }
 
 // The special line roles a person would reach for the role control to set; plain body text
@@ -81,7 +89,7 @@ async function typeRuns(store: DocStore, blockId: string, full: TextRun[], signa
   for (let n = TYPE_CHARS_PER_TICK; n < total; n += TYPE_CHARS_PER_TICK) {
     if (signal.aborted) break
     store.setRuns(blockId, slicedRuns(full, n))
-    await sleep(TYPE_TICK_MS)
+    await beat(TYPE_TICK_MS)
   }
   store.setRuns(blockId, full)
 }
@@ -97,7 +105,7 @@ async function typeList(store: DocStore, blockId: string, full: TextRun[][], sig
       if (signal.aborted) break
       shown[i] = slicedRuns(item, n)
       store.setListItems(blockId, shown.slice())
-      await sleep(TYPE_TICK_MS)
+      await beat(TYPE_TICK_MS)
     }
     shown[i] = item
     store.setListItems(blockId, shown.slice())
@@ -109,7 +117,7 @@ async function typeList(store: DocStore, blockId: string, full: TextRun[][], sig
 async function useTool(store: DocStore, tool: string | null, signal: AbortSignal) {
   if (!tool || signal.aborted) return
   store.setAiTool(tool)
-  await sleep(TOOL_BEAT_MS)
+  await beat(TOOL_BEAT_MS)
 }
 
 // Place a block on the page, then type its words in. Paragraphs and lists are written out
@@ -129,7 +137,7 @@ async function typeBlock(store: DocStore, pageIndex: number, block: Block, signa
     store.appendAiBlock(pageIndex, block)
     store.setAiTool(null)
     // A diagram is held on while it draws itself; a table or callout set lands after a beat.
-    if (!signal.aborted) await sleep(block.type === 'diagram' ? DIAGRAM_DRAW_MS : FIGURE_BEAT_MS)
+    if (!signal.aborted) await beat(block.type === 'diagram' ? DIAGRAM_DRAW_MS : FIGURE_BEAT_MS)
   }
 }
 
@@ -168,11 +176,11 @@ async function eraseAndRewrite(
 
   if (oldText.length > keep) {
     store.setAiTool('eraser')
-    await sleep(ERASE_BEAT_MS)
+    await beat(ERASE_BEAT_MS)
     for (let n = oldText.length - ERASE_CHARS_PER_TICK; n > keep; n -= ERASE_CHARS_PER_TICK) {
       if (signal.aborted) return
       store.setRuns(blockId, slicedRuns(oldRuns, n))
-      await sleep(ERASE_TICK_MS)
+      await beat(ERASE_TICK_MS)
     }
     store.setRuns(blockId, slicedRuns(newRuns, keep))
   }
@@ -182,7 +190,7 @@ async function eraseAndRewrite(
     for (let n = keep + TYPE_CHARS_PER_TICK; n < newText.length; n += TYPE_CHARS_PER_TICK) {
       if (signal.aborted) return
       store.setRuns(blockId, slicedRuns(newRuns, n))
-      await sleep(TYPE_TICK_MS)
+      await beat(TYPE_TICK_MS)
     }
   }
   store.setRuns(blockId, newRuns)
@@ -193,17 +201,17 @@ async function eraseAndRewrite(
 async function eraseBlock(store: DocStore, blockId: string, block: Block, signal: AbortSignal) {
   store.setWritingBlock(blockId)
   store.setAiTool('eraser')
-  await sleep(ERASE_BEAT_MS)
+  await beat(ERASE_BEAT_MS)
   if (block.type === 'text') {
     const runs = block.text.runs
     const total = runLength(runs)
     for (let n = total; n > 0; n -= ERASE_CHARS_PER_TICK) {
       if (signal.aborted) return
       store.setRuns(blockId, slicedRuns(runs, Math.max(0, n)))
-      await sleep(ERASE_TICK_MS)
+      await beat(ERASE_TICK_MS)
     }
   } else if (!signal.aborted) {
-    await sleep(FIGURE_BEAT_MS)
+    await beat(FIGURE_BEAT_MS)
   }
   store.setAiTool(null)
 }
@@ -225,7 +233,7 @@ async function typeInsertedBlock(store: DocStore, afterId: string, block: Block,
   }
   const id = store.insertAfter(afterId, { ...block, id: uid('b') })
   store.setWritingBlock(id)
-  if (!signal.aborted) await sleep(block.type === 'diagram' ? DIAGRAM_DRAW_MS : FIGURE_BEAT_MS)
+  if (!signal.aborted) await beat(block.type === 'diagram' ? DIAGRAM_DRAW_MS : FIGURE_BEAT_MS)
   return id
 }
 

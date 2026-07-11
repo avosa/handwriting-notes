@@ -156,3 +156,18 @@ button {
   border-radius: 3px;
   box-shadow: 0 0 0 3px var(--accent-wash-2);
 }
+
+/* When the reader asks the system to keep motion to a minimum, transitions and looping
+   animations are all but removed everywhere at once: things still change state, they just
+   do not slide, pulse, or spin. One frame is left so anything that waits on an animation to
+   end still fires. The writing beats are quieted separately where the words are typed in. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
