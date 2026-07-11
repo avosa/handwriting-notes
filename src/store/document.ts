@@ -704,6 +704,21 @@ export const useDocument = defineStore('document', {
       this.touch()
       return true
     },
+    // Pull the first block of a page onto the end of the page before it, so content flows back
+    // up to fill the space above. A page left with nothing on it is dropped, closing the gap.
+    pullFirstBlockUp(pageIndex: number): boolean {
+      const page = this.doc.pages[pageIndex]
+      const prev = this.doc.pages[pageIndex - 1]
+      if (!page || !prev || !page.blocks.length) return false
+      const [block] = page.blocks.splice(0, 1)
+      prev.blocks.push(block)
+      if (!page.blocks.length && (page.strokes?.length ?? 0) === 0 && (page.notes?.length ?? 0) === 0) {
+        this.doc.pages.splice(pageIndex, 1)
+      }
+      this.doc.pages.forEach((p, i) => (p.index = i))
+      this.touch()
+      return true
+    },
     // Backspace at the very top of a page joins it onto the page above: the block's words merge
     // onto the last line there, or, if that line cannot take them, the block moves up whole. A
     // page left empty by this gives its space back. Returns where the caret should come to rest.

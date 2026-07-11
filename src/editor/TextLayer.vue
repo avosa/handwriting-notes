@@ -199,6 +199,32 @@ function flowToNextPage(caretId: string) {
     }
   })
 }
+// Pull content up to fill pages, one block per frame, until no leading block of a later page
+// fits on the page above it. Run once after a page is joined up, so the whole page flows back
+// rather than only its first line, and empty pages left behind close up.
+function flowUp(guard = 0) {
+  if (guard > 80) return
+  void nextTick(() => {
+    const pages = Array.from(document.querySelectorAll('.note-page')) as HTMLElement[]
+    for (let i = 0; i < pages.length - 1; i++) {
+      const prevEl = pages[i]
+      const curEl = pages[i + 1]
+      const pxPerMm = prevEl.clientWidth / 210
+      const limit = prevEl.clientHeight - PAGE_FOOT_MM * pxPerMm
+      const prevBlocks = Array.from(prevEl.querySelectorAll('.text-layer > [data-block-id]')) as HTMLElement[]
+      const prevTop = prevEl.getBoundingClientRect().top
+      const prevBottom = prevBlocks.length
+        ? prevBlocks[prevBlocks.length - 1].getBoundingClientRect().bottom - prevTop
+        : 0
+      const first = curEl.querySelector('.text-layer > [data-block-id]') as HTMLElement | null
+      if (first && prevBottom + first.getBoundingClientRect().height <= limit) {
+        documentStore.pullFirstBlockUp(i + 1)
+        flowUp(guard + 1)
+        return
+      }
+    }
+  })
+}
 // Put the caret at a character offset within a block's editable, wherever the block now lives.
 function focusBlockCaret(id: string, offset: number) {
   const el = document.querySelector(`[data-block-id="${CSS.escape(id)}"]`) as HTMLElement | null
@@ -325,7 +351,12 @@ function onParagraphMergeBack(block: Extract<Block, { type: 'text' }>, runs: Tex
   // empty gives its space back. The caret rests where the two lines meet on the new page.
   const up = documentStore.mergeToPrevPageEnd(block.id, runs)
   if (up) {
-    void nextTick(() => focusBlockCaret(up.blockId, up.offset))
+    void nextTick(() => {
+      focusBlockCaret(up.blockId, up.offset)
+      // Then flow the rest of the joined page up to fill the space, the way removing a page
+      // break in a word processor pulls the following content back onto the page above.
+      flowUp()
+    })
     return
   }
   if (plainText(runs).trim() === '' && props.page.blocks.findIndex((b) => b.id === block.id) > 0) {
