@@ -339,6 +339,32 @@ describe('document store', () => {
     expect((doc.locate(id)!.block as { text: { indent?: number } }).text.indent).toBe(0)
   })
 
+  it('carries a heading onto the next page with the content it introduces', () => {
+    const doc = useDocument()
+    doc.doc.pages[0].blocks = [
+      { id: 'intro', type: 'text', text: { id: 'ti', role: 'body', runs: [{ text: 'earlier text' }] } },
+      { id: 'h', type: 'text', text: { id: 'th', role: 'heading', runs: [{ text: 'Why The Figure Varies' }] } },
+      { id: 'body', type: 'text', text: { id: 'tb', role: 'body', runs: [{ text: 'the body that overflows' }] } },
+    ]
+    // The body is what no longer fits; the heading above it must not be left behind.
+    doc.movePageTail('body')
+    expect(doc.doc.pages).toHaveLength(2)
+    expect(doc.doc.pages[0].blocks.map((b) => b.id)).toEqual(['intro'])
+    expect(doc.doc.pages[1].blocks.map((b) => b.id)).toEqual(['h', 'body'])
+  })
+
+  it('never takes a page-top heading when moving a tail, so it cannot empty a page in a loop', () => {
+    const doc = useDocument()
+    doc.doc.pages[0].blocks = [
+      { id: 'h', type: 'text', text: { id: 'th', role: 'heading', runs: [{ text: 'Top Heading' }] } },
+      { id: 'body', type: 'text', text: { id: 'tb', role: 'body', runs: [{ text: 'the body' }] } },
+    ]
+    doc.movePageTail('body')
+    // The heading stays as the first block of the page rather than being moved and emptying it.
+    expect(doc.doc.pages[0].blocks.map((b) => b.id)).toEqual(['h'])
+    expect(doc.doc.pages[1].blocks.map((b) => b.id)).toEqual(['body'])
+  })
+
   it('fills a stroke by id', () => {
     const doc = useDocument()
     doc.addStroke(0, { id: 's1', tool: 'fine', color: '#000', width: 1, points: [{ x: 0, y: 0, pressure: 1 }] })

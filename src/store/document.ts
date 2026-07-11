@@ -716,12 +716,20 @@ export const useDocument = defineStore('document', {
 
     // Move a block and everything after it on its page onto the start of the following page,
     // making a new page when it is the last one. Used to flow writing that no longer fits a
-    // page onto the next, so a page never grows past a single sheet.
+    // page onto the next, so a page never grows past a single sheet. A heading kept company: if
+    // the blocks just above are titles or headings, they move down with the content they
+    // introduce rather than being left dangling at the foot of the page with empty space under
+    // them. The page's own first block is never taken this way, so a page keeps a top and the
+    // move cannot empty it into a loop.
     movePageTail(blockId: string): boolean {
       const at = this.locate(blockId)
       if (!at || at.blockIndex === 0) return false
       const page = this.doc.pages[at.pageIndex]
-      const moved = page.blocks.splice(at.blockIndex)
+      const isLeadIn = (b: Block) =>
+        b.type === 'text' && ['title', 'subtitle', 'heading', 'subheading'].includes(b.text.role)
+      let start = at.blockIndex
+      while (start > 1 && isLeadIn(page.blocks[start - 1])) start -= 1
+      const moved = page.blocks.splice(start)
       if (!moved.length) return false
       let next = this.doc.pages[at.pageIndex + 1]
       if (!next) {
