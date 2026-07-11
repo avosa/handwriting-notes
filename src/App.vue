@@ -321,6 +321,19 @@ watch(
   { immediate: true },
 )
 
+// Carry the accessibility preferences onto the document root as data attributes, so the styles
+// that read them turn on across every page at once.
+watch(
+  () => settings.a11y ?? {},
+  (a) => {
+    const el = document.documentElement
+    el.dataset.rtl = a.rtl ? 'on' : ''
+    el.dataset.contrast = a.highContrast ? 'on' : ''
+    el.dataset.reader = a.readerSpacing ? 'on' : ''
+  },
+  { immediate: true, deep: true },
+)
+
 const pageCount = computed(() => documentStore.doc.pages.length)
 
 // Right-clicking or long-pressing a page opens page actions with a page break; the menu button
@@ -410,6 +423,24 @@ const commands = computed<Command[]>(() => [
   { id: 'theme-light', title: 'Theme: Light', icon: 'sun', run: () => settings.setTheme('light') },
   { id: 'theme-dark', title: 'Theme: Dark', icon: 'moon', run: () => settings.setTheme('dark') },
   { id: 'theme-system', title: 'Theme: System', icon: 'device', run: () => settings.setTheme('system') },
+  {
+    id: 'a11y-contrast',
+    title: `High contrast: ${settings.a11y?.highContrast ? 'on' : 'off'}`,
+    icon: 'sun',
+    run: () => settings.toggleA11y('highContrast'),
+  },
+  {
+    id: 'a11y-reader',
+    title: `Reader spacing: ${settings.a11y?.readerSpacing ? 'on' : 'off'}`,
+    icon: 'paragraph',
+    run: () => settings.toggleA11y('readerSpacing'),
+  },
+  {
+    id: 'a11y-rtl',
+    title: `Right-to-left text: ${settings.a11y?.rtl ? 'on' : 'off'}`,
+    icon: 'alignJustify',
+    run: () => settings.toggleA11y('rtl'),
+  },
   { id: 'shortcuts', title: 'Keyboard shortcuts', hint: '?', run: () => (showShortcuts.value = true) },
   { id: 'welcome', title: 'Show welcome', icon: 'wand', run: () => (showWelcome.value = true) },
   {

@@ -53,6 +53,11 @@ export const useSettings = defineStore('settings', {
     setProvider(provider: ProviderId) {
       this.activeProvider = provider
     },
+    // Flip one accessibility preference on or off, keeping the others as they are.
+    toggleA11y(key: 'rtl' | 'highContrast' | 'readerSpacing') {
+      const current = this.a11y ?? {}
+      this.a11y = { ...current, [key]: !current[key] }
+    },
     hydrate(saved: Settings) {
       this.$patch({
         ...saved,

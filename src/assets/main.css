@@ -265,3 +265,20 @@ button {
     scroll-behavior: auto !important;
   }
 }
+
+/* Accessibility preferences, switched on by data attributes on the document root. Each is scoped
+   to the pages so the app chrome is unaffected, and each avoids changing line height so the
+   writing stays aligned to the ruled paper. */
+[data-rtl='on'] .text-layer,
+[data-rtl='on'] .free-layer .note {
+  direction: rtl;
+}
+[data-contrast='on'] .note-page {
+  filter: contrast(1.18) saturate(1.06);
+}
+[data-reader='on'] .editable,
+[data-reader='on'] .cell,
+[data-reader='on'] .toggle-details {
+  letter-spacing: 0.035em;
+  word-spacing: 0.08em;
+}

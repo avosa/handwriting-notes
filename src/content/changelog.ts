@@ -22,6 +22,7 @@ export const changelog: Release[] = [
       'Write mathematics in LaTeX and see it typeset, rendered on the device and exported cleanly.',
       'Tables gain per-column sorting (numbers by value) and left, centre, or right alignment.',
       'An emoji picker in the toolbar drops an emoji straight into the line, searchable by name.',
+      'Accessibility: right-to-left writing, a high-contrast mode, and roomier reader spacing.',
       'Manus now reads attached images, PDFs, documents, and voice notes, not just text.',
     ],
   },

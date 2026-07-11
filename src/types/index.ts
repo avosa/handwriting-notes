@@ -317,4 +317,13 @@ export interface Settings {
   activeTool: PenType
   activeColor: string
   activeWidth: number
+  /** Accessibility preferences, applied across the note. All default off/normal. */
+  a11y?: {
+    /** Lay the writing out right to left, for scripts that read that way. */
+    rtl?: boolean
+    /** Deepen ink and rules for a stronger contrast against the paper. */
+    highContrast?: boolean
+    /** Open the letters and words a little for easier reading. */
+    readerSpacing?: boolean
+  }
 }
