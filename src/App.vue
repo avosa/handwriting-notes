@@ -182,6 +182,18 @@ async function onRestorePicked(event: Event) {
   if (ok && library.recent[0]) await library.openNote(library.recent[0].id)
 }
 
+// Import a text or Markdown document as a new note, through the ingestion seam, then show it.
+const importInput = ref<HTMLInputElement | null>(null)
+async function onImportPicked(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  ;(event.target as HTMLInputElement).value = ''
+  if (!file) return
+  const text = await file.text()
+  const { ingestTextDocument, titleFromFilename } = await import('./ingest/ingest')
+  await ingestTextDocument(titleFromFilename(file.name), text)
+  showHome.value = false
+}
+
 // Drawer actions close the menu first, then run — so the page eases back before a sheet
 // or dialog takes over the screen.
 function drawerHome() {
@@ -538,6 +550,13 @@ const commands = computed<Command[]>(() => [
   { id: 'keys', title: 'AI keys', icon: 'key', run: () => (showKey.value = true) },
   { id: 'backup', title: 'Back up all notes to a file', icon: 'download', run: () => void library.exportBackup() },
   { id: 'restore', title: 'Restore notes from a backup', icon: 'download', run: () => backupInput.value?.click() },
+  {
+    id: 'import',
+    title: 'Import a document',
+    hint: 'text or Markdown to a note',
+    icon: 'file',
+    run: () => importInput.value?.click(),
+  },
   { id: 'undo', title: 'Undo', hint: `${mod}Z`, icon: 'undo', run: () => documentStore.undo() },
   { id: 'redo', title: 'Redo', hint: `${shiftMod}Z`, icon: 'redo', run: () => documentStore.redo() },
   { id: 'theme-light', title: 'Theme: Light', icon: 'sun', run: () => settings.setTheme('light') },
@@ -975,6 +994,13 @@ function addPage() {
 
     <CommandPalette v-if="showPalette" :commands="commands" @close="showPalette = false" />
     <input ref="backupInput" type="file" accept="application/json" style="display: none" @change="onRestorePicked" />
+    <input
+      ref="importInput"
+      type="file"
+      accept=".md,.markdown,.txt,text/plain,text/markdown"
+      style="display: none"
+      @change="onImportPicked"
+    />
 
     <ShortcutsSheet v-if="showShortcuts" @close="showShortcuts = false" />
 

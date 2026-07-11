@@ -134,6 +134,18 @@ registerTool<{ blockId: string }, { ok: true }>({
   },
 })
 
+registerTool<{ title: string; text: string }, { noteId: string }>({
+  name: 'note.import',
+  description: 'Bring in text or Markdown as a new note (the ingestion seam every source lands on).',
+  capability: 'write',
+  resource: () => ({ kind: 'corpus' }),
+  input: { title: 'A title for the note.', text: 'The document text or Markdown.' },
+  run: async ({ title, text }) => {
+    const { ingestTextDocument } = await import('@/ingest/ingest')
+    return { noteId: await ingestTextDocument(title, text) }
+  },
+})
+
 // --- Retrieval ---------------------------------------------------------------------------------
 
 registerTool<{ query: string; k?: number }, { noteId: string; title: string; text: string; score: number }[]>({
