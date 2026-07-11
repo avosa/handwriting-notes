@@ -719,8 +719,9 @@ export const useDocument = defineStore('document', {
       this.touch()
       return true
     },
-    // Backspace at the very top of a page joins it onto the page above: the block's words merge
-    // onto the last line there, or, if that line cannot take them, the block moves up whole. A
+    // Backspace at the very top of a page joins it onto the page above. A plain body line runs
+    // its words onto the last line there for a seamless join; a titled or headed line keeps its
+    // own look and moves up whole so its formatting is never flattened into the line above. A
     // page left empty by this gives its space back. Returns where the caret should come to rest.
     mergeToPrevPageEnd(blockId: string, runs: TextRun[]): { blockId: string; offset: number } | null {
       const at = this.locate(blockId)
@@ -729,15 +730,18 @@ export const useDocument = defineStore('document', {
       const prev = this.doc.pages[at.pageIndex - 1]
       const last = prev.blocks[prev.blocks.length - 1] as Block | undefined
       const words = runs.filter((r) => r.text.length)
+      const isPlainLine =
+        at.block.type === 'text' && (at.block.text.role === 'body' || at.block.text.role === 'caption')
       let result: { blockId: string; offset: number }
-      if (last?.type === 'text') {
+      if (isPlainLine && last?.type === 'text') {
         const offset = last.text.runs.reduce((n, r) => n + r.text.length, 0)
         const merged = [...last.text.runs, ...words].filter((r) => r.text.length)
         last.text.runs = merged.length ? merged : [{ text: '' }]
         page.blocks.splice(0, 1)
         result = { blockId: last.id, offset }
       } else {
-        // Nothing above to merge into, so the whole line moves up to sit below what is there.
+        // A titled line, or nothing above to merge into: the whole block moves up keeping its
+        // formatting, to sit below what is already there.
         const [moved] = page.blocks.splice(0, 1)
         prev.blocks.push(moved)
         result = { blockId: moved.id, offset: 0 }

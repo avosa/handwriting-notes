@@ -183,15 +183,28 @@ watch(
 
 const pageCount = computed(() => documentStore.doc.pages.length)
 
-// Right-clicking or long-pressing a page, or tapping its menu button, opens page actions at
-// that spot. A right-click that lands on a line also remembers it, so the same menu can offer a
-// page break there; the menu button on the page count carries no line, so it shows only the
-// whole-page actions.
+// Right-clicking or long-pressing a page opens page actions with a page break; the menu button
+// on the page count opens the same actions without one, since a break needs a place on the page
+// and the button carries none.
 const pageMenu = ref<{ index: number; x: number; y: number; blockId: string | null } | null>(null)
+// The line to break at: the one under the click if there is one, otherwise the last line of the
+// clicked page, so a break can be started from anywhere on the sheet, not only where text sits.
+function breakTarget(index: number, event: MouseEvent): string | null {
+  const blockEl = (event.target as HTMLElement).closest?.('[data-block-id]') as HTMLElement | null
+  if (blockEl) return blockEl.getAttribute('data-block-id')
+  const blocks = documentStore.doc.pages[index]?.blocks
+  return blocks?.length ? blocks[blocks.length - 1].id : null
+}
 function openPageMenu(index: number, event: MouseEvent) {
+  openMenuAt(index, event, breakTarget(index, event))
+}
+// The page-count button opens the whole-page actions only, so it never offers a page break.
+function openPageActions(index: number, event: MouseEvent) {
+  openMenuAt(index, event, null)
+}
+function openMenuAt(index: number, event: MouseEvent, blockId: string | null) {
   event.preventDefault()
   event.stopPropagation()
-  const blockEl = (event.target as HTMLElement).closest?.('[data-block-id]') as HTMLElement | null
   // Keep the menu on screen: flip it up near the bottom, and in from the right edge.
   const menuW = 200
   const menuH = 210
@@ -201,7 +214,7 @@ function openPageMenu(index: number, event: MouseEvent) {
     index,
     x: Math.max(8, x),
     y: Math.max(8, y),
-    blockId: blockEl?.getAttribute('data-block-id') ?? null,
+    blockId,
   }
 }
 function closePageMenu() {
@@ -505,7 +518,7 @@ function addPage() {
           <NotePage :page="page" :page-index="i" :width-px="pageWidth" :mode="mode" />
           <div class="page-num">
             <span>Page {{ i + 1 }} of {{ pageCount }}</span>
-            <button class="page-more" title="Page actions" @click="openPageMenu(i, $event)">
+            <button class="page-more" title="Page actions" @click="openPageActions(i, $event)">
               <Icon name="dots" :size="16" />
             </button>
           </div>

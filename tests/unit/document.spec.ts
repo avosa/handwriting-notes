@@ -234,6 +234,28 @@ describe('document store', () => {
     expect(quote.type === 'quote' && quote.runs.every((r) => r.bold)).toBe(true)
   })
 
+  it('flows a heading up to the page above keeping its formatting, and joins a plain line', () => {
+    const heading = useDocument()
+    heading.doc.pages = [
+      { id: 'p0', index: 0, presetId: '1C', blocks: [{ id: 'a', type: 'text', text: { id: 'ta', role: 'body', runs: [{ text: 'alpha' }] } }], strokes: [] },
+      { id: 'p1', index: 1, presetId: '1C', blocks: [{ id: 'h', type: 'text', text: { id: 'th', role: 'heading', runs: [{ text: 'Chapter' }] } }], strokes: [] },
+    ] as never
+    heading.mergeToPrevPageEnd('h', [{ text: 'Chapter' }])
+    expect(heading.doc.pages).toHaveLength(1)
+    const moved = heading.locate('h')!.block
+    expect(moved.type === 'text' && moved.text.role).toBe('heading')
+
+    const body = useDocument()
+    body.doc.pages = [
+      { id: 'p0', index: 0, presetId: '1C', blocks: [{ id: 'a', type: 'text', text: { id: 'ta', role: 'body', runs: [{ text: 'alpha' }] } }], strokes: [] },
+      { id: 'p1', index: 1, presetId: '1C', blocks: [{ id: 'b', type: 'text', text: { id: 'tb', role: 'body', runs: [{ text: 'beta' }] } }], strokes: [] },
+    ] as never
+    body.mergeToPrevPageEnd('b', [{ text: 'beta' }])
+    expect(body.doc.pages).toHaveLength(1)
+    const a = body.locate('a')!.block
+    expect(a.type === 'text' && a.text.runs.map((r) => r.text).join('')).toBe('alphabeta')
+  })
+
   it('fills a stroke by id', () => {
     const doc = useDocument()
     doc.addStroke(0, { id: 's1', tool: 'fine', color: '#000', width: 1, points: [{ x: 0, y: 0, pressure: 1 }] })
