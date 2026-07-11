@@ -66,6 +66,50 @@ const showStorage = ref(false)
 const showChat = ref(false)
 const showFind = ref(false)
 
+// Reading vs. writing shape the chrome so nothing blocks the page. Two signals drive it: whether
+// the reader is scrolling (and which way), and whether a line is being edited.
+//   - The bottom tool dock slides away when the reader scrolls down to read, and springs back the
+//     moment they scroll up or start writing — like a browser's chrome. While editing it always
+//     stays, so writing tools are one tap away.
+//   - The floating chat button tucks away on a phone while scrolling or writing, so it never
+//     covers the words, and eases back when things are still.
+// This applies on web and mobile, so the page is always the focus.
+const isPhone = ref(false)
+const isScrolling = ref(false)
+const isEditing = ref(false)
+const dockHiddenByScroll = ref(false)
+let scrollIdleTimer: ReturnType<typeof setTimeout> | undefined
+let lastScrollTop = 0
+const phoneQuery = window.matchMedia('(max-width: 720px)')
+function syncPhone() {
+  isPhone.value = phoneQuery.matches
+}
+function onScrollActivity(event: Event) {
+  const target = event.target as HTMLElement | Document | null
+  const top =
+    target && target instanceof HTMLElement && typeof target.scrollTop === 'number' ? target.scrollTop : window.scrollY
+  const delta = top - lastScrollTop
+  lastScrollTop = top
+  // While the AI is writing, the page auto-scrolls to follow the words. That is not the reader
+  // scrolling to read, so it must not tuck the dock or the button away — the tools stay put.
+  if (generating.value) return
+  if (delta > 5)
+    dockHiddenByScroll.value = true // scrolling down to read → tuck the dock
+  else if (delta < -5) dockHiddenByScroll.value = false // scrolling up → bring it back
+  isScrolling.value = true
+  clearTimeout(scrollIdleTimer)
+  scrollIdleTimer = setTimeout(() => (isScrolling.value = false), 900)
+}
+function onFocusShift() {
+  const el = document.activeElement as HTMLElement | null
+  isEditing.value = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+}
+// The tool dock hides while reading (scrolled down, not editing); writing — by hand or by the AI
+// — always shows it, so the tools and Stop control stay in reach.
+const dockTucked = computed(() => dockHiddenByScroll.value && !isEditing.value && !generating.value)
+// The chat button tucks on a phone while scrolling or writing so it never covers the page.
+const fabTucked = computed(() => isPhone.value && (isScrolling.value || isEditing.value))
+
 // Open a note chosen in the links panel or the map, then leave those overlays.
 async function openNoteById(id: string) {
   await library.openNote(id)
@@ -644,9 +688,20 @@ onMounted(() => {
 })
 window.addEventListener('resize', fit)
 window.addEventListener('keydown', onKeydown)
+// Watch scrolling (capturing, so it catches the page's own scroller) and focus, to tuck the
+// floating chat button away on a phone while reading or writing.
+syncPhone()
+phoneQuery.addEventListener('change', syncPhone)
+window.addEventListener('scroll', onScrollActivity, { passive: true, capture: true })
+document.addEventListener('focusin', onFocusShift)
+document.addEventListener('focusout', onFocusShift)
 onBeforeUnmount(() => {
   window.removeEventListener('resize', fit)
   window.removeEventListener('keydown', onKeydown)
+  phoneQuery.removeEventListener('change', syncPhone)
+  window.removeEventListener('scroll', onScrollActivity, true)
+  document.removeEventListener('focusin', onFocusShift)
+  document.removeEventListener('focusout', onFocusShift)
 })
 
 const title = computed({
@@ -838,7 +893,7 @@ function addPage() {
         </div>
       </Transition>
 
-      <div class="dock-wrap">
+      <div class="dock-wrap" :class="{ tucked: dockTucked }">
         <EditorBar :mode="mode" @update:mode="mode = $event" />
       </div>
 
@@ -914,6 +969,7 @@ function addPage() {
     <button
       v-if="!showChat && !showHome && !showGraph"
       class="ai-fab"
+      :class="{ tucked: fabTucked }"
       title="Chat with your notes"
       aria-label="Chat with your notes"
       @click="showChat = true"
@@ -1240,6 +1296,16 @@ function addPage() {
   bottom: max(18px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
   z-index: 40;
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease;
+}
+/* While reading (scrolled down, not editing) the dock slides off the bottom so it never covers
+   the page; it springs straight back on scroll-up or when a line is edited. */
+.dock-wrap.tucked {
+  transform: translate(-50%, calc(100% + 28px));
+  opacity: 0;
+  pointer-events: none;
 }
 .ai-fab {
   position: fixed;
@@ -1268,6 +1334,13 @@ function addPage() {
 }
 .ai-fab:active {
   transform: scale(0.96);
+}
+/* Tuck the chat button down and out on a phone while reading or writing, so it never covers the
+   words; it eases back when the page is still. */
+.ai-fab.tucked {
+  transform: translateY(120px);
+  opacity: 0;
+  pointer-events: none;
 }
 /* On phones the tool dock sits centre-bottom, so lift the button clear of it. */
 @media (max-width: 720px) {

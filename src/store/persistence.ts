@@ -53,23 +53,40 @@ interface Stores {
 
 let dbPromise: Promise<IDBPDatabase<Stores>> | null = null
 
-function db(): Promise<IDBPDatabase<Stores>> {
-  if (!dbPromise) {
-    dbPromise = openDB<Stores>(DB_NAME, DB_VERSION, {
-      upgrade(database) {
-        // Create any store that is missing, by name rather than by version number. This is
-        // self-healing: a database left in a partial state by an interrupted earlier upgrade
-        // (for example a store that never got created) is repaired on the next open, instead of
-        // being stuck missing a store its version says it should have.
-        //   document/settings/blobs/meta — the originals
-        //   versions — per-note history snapshots
-        //   vectors  — the local semantic index, one embedding per block
-        for (const name of ['document', 'settings', 'blobs', 'meta', 'versions', 'vectors'] as const) {
-          if (!database.objectStoreNames.contains(name)) database.createObjectStore(name)
-        }
-      },
-    })
+// Every object store the app relies on. document/settings/blobs/meta are the originals; versions
+// holds per-note history; vectors holds the local semantic index (one embedding per block).
+const REQUIRED_STORES = ['document', 'settings', 'blobs', 'meta', 'versions', 'vectors'] as const
+
+// Create any store that is missing, by name rather than by version number, so a database left in a
+// partial state is repaired rather than being stuck without a store its version says it has.
+function createMissingStores(database: IDBPDatabase<Stores>): void {
+  for (const name of REQUIRED_STORES) {
+    if (!database.objectStoreNames.contains(name)) database.createObjectStore(name)
   }
+}
+
+// Open the database and guarantee every store exists, whatever state it was left in. This is
+// bulletproof against an interrupted upgrade (a store that never got created) regardless of the
+// version number: if any store is missing after opening, it forces one more upgrade at the next
+// version to create it. A database already newer than this build is opened as-is rather than
+// downgraded (which would throw).
+async function openHealthy(): Promise<IDBPDatabase<Stores>> {
+  let database: IDBPDatabase<Stores>
+  try {
+    database = await openDB<Stores>(DB_NAME, DB_VERSION, { upgrade: createMissingStores })
+  } catch {
+    database = await openDB<Stores>(DB_NAME)
+  }
+  if (!REQUIRED_STORES.every((name) => database.objectStoreNames.contains(name))) {
+    const nextVersion = database.version + 1
+    database.close()
+    database = await openDB<Stores>(DB_NAME, nextVersion, { upgrade: createMissingStores })
+  }
+  return database
+}
+
+function db(): Promise<IDBPDatabase<Stores>> {
+  if (!dbPromise) dbPromise = openHealthy()
   return dbPromise
 }
 
