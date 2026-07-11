@@ -45,6 +45,9 @@ interface DocumentState {
   lineSelection: { pageIndex: number; refs: LineRef[] } | null
   /** The line a shift-click extends from, set as the caret lands on a line. */
   lineAnchor: LineRef | null
+  /** The block whose comment box is open for editing, or null when none is. Transient, so it is
+   *  not part of the saved note. */
+  activeCommentId: string | null
 }
 
 // A single editable line addressed across blocks: a paragraph carries item null, a list
@@ -100,6 +103,7 @@ export const useDocument = defineStore('document', {
     aiTool: null,
     lineSelection: null,
     lineAnchor: null,
+    activeCommentId: null,
   }),
   getters: {
     canUndo: (state) => state.past.length > 0,
@@ -370,6 +374,8 @@ export const useDocument = defineStore('document', {
       if (!at) return
       this.doc.pages[at.pageIndex].blocks.splice(at.blockIndex, 1)
       if (this.selectedBlockId === blockId) this.selectedBlockId = null
+      if (this.doc.comments?.[blockId]) delete this.doc.comments[blockId]
+      if (this.activeCommentId === blockId) this.activeCommentId = null
       this.touch()
     },
 
@@ -425,6 +431,26 @@ export const useDocument = defineStore('document', {
         at.block.text = text
         this.touch()
       }
+    },
+    // Self-comments: a margin note the writer attaches to a block. Kept in one map on the note
+    // keyed by block id, so a comment travels with its line and is dropped when the line goes.
+    commentOf(blockId: string): string | undefined {
+      return this.doc.comments?.[blockId]
+    },
+    setComment(blockId: string, text: string) {
+      const trimmed = text.trim()
+      if (!this.doc.comments) this.doc.comments = {}
+      if (trimmed) this.doc.comments[blockId] = text
+      else delete this.doc.comments[blockId]
+      this.touch()
+    },
+    // Open a block's comment box for editing, adding an empty one so it appears at once.
+    startComment(blockId: string | null) {
+      if (!blockId) return
+      this.activeCommentId = blockId
+    },
+    stopComment() {
+      this.activeCommentId = null
     },
     // A collapsible section: a heading that folds a body of notes away, opening on a chevron.
     addToggle(blockId: string | null): string {
@@ -985,6 +1011,9 @@ export const useDocument = defineStore('document', {
           }
         }
         for (const note of page.notes ?? []) note.runs = swap(note.runs)
+      }
+      if (this.doc.comments) {
+        for (const id of Object.keys(this.doc.comments)) this.doc.comments[id] = inString(this.doc.comments[id])
       }
       if (total) this.touch()
       return total

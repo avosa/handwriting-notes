@@ -126,6 +126,22 @@ function focusToggleDetails(id: string) {
   if (at?.block.type === 'toggle' && at.block.open === false) documentStore.toggleOpen(id)
   void nextTick(() => toggleDetails.value.get(id)?.focus())
 }
+// A block's comment box, kept by block id so opening a comment can drop the caret straight in.
+const commentEls = ref(new Map<string, HTMLTextAreaElement>())
+function bindComment(id: string) {
+  return (el: unknown) => {
+    if (el) commentEls.value.set(id, el as HTMLTextAreaElement)
+    else commentEls.value.delete(id)
+  }
+}
+watch(
+  () => documentStore.activeCommentId,
+  async (id) => {
+    if (!id) return
+    await nextTick()
+    commentEls.value.get(id)?.focus()
+  },
+)
 // The line to move the caret into next, and where along it the caret should sit, so a merge
 // can drop the caret at the join between the two lines it made one.
 const pendingFocus = ref<{ key: string; offset?: number } | null>(null)
@@ -954,6 +970,32 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
           <Icon name="trash" :size="15" />
         </button>
       </div>
+
+      <div
+        v-if="documentStore.commentOf(block.id) !== undefined || documentStore.activeCommentId === block.id"
+        class="comment-note"
+      >
+        <Icon name="comment" :size="13" class="comment-glyph" />
+        <textarea
+          :ref="bindComment(block.id)"
+          v-auto-grow
+          class="comment-text"
+          :value="documentStore.commentOf(block.id) ?? ''"
+          placeholder="Comment"
+          rows="1"
+          @focus="documentStore.activeCommentId = block.id"
+          @input="documentStore.setComment(block.id, ($event.target as HTMLTextAreaElement).value)"
+          @blur="documentStore.stopComment()"
+        />
+        <button
+          v-if="editable"
+          class="comment-remove"
+          title="Remove comment"
+          @click.stop="documentStore.setComment(block.id, '')"
+        >
+          <Icon name="close" :size="12" />
+        </button>
+      </div>
     </template>
     <SlashMenu v-if="slash" :query="slash.query" :x="slash.x" :y="slash.y" @pick="applySlash" @close="slash = null" />
   </div>
@@ -1147,6 +1189,51 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
 .math-slot {
   position: relative;
   margin: 2px 0;
+}
+/* The writer's own comment on a line: a small, quiet margin note set apart from the writing. */
+.comment-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 1px 0 3px 14px;
+  padding: 4px 8px;
+  border-left: 2px solid var(--accent-wash-2, rgba(74, 114, 176, 0.3));
+  background: var(--accent-wash, rgba(74, 114, 176, 0.06));
+  border-radius: 0 8px 8px 0;
+}
+.comment-glyph {
+  flex-shrink: 0;
+  margin-top: 3px;
+  opacity: 0.55;
+}
+.comment-text {
+  flex: 1;
+  resize: none;
+  overflow: hidden;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-muted, #6b6b7a);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+.comment-remove {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #9a9aa8);
+  cursor: pointer;
+  opacity: 0;
+  padding: 2px;
+  border-radius: 4px;
+}
+.comment-note:hover .comment-remove {
+  opacity: 1;
+}
+.comment-remove:hover {
+  color: var(--danger, #b73b3a);
 }
 /* A rule across the writing column that parts one section from the next. */
 .divider-slot {

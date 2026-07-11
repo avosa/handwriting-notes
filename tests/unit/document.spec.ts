@@ -485,6 +485,19 @@ describe('document store', () => {
     expect(block().latex).toBe('E = mc**2')
   })
 
+  it('attaches a comment to a block, reaches it with find and replace, and drops it with the block', () => {
+    const doc = useDocument()
+    const first = doc.doc.pages[0].blocks[0].id
+    doc.setComment(first, 'check this later')
+    expect(doc.commentOf(first)).toBe('check this later')
+    expect(doc.replaceAll('later', 'tomorrow')).toBeGreaterThan(0)
+    expect(doc.commentOf(first)).toBe('check this tomorrow')
+    // Clearing to empty removes it; removing the block removes its comment too.
+    doc.setComment(first, 'x')
+    doc.removeBlock(first)
+    expect(doc.commentOf(first)).toBeUndefined()
+  })
+
   it('fills a stroke by id', () => {
     const doc = useDocument()
     doc.addStroke(0, { id: 's1', tool: 'fine', color: '#000', width: 1, points: [{ x: 0, y: 0, pressure: 1 }] })

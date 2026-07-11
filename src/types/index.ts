@@ -253,6 +253,9 @@ export interface NoteDocument {
   pages: Page[]
   createdAt: number
   updatedAt: number
+  /** The writer's own comments, one per block, keyed by block id. A margin note the reader
+   *  attaches to a line to remind, question, or annotate, without touching the writing. */
+  comments?: Record<string, string>
 }
 
 /** One row in the notes library: enough to list and open a note without loading it. */

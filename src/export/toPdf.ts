@@ -355,10 +355,16 @@ function drawStrokes(page: PDFPage, strokes: Stroke[]) {
   }
 }
 
-function pageHeightMm(page: Page, preset: SheetPreset, metrics: TextMetrics, fonts: Fonts): number {
+function pageHeightMm(
+  page: Page,
+  preset: SheetPreset,
+  metrics: TextMetrics,
+  fonts: Fonts,
+  comments?: Record<string, string>,
+): number {
   // A dry run of the layout to learn how tall the grown page needs to be.
   let cursor = metrics.firstBaseline - metrics.lineHeight
-  cursor = layoutBlocks(page, metrics, fonts, null, cursor)
+  cursor = layoutBlocks(page, metrics, fonts, null, cursor, comments)
   const grown =
     preset.rule.topGap +
     Math.ceil(Math.max(0, cursor + 12 - preset.rule.topGap) / preset.rule.spacing) * preset.rule.spacing
@@ -372,6 +378,7 @@ function layoutBlocks(
   fonts: Fonts,
   pdfPage: PDFPage | null,
   startMm: number,
+  comments?: Record<string, string>,
 ): number {
   const handwriting = getHandwriting(useSettings().activeHandwritingId)
   const left = metrics.left
@@ -602,6 +609,28 @@ function layoutBlocks(
         })
       cursor += lineH
     }
+    // The writer's comment on this block, set in a small muted hand under it.
+    const commentNote = comments?.[block.id]?.trim()
+    if (commentNote) {
+      const size = metrics.fontSize.caption
+      const words = runsToWords([{ text: `note: ${commentNote.replace(/\n/g, ' ')}` }])
+      const lines = words.length ? wrapWords(fonts.body, words, mm(size), mm(colWidth - 6)) : []
+      for (const line of lines) {
+        if (pdfPage && line.length)
+          drawWordLine(
+            pdfPage,
+            fonts.body,
+            line,
+            mm(size),
+            mm(left + 6),
+            mm(cursor + lineH * 0.7),
+            mm(colWidth - 6),
+            '#8a8a8a',
+            'left',
+          )
+        cursor += lineH
+      }
+    }
   }
   return cursor
 }
@@ -618,10 +647,10 @@ export async function documentToPdf(doc: NoteDocument): Promise<Uint8Array> {
   for (const page of doc.pages) {
     const preset = getPreset(page.presetId)
     const metrics = textMetrics(preset)
-    const heightMm = pageHeightMm(page, preset, metrics, fonts)
+    const heightMm = pageHeightMm(page, preset, metrics, fonts, doc.comments)
     const pdfPage = pdf.addPage([mm(preset.width), mm(heightMm)])
     drawSheet(pdfPage, preset, heightMm)
-    layoutBlocks(page, metrics, fonts, pdfPage, metrics.firstBaseline - metrics.lineHeight)
+    layoutBlocks(page, metrics, fonts, pdfPage, metrics.firstBaseline - metrics.lineHeight, doc.comments)
     drawStrokes(pdfPage, page.strokes)
     const palette = getHandwriting(useSettings().activeHandwritingId).palette
     for (const note of page.notes ?? []) {

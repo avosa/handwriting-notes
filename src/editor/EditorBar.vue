@@ -239,6 +239,14 @@ function imageRatio(file: Blob): Promise<number> {
               <EmojiPicker @pick="insertAtSelection" />
             </template>
           </Popover>
+          <button
+            title="Comment on this line"
+            :disabled="!selectedId"
+            @mousedown.prevent
+            @click="documentStore.startComment(selectedId)"
+          >
+            <Icon name="comment" :size="18" />
+          </button>
           <button title="Align left" @click="applyAlign('left')"><Icon name="alignLeft" :size="18" /></button>
           <button title="Centre" @click="applyAlign('center')"><Icon name="alignCenter" :size="18" /></button>
           <button title="Justify" @click="applyAlign('justify')"><Icon name="alignJustify" :size="18" /></button>

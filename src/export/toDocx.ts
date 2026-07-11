@@ -387,10 +387,21 @@ async function pageChildren(
   bodyFont: string,
   headerFont: string,
   palette: ReturnType<typeof getHandwriting>['palette'],
+  comments?: Record<string, string>,
 ) {
   const children: (Paragraph | Table)[] = []
-  for (const block of page.blocks)
+  for (const block of page.blocks) {
     children.push(...(await blockToChildren(block, preset, bodyFont, headerFont, palette)))
+    const note = comments?.[block.id]?.trim()
+    if (note) {
+      children.push(
+        new Paragraph({
+          indent: { left: twip(6) },
+          children: [new DocxTextRun({ text: `💬 ${note}`, italics: true, font: bodyFont, color: '888888' })],
+        }),
+      )
+    }
+  }
   return children
 }
 
@@ -434,7 +445,7 @@ export async function documentToDocx(doc: NoteDocument): Promise<Blob> {
             }),
           ],
         }),
-        ...(await pageChildren(page, p, bodyFont, headerFont, handwriting.palette)),
+        ...(await pageChildren(page, p, bodyFont, headerFont, handwriting.palette, doc.comments)),
       ],
     })
   }

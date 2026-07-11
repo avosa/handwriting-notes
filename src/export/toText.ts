@@ -98,7 +98,7 @@ function nestedTextLines(rows: ListRow[], ordered: boolean, task: boolean): stri
   })
 }
 
-function blockLines(block: Block, d: Dress, kind: 'text' | 'md' | 'html'): string[] {
+function blockLines(block: Block, d: Dress, kind: 'text' | 'md' | 'html', comment?: string): string[] {
   const out: string[] = []
   if (block.type === 'text') {
     const text = d.runs(block.text.runs).trim()
@@ -186,12 +186,19 @@ function blockLines(block: Block, d: Dress, kind: 'text' | 'md' | 'html'): strin
       }
     }
   }
+  // The writer's own comment on this block travels with it as a marked aside.
+  const note = comment?.trim()
+  if (note) {
+    if (kind === 'html') out.push(`<aside class="comment">💬 ${escapeHtml(note)}</aside>`)
+    else if (kind === 'md') out.push(`> 💬 ${note}`)
+    else out.push(`  💬 ${note}`)
+  }
   return out
 }
 
-function pageLines(page: Page, d: Dress, kind: 'text' | 'md' | 'html'): string[] {
+function pageLines(page: Page, d: Dress, kind: 'text' | 'md' | 'html', comments?: Record<string, string>): string[] {
   const out: string[] = []
-  for (const block of page.blocks) out.push(...blockLines(block, d, kind))
+  for (const block of page.blocks) out.push(...blockLines(block, d, kind, comments?.[block.id]))
   for (const note of page.notes ?? []) {
     const text = d.runs(note.runs).trim()
     if (text) out.push(kind === 'html' ? `<p>${text}</p>` : text)
@@ -204,7 +211,7 @@ export function toPlainText(doc: NoteDocument): string {
   const d = { runs: plain }
   const lines: string[] = []
   if (doc.title.trim()) lines.push(doc.title.trim(), '')
-  for (const page of doc.pages) lines.push(...pageLines(page, d, 'text'))
+  for (const page of doc.pages) lines.push(...pageLines(page, d, 'text', doc.comments))
   return (
     lines
       .join('\n')
@@ -218,7 +225,7 @@ export function toMarkdown(doc: NoteDocument): string {
   const d = { runs: markdownRuns }
   const lines: string[] = []
   if (doc.title.trim()) lines.push(`# ${doc.title.trim()}`, '')
-  for (const page of doc.pages) lines.push(...pageLines(page, d, 'md'), '')
+  for (const page of doc.pages) lines.push(...pageLines(page, d, 'md', doc.comments), '')
   return (
     lines
       .join('\n')
@@ -231,7 +238,7 @@ export function toHtml(doc: NoteDocument): string {
   doc = joinSplitParagraphs(doc)
   const d = { runs: htmlRuns }
   const body: string[] = []
-  for (const page of doc.pages) body.push(...pageLines(page, d, 'html'))
+  for (const page of doc.pages) body.push(...pageLines(page, d, 'html', doc.comments))
   const title = escapeHtml(doc.title.trim() || 'Note')
   return [
     '<!doctype html>',
