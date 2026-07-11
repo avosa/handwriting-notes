@@ -15,6 +15,7 @@ import { useSettings } from '@/store/settings'
 import { hashSeed } from '@/diagrams/wobble'
 import EditableText from './EditableText.vue'
 import SlashMenu from './SlashMenu.vue'
+import MathBlock from './MathBlock.vue'
 import TableBlock from './TableBlock.vue'
 import CalloutsBlock from './CalloutsBlock.vue'
 import ImageBlock from './ImageBlock.vue'
@@ -208,6 +209,12 @@ function applySlash(commandId: string) {
     pendingFocus.value = { key: `toggle:${id}` }
     return
   }
+  if (commandId === 'math') {
+    const id = documentStore.addMath(blockId)
+    documentStore.removeBlock(blockId)
+    documentStore.requestFocus(id)
+    return
+  }
   if (commandId === 'divider') {
     const dividerId = documentStore.addDivider(blockId)
     const lineId = documentStore.addParagraphAfter(dividerId, 'body')
@@ -229,10 +236,12 @@ watch(
       documentStore.clearPendingFocus()
       return
     }
-    // A code block edits in a textarea rather than a contenteditable, so it is focused by
+    // A code or math block edits in a textarea rather than a contenteditable, so it is focused by
     // reaching for its element directly; clearing the request either way avoids a stale ask
     // grabbing a later line.
-    const area = document.querySelector(`.code-slot[data-block-id="${CSS.escape(id)}"] .code-text`)
+    const area = document.querySelector(
+      `.code-slot[data-block-id="${CSS.escape(id)}"] .code-text, .math-slot[data-block-id="${CSS.escape(id)}"] .math-source`,
+    )
     if (area instanceof HTMLTextAreaElement) area.focus()
     if (editables.value.get(`text:${id}`) || area) documentStore.clearPendingFocus()
   },
@@ -912,6 +921,23 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
         </button>
       </div>
 
+      <div v-else-if="block.type === 'math'" class="math-slot" :data-block-id="block.id" :style="quoteStyle()">
+        <MathBlock
+          :latex="block.latex"
+          :editable="editable"
+          @update="documentStore.setMath(block.id, $event)"
+          @focus="onFocusBlock(block.id)"
+        />
+        <button
+          v-if="editable"
+          class="figure-remove"
+          title="Remove math"
+          @click.stop="documentStore.removeBlock(block.id)"
+        >
+          <Icon name="trash" :size="15" />
+        </button>
+      </div>
+
       <div
         v-else-if="block.type === 'divider'"
         class="divider-slot"
@@ -1117,6 +1143,11 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
 .toggle-details:focus {
   outline: none;
 }
+/* A block of typeset mathematics on its own line, centred like a display equation. */
+.math-slot {
+  position: relative;
+  margin: 2px 0;
+}
 /* A rule across the writing column that parts one section from the next. */
 .divider-slot {
   position: relative;
@@ -1130,6 +1161,7 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
 .quote-slot:hover .figure-remove,
 .code-slot:hover .figure-remove,
 .toggle-slot:hover .figure-remove,
+.math-slot:hover .figure-remove,
 .divider-slot:hover .figure-remove {
   opacity: 1;
 }

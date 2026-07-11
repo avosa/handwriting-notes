@@ -442,6 +442,18 @@ describe('document store', () => {
     expect(block().summary[0].text).toBe('Why it changes')
   })
 
+  it('adds a math block, edits its LaTeX, and reaches it with find and replace', () => {
+    const doc = useDocument()
+    const first = doc.doc.pages[0].blocks[0].id
+    const id = doc.addMath(first)
+    const block = () => doc.locate(id)!.block as Extract<Block, { type: 'math' }>
+    expect(block().type).toBe('math')
+    doc.setMath(id, 'E = mc^2')
+    expect(block().latex).toBe('E = mc^2')
+    expect(doc.replaceAll('mc^2', 'mc**2')).toBeGreaterThan(0)
+    expect(block().latex).toBe('E = mc**2')
+  })
+
   it('fills a stroke by id', () => {
     const doc = useDocument()
     doc.addStroke(0, { id: 's1', tool: 'fine', color: '#000', width: 1, points: [{ x: 0, y: 0, pressure: 1 }] })

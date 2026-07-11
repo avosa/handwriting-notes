@@ -201,6 +201,7 @@ export type Block =
     }
   | { id: string; type: 'quote'; runs: TextRun[]; float?: FloatPos; scale?: FontScale }
   | { id: string; type: 'code'; text: string; float?: FloatPos; scale?: FontScale }
+  | { id: string; type: 'math'; latex: string; float?: FloatPos; scale?: FontScale }
   | { id: string; type: 'divider'; float?: FloatPos; scale?: FontScale }
   | {
       id: string

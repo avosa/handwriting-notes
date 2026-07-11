@@ -114,6 +114,16 @@ describe('note text export', () => {
     expect(html).toContain('<li>two</li>')
   })
 
+  it('exports math as LaTeX for text and MathML for HTML', () => {
+    const d = doc()
+    d.pages[0].blocks.push({ id: 'm', type: 'math', latex: 'c = \\sqrt{a^2 + b^2}' } as never)
+    expect(toPlainText(d)).toContain('$$c = \\sqrt{a^2 + b^2}$$')
+    expect(toMarkdown(d)).toContain('$$c = \\sqrt{a^2 + b^2}$$')
+    const html = toHtml(d)
+    // MathML renders natively in a browser without the KaTeX stylesheet.
+    expect(html).toContain('<math')
+  })
+
   it('exports a collapsible section open, heading then body, in each format', () => {
     const d = doc()
     d.pages[0].blocks.push({

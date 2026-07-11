@@ -76,6 +76,8 @@ export function noteToText(doc: NoteDocument): string {
         if (text) lines.push(`> ${text}`)
       } else if (block.type === 'code') {
         if (block.text.trim()) lines.push('```', block.text, '```')
+      } else if (block.type === 'math') {
+        if (block.latex.trim()) lines.push(`$$${block.latex}$$`)
       } else if (block.type === 'toggle') {
         const summary = runsText(block.summary).trim()
         if (summary) lines.push(summary)

@@ -19,6 +19,7 @@ export const changelog: Release[] = [
       'Long AI notes flow across as many sheets as they need, and a heading is never left behind.',
       'A paragraph too long for a page now splits at the line, filling the page before it carries on.',
       'Collapsible sections: a heading with a chevron that folds its notes away, from / or Insert.',
+      'Write mathematics in LaTeX and see it typeset, rendered on the device and exported cleanly.',
       'Manus now reads attached images, PDFs, documents, and voice notes, not just text.',
     ],
   },

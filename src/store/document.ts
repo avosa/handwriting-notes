@@ -459,6 +459,19 @@ export const useDocument = defineStore('document', {
         this.touch()
       }
     },
+    // A block of typeset mathematics, written in LaTeX and drawn by the math engine.
+    addMath(blockId: string | null): string {
+      const id = this.insertAfter(blockId, { id: uid('b'), type: 'math', latex: '' })
+      this.pendingFocusId = id
+      return id
+    },
+    setMath(blockId: string, latex: string) {
+      const at = this.locate(blockId)
+      if (at?.block.type === 'math') {
+        at.block.latex = latex
+        this.touch()
+      }
+    },
     // A plain rule across the column that separates one part of the note from the next.
     addDivider(blockId: string | null): string {
       return this.insertAfter(blockId, { id: uid('b'), type: 'divider' })
@@ -926,6 +939,7 @@ export const useDocument = defineStore('document', {
           else if (block.type === 'quote') block.runs = swap(block.runs)
           else if (block.type === 'list') block.items = block.items.map(swap)
           else if (block.type === 'code') block.text = inString(block.text)
+          else if (block.type === 'math') block.latex = inString(block.latex)
           else if (block.type === 'toggle') {
             block.summary = swap(block.summary)
             block.details = inString(block.details)

@@ -78,6 +78,9 @@ function insertCode() {
 function insertToggle() {
   documentStore.select(documentStore.addToggle(selectedId.value))
 }
+function insertMath() {
+  documentStore.select(documentStore.addMath(selectedId.value))
+}
 function insertDivider() {
   documentStore.select(documentStore.addDivider(selectedId.value))
 }
@@ -258,6 +261,9 @@ function imageRatio(file: Blob): Promise<number> {
               <button class="menu-item" @click="insertCode()"><Icon name="file" :size="18" /><span>Code</span></button>
               <button class="menu-item" @click="insertToggle()">
                 <Icon name="chevronDown" :size="18" /><span>Toggle section</span>
+              </button>
+              <button class="menu-item" @click="insertMath()">
+                <Icon name="file" :size="18" /><span>Math (LaTeX)</span>
               </button>
               <button class="menu-item" @click="insertDivider()">
                 <Icon name="pageBreak" :size="18" /><span>Divider</span>

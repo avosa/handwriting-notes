@@ -26,6 +26,7 @@ const ALL: SlashCommand[] = [
   { id: 'task', title: 'Task list', keywords: 'task todo checklist check', icon: 'check' },
   { id: 'quote', title: 'Quote', keywords: 'quote blockquote', icon: 'paragraph' },
   { id: 'code', title: 'Code', keywords: 'code monospace', icon: 'file' },
+  { id: 'math', title: 'Math (LaTeX)', keywords: 'math latex equation formula tex', icon: 'file' },
   { id: 'toggle', title: 'Toggle section', keywords: 'toggle collapse section fold details', icon: 'chevronDown' },
   { id: 'divider', title: 'Divider', keywords: 'divider rule line separator', icon: 'pageBreak' },
 ]

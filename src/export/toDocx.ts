@@ -335,6 +335,17 @@ async function blockToChildren(
     }
     return paras
   }
+  if (block.type === 'math') {
+    // Word has no formula engine here, so the LaTeX source is written centred as text, which a
+    // reader can paste into a math tool; nothing is lost.
+    return [
+      new Paragraph({
+        spacing: { line: lineTwip, lineRule: 'exact' },
+        alignment: AlignmentType.CENTER,
+        children: [new DocxTextRun({ text: block.latex, font: 'Consolas', size: sized(ROLE_SIZE.body) })],
+      }),
+    ]
+  }
   if (block.type === 'divider') {
     return [
       new Paragraph({

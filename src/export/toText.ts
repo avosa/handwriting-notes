@@ -3,6 +3,17 @@
 // the same blocks and differs only in how a line is dressed, so the three never drift apart.
 import type { Block, NoteDocument, Page, TextRun } from '@/types'
 import { joinSplitParagraphs } from './continuations'
+import katex from 'katex'
+
+// Render a formula to MathML, which browsers draw natively without the KaTeX stylesheet, so the
+// exported HTML stays self-contained. A formula the engine cannot parse falls back to its source.
+function mathToMml(latex: string): string {
+  try {
+    return katex.renderToString(latex, { displayMode: true, throwOnError: false, trust: false, output: 'mathml' })
+  } catch {
+    return `$$${latex}$$`
+  }
+}
 
 function plain(runs: TextRun[]): string {
   return runs.map((r) => r.text).join('')
@@ -133,6 +144,12 @@ function blockLines(block: Block, d: Dress, kind: 'text' | 'md' | 'html'): strin
     if (kind === 'html') out.push(`<pre><code>${escapeHtml(code)}</code></pre>`)
     else if (kind === 'md') out.push('```', code, '```')
     else out.push(...code.split('\n').map((l) => `    ${l}`))
+  } else if (block.type === 'math') {
+    const latex = block.latex.trim()
+    if (latex) {
+      if (kind === 'html') out.push(`<p>${mathToMml(latex)}</p>`)
+      else out.push(`$$${latex}$$`)
+    }
   } else if (block.type === 'toggle') {
     // A collapsible section exports open, so its notes are never hidden in a saved copy.
     const summary = d.runs(block.summary).trim()

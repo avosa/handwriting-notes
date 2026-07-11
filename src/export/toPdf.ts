@@ -573,6 +573,25 @@ function layoutBlocks(
           )
         cursor += lineH
       }
+    } else if (block.type === 'math') {
+      // No formula engine in the PDF pass, so the LaTeX source is drawn centred as text.
+      const size = metrics.fontSize.body
+      for (const mathLine of block.latex ? block.latex.split('\n') : []) {
+        if (pdfPage && mathLine) {
+          const w = measure(fonts.body, mathLine, mm(size))
+          drawShaped(
+            pdfPage,
+            fonts.body,
+            mathLine,
+            mm(size),
+            mm(left) + (mm(colWidth) - w) / 2,
+            mm(cursor + lineH * 0.78),
+            color(handwriting.palette.ink),
+            false,
+          )
+        }
+        cursor += lineH
+      }
     } else if (block.type === 'divider') {
       if (pdfPage)
         pdfPage.drawLine({
