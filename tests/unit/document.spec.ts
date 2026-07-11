@@ -203,6 +203,14 @@ describe('document store', () => {
     expect((doc.locate(id)!.block as { heightRules: number }).heightRules).toBe(4)
   })
 
+  it('rules a page on a chosen paper, per page', () => {
+    const doc = useDocument()
+    doc.setPagePreset(0, 'grid')
+    expect(doc.doc.pages[0].presetId).toBe('grid')
+    doc.setPagePreset(0, 'blank')
+    expect(doc.doc.pages[0].presetId).toBe('blank')
+  })
+
   it('fills a stroke by id', () => {
     const doc = useDocument()
     doc.addStroke(0, { id: 's1', tool: 'fine', color: '#000', width: 1, points: [{ x: 0, y: 0, pressure: 1 }] })

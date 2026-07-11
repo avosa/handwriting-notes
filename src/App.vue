@@ -225,6 +225,26 @@ const commands = computed<Command[]>(() => [
   { id: 'theme-system', title: 'Theme: System', icon: 'device', run: () => settings.setTheme('system') },
   { id: 'shortcuts', title: 'Keyboard shortcuts', hint: '?', run: () => (showShortcuts.value = true) },
   { id: 'welcome', title: 'Show welcome', icon: 'wand', run: () => (showWelcome.value = true) },
+  {
+    id: 'paper-lined',
+    title: 'Paper: Lined',
+    run: () => documentStore.setPagePreset(documentStore.activePageIndex, '1C'),
+  },
+  {
+    id: 'paper-grid',
+    title: 'Paper: Grid',
+    run: () => documentStore.setPagePreset(documentStore.activePageIndex, 'grid'),
+  },
+  {
+    id: 'paper-dots',
+    title: 'Paper: Dotted',
+    run: () => documentStore.setPagePreset(documentStore.activePageIndex, 'dots'),
+  },
+  {
+    id: 'paper-blank',
+    title: 'Paper: Blank',
+    run: () => documentStore.setPagePreset(documentStore.activePageIndex, 'blank'),
+  },
   { id: 'info', title: 'Note info', hint: 'words, reading time', run: () => (showInfo.value = true) },
   { id: 'whats-new', title: "What's new", run: () => (showWhatsNew.value = true) },
   { id: 'feedback', title: 'Send feedback', icon: 'send', run: sendFeedback },

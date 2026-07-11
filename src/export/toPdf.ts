@@ -146,13 +146,43 @@ function drawWordLine(
 function drawSheet(page: PDFPage, preset: SheetPreset, heightMm: number) {
   const h = page.getHeight()
   page.drawRectangle({ x: 0, y: 0, width: mm(preset.width), height: mm(heightMm), color: color(preset.background) })
+  const style = preset.style ?? 'lined'
+  if (style === 'blank') return
+
+  const ruleColor = color(preset.rule.color)
+  if (style === 'grid' || style === 'dots') {
+    const s = preset.rule.spacing
+    if (style === 'grid') {
+      const w = mm(ptToMm(preset.rule.weightPt))
+      for (let y = 0; y <= heightMm + 0.001; y += s) {
+        page.drawLine({
+          start: { x: 0, y: h - mm(y) },
+          end: { x: mm(preset.width), y: h - mm(y) },
+          thickness: w,
+          color: ruleColor,
+        })
+      }
+      for (let x = 0; x <= preset.width + 0.001; x += s) {
+        page.drawLine({ start: { x: mm(x), y: h }, end: { x: mm(x), y: 0 }, thickness: w, color: ruleColor })
+      }
+    } else {
+      const r = mm(Math.max(0.18, ptToMm(preset.rule.weightPt) * 0.7))
+      for (let y = 0; y <= heightMm + 0.001; y += s) {
+        for (let x = 0; x <= preset.width + 0.001; x += s) {
+          page.drawCircle({ x: mm(x), y: h - mm(y), size: r, color: ruleColor })
+        }
+      }
+    }
+    return
+  }
+
   const ruleWidth = mm(ptToMm(preset.rule.weightPt))
   for (const y of ruleYsForHeight(preset, heightMm)) {
     page.drawLine({
       start: { x: 0, y: h - mm(y) },
       end: { x: mm(preset.width), y: h - mm(y) },
       thickness: ruleWidth,
-      color: color(preset.rule.color),
+      color: ruleColor,
     })
   }
   page.drawLine({

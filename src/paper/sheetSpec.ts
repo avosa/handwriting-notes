@@ -6,6 +6,9 @@
 export interface SheetPreset {
   id: string
   name: string
+  /** How the paper is ruled: horizontal lines, a full grid, a field of dots, or nothing.
+   *  Unset reads as lined, so the ruled presets need not name it. */
+  style?: 'lined' | 'grid' | 'dots' | 'blank'
   /** Page width and height in millimetres. */
   width: number
   height: number
@@ -93,9 +96,54 @@ const preset1A: SheetPreset = {
   },
 }
 
+// A square grid on A4, the cell doubling as the writing line so a line of writing sits two
+// cells tall. No margin rule; writing starts near the left edge.
+const presetGrid: SheetPreset = {
+  id: 'grid',
+  name: 'Grid',
+  style: 'grid',
+  width: 210,
+  height: 297,
+  background: '#FDFBF4',
+  rule: { color: '#D7DCE2', spacing: 5, topGap: 10, weightPt: 0.6 },
+  margin: { color: '#D7DCE2', left: 0, weightPt: 0 },
+  text: { left: 9, right: 201, leadingRules: 2 },
+}
+
+// A field of dots on A4, the same cell as the grid but marked only at the crossings, so the
+// page guides without lines running across it.
+const presetDots: SheetPreset = {
+  id: 'dots',
+  name: 'Dotted',
+  style: 'dots',
+  width: 210,
+  height: 297,
+  background: '#FDFBF4',
+  rule: { color: '#C4CAD2', spacing: 5, topGap: 10, weightPt: 0.9 },
+  margin: { color: '#C4CAD2', left: 0, weightPt: 0 },
+  text: { left: 9, right: 201, leadingRules: 2 },
+}
+
+// Plain A4 with nothing printed on it. The writing grid is still there, unseen, so lines stay
+// evenly spaced.
+const presetBlank: SheetPreset = {
+  id: 'blank',
+  name: 'Blank',
+  style: 'blank',
+  width: 210,
+  height: 297,
+  background: '#FDFBF4',
+  rule: { color: '#00000000', spacing: 9.02, topGap: 14.1, weightPt: 0 },
+  margin: { color: '#00000000', left: 0, weightPt: 0 },
+  text: { left: 12, right: 198, leadingRules: 1 },
+}
+
 export const sheetPresets: Record<string, SheetPreset> = {
   [preset1C.id]: preset1C,
   [preset1A.id]: preset1A,
+  [presetGrid.id]: presetGrid,
+  [presetDots.id]: presetDots,
+  [presetBlank.id]: presetBlank,
 }
 
 export const defaultPresetId = preset1C.id

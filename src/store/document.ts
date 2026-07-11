@@ -536,6 +536,14 @@ export const useDocument = defineStore('document', {
       this.touch()
     },
 
+    // Change the paper a page is ruled on: lined, grid, dotted, or blank. Applied per page, so
+    // one note can mix a ruled page with a grid one.
+    setPagePreset(pageIndex: number, presetId: string) {
+      const page = this.doc.pages[pageIndex]
+      if (!page) return
+      page.presetId = presetId
+      this.touch()
+    },
     // A figure is resized by the number of ruled lines it spans, kept within sane bounds. Both
     // drawn diagrams and placed pictures stand a whole number of lines tall.
     setFigureHeight(blockId: string, heightRules: number) {

@@ -78,13 +78,32 @@ function runs(list: TextRun[], font: string, size: number, fallbackColor: string
 }
 
 function sheetSvg(preset: SheetPreset): string {
+  const style = preset.style ?? 'lined'
+  const paper = `<rect width="${preset.width}" height="${preset.height}" fill="${preset.background}"/>`
+  const svg = (inner: string) =>
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${preset.width} ${preset.height}">${paper}${inner}</svg>`
+
+  if (style === 'blank') return svg('')
+  if (style === 'grid' || style === 'dots') {
+    const s = preset.rule.spacing
+    const mark =
+      style === 'grid'
+        ? `<path d="M ${s} 0 L 0 0 0 ${s}" fill="none" stroke="${preset.rule.color}" stroke-width="0.24"/>`
+        : `<circle cx="0" cy="0" r="0.32" fill="${preset.rule.color}"/>`
+    return svg(
+      `<defs><pattern id="p" width="${s}" height="${s}" patternUnits="userSpaceOnUse">${mark}</pattern></defs>` +
+        `<rect width="${preset.width}" height="${preset.height}" fill="url(#p)"/>`,
+    )
+  }
   const rules = ruleYs(preset)
     .map(
       (y) =>
         `<line x1="0" y1="${y}" x2="${preset.width}" y2="${y}" stroke="${preset.rule.color}" stroke-width="0.32"/>`,
     )
     .join('')
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${preset.width} ${preset.height}"><rect width="${preset.width}" height="${preset.height}" fill="${preset.background}"/>${rules}<line x1="${preset.margin.left}" y1="0" x2="${preset.margin.left}" y2="${preset.height}" stroke="${preset.margin.color}" stroke-width="0.4"/></svg>`
+  return svg(
+    `${rules}<line x1="${preset.margin.left}" y1="0" x2="${preset.margin.left}" y2="${preset.height}" stroke="${preset.margin.color}" stroke-width="0.4"/>`,
+  )
 }
 
 function diagramSvg(block: Extract<Block, { type: 'diagram' }>, fontFamily: string, fontScale = 1): string {

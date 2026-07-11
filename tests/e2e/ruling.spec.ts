@@ -1,5 +1,17 @@
 import { test, expect } from '@playwright/test'
 
+// The welcome card greets a first visit and covers the page until dismissed. Mark it seen
+// before the app loads so the tests drive the editor directly.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('welcomed', '1')
+    } catch {
+      // Storage may be unavailable; the tests that need the editor clear will still handle it.
+    }
+  })
+})
+
 // The sheet is the thing that kept breaking, so this asserts the ruling directly:
 // every horizontal rule is present, evenly spaced, and the salmon margin sits where
 // the spec says. Reading geometry from the rendered SVG keeps the check exact.
