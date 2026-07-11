@@ -384,6 +384,27 @@ export const useDocument = defineStore('document', {
       this.pendingFocusId = id
       return id
     },
+    // A checklist: an unnumbered list that carries a tick per item. The tick states start out
+    // clear and stay the same length as the items as the list is edited.
+    addTaskList(blockId: string | null): string {
+      const id = this.insertAfter(blockId, {
+        id: uid('b'),
+        type: 'list',
+        ordered: false,
+        items: [[{ text: '' }]],
+        checked: [false],
+      })
+      this.pendingFocusId = id
+      return id
+    },
+    // Tick or untick one item of a checklist.
+    toggleListCheck(blockId: string, index: number) {
+      const at = this.locate(blockId)
+      if (at?.block.type === 'list' && at.block.checked && index < at.block.checked.length) {
+        at.block.checked[index] = !at.block.checked[index]
+        this.touch()
+      }
+    },
     // Turn the line the caret is on into a bullet, so the words already there become the first
     // item rather than a fresh empty bullet appearing below and pushing the line down. A
     // paragraph becomes a one item list keeping its words; a list already there switches its

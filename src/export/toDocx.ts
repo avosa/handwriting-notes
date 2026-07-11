@@ -175,16 +175,32 @@ async function blockToChildren(
     ]
   }
   if (block.type === 'list') {
-    return block.items.map(
-      (item, i) =>
-        new Paragraph({
+    return block.items.map((item, i) => {
+      // A task list writes a plain checkbox marker before each line rather than a bullet, so
+      // the tick state travels into the document even where a checkbox control cannot.
+      if (block.checked) {
+        const box = block.checked[i] ? '[x] ' : '[ ] '
+        return new Paragraph({
           spacing: { line: lineTwip, lineRule: 'exact' },
-          bullet: block.ordered ? undefined : { level: 0 },
-          numbering: block.ordered ? { reference: 'ordered', level: 0 } : undefined,
-          children: runs(item, bodyFont, sized(ROLE_SIZE.body), palette.ink),
-          ...(block.ordered ? { text: `${i + 1}.` } : {}),
-        }),
-    )
+          children: [
+            new DocxTextRun({
+              text: box,
+              font: bodyFont,
+              size: sized(ROLE_SIZE.body),
+              color: palette.ink.replace('#', ''),
+            }),
+            ...runs(item, bodyFont, sized(ROLE_SIZE.body), palette.ink),
+          ],
+        })
+      }
+      return new Paragraph({
+        spacing: { line: lineTwip, lineRule: 'exact' },
+        bullet: block.ordered ? undefined : { level: 0 },
+        numbering: block.ordered ? { reference: 'ordered', level: 0 } : undefined,
+        children: runs(item, bodyFont, sized(ROLE_SIZE.body), palette.ink),
+        ...(block.ordered ? { text: `${i + 1}.` } : {}),
+      })
+    })
   }
   if (block.type === 'table') {
     const makeRow = (cells: string[], head: boolean) =>

@@ -66,6 +66,9 @@ function insertParagraph(role: TextRole) {
 function insertList(ordered: boolean) {
   documentStore.select(documentStore.convertToList(selectedId.value, ordered))
 }
+function insertTaskList() {
+  documentStore.select(documentStore.addTaskList(selectedId.value))
+}
 function insertTable() {
   documentStore.select(documentStore.addTable(selectedId.value, 3, 2))
 }
@@ -227,6 +230,9 @@ function imageRatio(file: Blob): Promise<number> {
               </button>
               <button class="menu-item" @click="insertList(false)">
                 <Icon name="listBullet" :size="18" /><span>Bulleted list</span>
+              </button>
+              <button class="menu-item" @click="insertTaskList()">
+                <Icon name="check" :size="18" /><span>Task list</span>
               </button>
               <button class="menu-item" @click="insertTable()">
                 <Icon name="table" :size="18" /><span>Table</span>

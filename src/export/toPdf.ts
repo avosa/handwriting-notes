@@ -396,7 +396,7 @@ function layoutBlocks(
       const size = metrics.fontSize.body * (block.scale ?? 1)
       const face = fonts.body
       block.items.forEach((item, i) => {
-        const marker = block.ordered ? `${i + 1}.` : '•'
+        const marker = block.checked ? (block.checked[i] ? '[x]' : '[ ]') : block.ordered ? `${i + 1}.` : '•'
         if (pdfPage)
           drawShaped(
             pdfPage,

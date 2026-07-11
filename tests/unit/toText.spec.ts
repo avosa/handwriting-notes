@@ -54,6 +54,23 @@ describe('note text export', () => {
     expect(html).toContain('<th>A</th>')
   })
 
+  it('writes a task list with its tick states', () => {
+    const d = doc()
+    d.pages[0].blocks.push({
+      id: 'tl',
+      type: 'list',
+      ordered: false,
+      items: [[{ text: 'buy milk' }], [{ text: 'call mum' }]],
+      checked: [true, false],
+    })
+    const md = toMarkdown(d)
+    expect(md).toContain('- [x] buy milk')
+    expect(md).toContain('- [ ] call mum')
+    const html = toHtml(d)
+    expect(html).toContain('<input type="checkbox" disabled checked> buy milk')
+    expect(html).toContain('<input type="checkbox" disabled> call mum')
+  })
+
   it('escapes angle brackets so note text cannot inject markup', () => {
     const d = doc()
     d.pages[0].blocks[1] = { id: 'b', type: 'text', text: { id: 'y', role: 'body', runs: [{ text: '<script>x' }] } }

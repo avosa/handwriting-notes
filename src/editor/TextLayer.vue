@@ -233,6 +233,7 @@ function onListEnter(block: Extract<Block, { type: 'list' }>, itemIndex: number,
   // carries on as a normal paragraph after the list, so pressing enter twice escapes it.
   if (plainText(block.items[itemIndex]).trim() === '' && plainText(after).trim() === '') {
     block.items.splice(itemIndex, 1)
+    block.checked?.splice(itemIndex, 1)
     const id = documentStore.addParagraphAfter(block.id, 'body')
     if (!block.items.length) documentStore.removeBlock(block.id)
     documentStore.touch()
@@ -240,6 +241,7 @@ function onListEnter(block: Extract<Block, { type: 'list' }>, itemIndex: number,
     return
   }
   block.items.splice(itemIndex + 1, 0, after.length ? after : [{ text: '' }])
+  block.checked?.splice(itemIndex + 1, 0, false)
   documentStore.touch()
   pendingFocus.value = { key: `list:${block.id}:${itemIndex + 1}` }
 }
@@ -247,6 +249,7 @@ function onListEnter(block: Extract<Block, { type: 'list' }>, itemIndex: number,
 // own numbering in order instead of arriving as a block on its own.
 function onListPasteLines(block: Extract<Block, { type: 'list' }>, itemIndex: number, lines: string[]) {
   block.items.splice(itemIndex + 1, 0, ...lines.map((line) => [{ text: line }]))
+  block.checked?.splice(itemIndex + 1, 0, ...lines.map(() => false))
   documentStore.touch()
   pendingFocus.value = { key: `list:${block.id}:${itemIndex + lines.length}` }
 }
@@ -266,6 +269,7 @@ function onListMergeBack(block: Extract<Block, { type: 'list' }>, itemIndex: num
     const joinAt = plainText(block.items[itemIndex - 1]).length
     block.items[itemIndex - 1] = mergeRuns(block.items[itemIndex - 1], runs)
     block.items.splice(itemIndex, 1)
+    block.checked?.splice(itemIndex, 1)
     documentStore.touch()
     pendingFocus.value = { key: `list:${block.id}:${itemIndex - 1}`, offset: joinAt }
     return
@@ -273,6 +277,7 @@ function onListMergeBack(block: Extract<Block, { type: 'list' }>, itemIndex: num
   const target = joinOntoLineAbove(block.id, runs)
   if (target) {
     block.items.splice(0, 1)
+    block.checked?.splice(0, 1)
     if (!block.items.length) documentStore.removeBlock(block.id)
     else documentStore.touch()
     pendingFocus.value = target
@@ -353,13 +358,25 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
         :data-block-id="block.id"
         :style="listStyle(block)"
       >
-        <li v-for="(_, i) in block.items" :key="i">
-          <span class="marker">{{ block.ordered ? `${i + 1}.` : '•' }}</span>
+        <li v-for="(_, i) in block.items" :key="i" :class="{ task: !!block.checked }">
+          <button
+            v-if="block.checked"
+            class="check"
+            :class="{ on: block.checked[i] }"
+            :title="block.checked[i] ? 'Mark not done' : 'Mark done'"
+            @click="documentStore.toggleListCheck(block.id, i)"
+          >
+            <Icon v-if="block.checked[i]" name="check" :size="13" />
+          </button>
+          <span v-else class="marker">{{ block.ordered ? `${i + 1}.` : '•' }}</span>
           <EditableText
             :ref="bindEditable(`list:${block.id}:${i}`)"
             v-model="block.items[i]"
             class="li-text"
-            :class="{ 'line-selected': selectedLineKeys.has(lineKey(block.id, i)) }"
+            :class="{
+              'line-selected': selectedLineKeys.has(lineKey(block.id, i)),
+              done: block.checked && block.checked[i],
+            }"
             placeholder="List item"
             split-lines
             @mousedown="onLineMouseDown(block.id, i, $event)"
@@ -521,6 +538,32 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
 }
 .list .li-text {
   flex: 1;
+}
+/* A checklist box: a small square that fills with a tick when the item is done, sitting on
+   the rule beside the writing. The done line is struck through and dimmed. */
+.list li.task {
+  align-items: baseline;
+}
+.list .check {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  margin-top: 2px;
+  padding: 0;
+  border: 1.5px solid var(--accent, #4a72b0);
+  border-radius: 4px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+.list .check.on {
+  background: var(--accent, #4a72b0);
+}
+.list .li-text.done {
+  text-decoration: line-through;
+  opacity: 0.55;
 }
 .table-slot,
 .callouts-slot {

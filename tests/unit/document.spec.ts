@@ -211,6 +211,21 @@ describe('document store', () => {
     expect(doc.doc.pages[0].presetId).toBe('blank')
   })
 
+  it('starts a task list with one clear tick and toggles a tick by index', () => {
+    const doc = useDocument()
+    const first = doc.doc.pages[0].blocks[0].id
+    const id = doc.addTaskList(first)
+    const block = doc.locate(id)!.block
+    expect(block.type === 'list' && block.checked).toEqual([false])
+    doc.toggleListCheck(id, 0)
+    expect((doc.locate(id)!.block as { checked: boolean[] }).checked[0]).toBe(true)
+    doc.toggleListCheck(id, 0)
+    expect((doc.locate(id)!.block as { checked: boolean[] }).checked[0]).toBe(false)
+    // Out of range is ignored rather than growing the array.
+    doc.toggleListCheck(id, 5)
+    expect((doc.locate(id)!.block as { checked: boolean[] }).checked).toHaveLength(1)
+  })
+
   it('fills a stroke by id', () => {
     const doc = useDocument()
     doc.addStroke(0, { id: 's1', tool: 'fine', color: '#000', width: 1, points: [{ x: 0, y: 0, pressure: 1 }] })

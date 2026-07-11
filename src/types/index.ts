@@ -163,6 +163,9 @@ export type Block =
       type: 'list'
       ordered: boolean
       items: TextRun[][]
+      /** Present only on a task list: one tick state per item, kept the same length as items.
+       *  A plain bullet or numbered list leaves this unset. */
+      checked?: boolean[]
       indent?: number
       float?: FloatPos
       scale?: FontScale

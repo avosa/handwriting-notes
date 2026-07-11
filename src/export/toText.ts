@@ -55,6 +55,23 @@ function blockLines(block: Block, d: Dress, kind: 'text' | 'md' | 'html'): strin
     } else {
       out.push(text)
     }
+  } else if (block.type === 'list' && block.checked) {
+    const checked = block.checked
+    if (kind === 'html') {
+      const lis = block.items
+        .map((it, i) => {
+          const t = d.runs(it).trim()
+          return t ? `<li><input type="checkbox" disabled${checked[i] ? ' checked' : ''}> ${t}</li>` : ''
+        })
+        .filter(Boolean)
+        .join('')
+      out.push(`<ul>${lis}</ul>`)
+    } else {
+      block.items.forEach((it, i) => {
+        const t = d.runs(it).trim()
+        if (t) out.push(`- [${checked[i] ? 'x' : ' '}] ${t}`)
+      })
+    }
   } else if (block.type === 'list') {
     const items = block.items.map((it) => d.runs(it).trim()).filter(Boolean)
     if (kind === 'html') {
