@@ -248,18 +248,22 @@ function commitRename(id: string) {
 
         <div v-if="browsingFolders && subfolders.length" class="folder-grid">
           <div v-for="f in subfolders" :key="f.id" class="folder-card">
-            <button class="folder-open" @dblclick="openFolder(f.id)" @click="openFolder(f.id)">
+            <!-- While renaming, the editable field stands in for the button: an input nested
+                 inside a button cannot take the caret, which is why renaming appeared stuck. -->
+            <div v-if="renamingFolderId === f.id" class="folder-open editing">
               <Icon name="folder" :size="22" />
               <input
-                v-if="renamingFolderId === f.id"
                 ref="folderRenameInput"
                 class="folder-rename"
                 :value="f.name"
-                @click.stop
                 @blur="commitFolderRename(f.id)"
                 @keydown.enter.prevent="commitFolderRename(f.id)"
+                @keydown.esc.prevent="renamingFolderId = null"
               />
-              <span v-else class="folder-name">{{ f.name }}</span>
+            </div>
+            <button v-else class="folder-open" @click="openFolder(f.id)">
+              <Icon name="folder" :size="22" />
+              <span class="folder-name">{{ f.name }}</span>
               <span class="folder-count">{{ folderCount(f.id) }}</span>
             </button>
             <Popover align="right">
@@ -887,6 +891,10 @@ h2 {
 }
 .folder-open:hover {
   background: var(--accent-wash);
+}
+.folder-open.editing {
+  cursor: default;
+  padding-right: 12px;
 }
 .folder-name {
   flex: 1;

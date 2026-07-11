@@ -94,21 +94,63 @@ function update() {
     visible.value = false
     return
   }
-  x.value = rect.left + rect.width / 2
-  y.value = rect.top - 10
+  // Remember where the selection sits; the menu is then placed relative to it, but always
+  // clamped to stay on screen (see place()).
+  anchor = { cx: rect.left + rect.width / 2, top: rect.top, bottom: rect.bottom }
   visible.value = true
+  void nextTick(place)
+}
+
+// The gap kept between the menu and the edges of the screen so it never runs off the page.
+const MARGIN = 8
+const menuEl = ref<HTMLElement | null>(null)
+let anchor: { cx: number; top: number; bottom: number } | null = null
+
+// Position the menu over the selection, then pull it back inside the viewport on every side.
+// It measures its own size after rendering, so it stays in view however wide it has wrapped and
+// whether it sits on a phone or a wide desktop. When there is no room above the selection it
+// flips to sit just below it.
+function place() {
+  if (!anchor || !menuEl.value) return
+  const w = menuEl.value.offsetWidth
+  const h = menuEl.value.offsetHeight
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const left = Math.max(MARGIN, Math.min(anchor.cx - w / 2, vw - w - MARGIN))
+  let top = anchor.top - 10 - h
+  if (top < MARGIN) top = anchor.bottom + 10
+  top = Math.max(MARGIN, Math.min(top, vh - h - MARGIN))
+  x.value = left
+  y.value = top
 }
 
 function onSelectionChange() {
   requestAnimationFrame(update)
 }
-onMounted(() => document.addEventListener('selectionchange', onSelectionChange))
-onBeforeUnmount(() => document.removeEventListener('selectionchange', onSelectionChange))
+// Keep the menu glued to the selection and inside the screen as the page scrolls or the window
+// resizes, since either can move the selection or change how much room there is.
+function reflow() {
+  if (visible.value) requestAnimationFrame(update)
+}
+onMounted(() => {
+  document.addEventListener('selectionchange', onSelectionChange)
+  window.addEventListener('resize', reflow)
+  window.addEventListener('scroll', reflow, true)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('selectionchange', onSelectionChange)
+  window.removeEventListener('resize', reflow)
+  window.removeEventListener('scroll', reflow, true)
+})
 
 // Selecting or clearing the whole note does not always move the text selection, so react to
 // it directly: hide the menu the moment the note is wholly selected, and let it come back
 // when that clears if a selection is still standing.
 watch(() => documentStore.allSelected, update)
+
+// Switching into the Ask-AI or link modes changes the menu's size, so re-clamp it to the screen
+// once the new content has rendered.
+watch([asking, linking], () => void nextTick(place))
 
 function makeRole(role: TextRole) {
   documentStore.setSelectionRole(role)
@@ -199,6 +241,7 @@ function cancelLink() {
   <Transition name="rise">
     <div
       v-if="visible"
+      ref="menuEl"
       class="selection-menu"
       :style="{ left: `${x}px`, top: `${y}px` }"
       @mousedown.prevent
@@ -283,7 +326,6 @@ function cancelLink() {
 .selection-menu {
   position: fixed;
   z-index: 70;
-  transform: translate(-50%, -100%);
   display: flex;
   align-items: center;
   gap: 2px;
@@ -426,7 +468,7 @@ button:hover {
 .rise-enter-from,
 .rise-leave-to {
   opacity: 0;
-  transform: translate(-50%, -90%);
+  transform: translateY(6px);
 }
 
 @media (max-width: 720px) {
