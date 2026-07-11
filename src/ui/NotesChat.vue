@@ -7,6 +7,7 @@ import { useNotesChat } from '@/compose/useNotesChat'
 import { embedStatus, embedProgress } from '@/ai/embeddings/embedder'
 import { indexing } from '@/ai/embeddings/semanticIndex'
 import Icon from './Icon.vue'
+import AnswerMarkdown from './AnswerMarkdown.vue'
 import { useFocusTrap } from './useFocusTrap'
 
 const emit = defineEmits<{ (e: 'close'): void; (e: 'open', id: string): void; (e: 'need-key'): void }>()
@@ -78,8 +79,15 @@ const statusLine = () => {
             <template v-if="m.role === 'assistant' && !m.text && m.streaming">
               <span class="thinking">{{ statusLine() }}</span>
             </template>
+            <template v-else-if="m.role === 'assistant'">
+              <AnswerMarkdown :text="m.text" :sources="m.sources" @open="emit('open', $event)" /><span
+                v-if="m.streaming"
+                class="caret"
+                >▍</span
+              >
+            </template>
             <template v-else>
-              <span class="text">{{ m.text }}<span v-if="m.streaming" class="caret">▍</span></span>
+              <span class="text">{{ m.text }}</span>
             </template>
           </div>
           <div v-if="m.sources && m.sources.length" class="sources">
