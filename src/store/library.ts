@@ -25,6 +25,12 @@ export const useLibrary = defineStore('library', {
     favorites(): LibraryEntry[] {
       return this.recent.filter((e) => e.favorite)
     },
+    // Every label used across the library, sorted, for a filter row.
+    allTags(): string[] {
+      const set = new Set<string>()
+      for (const e of this.entries) for (const t of e.tags ?? []) set.add(t)
+      return [...set].sort()
+    },
     current: (state) => state.entries.find((e) => e.id === state.currentId) ?? null,
   },
   actions: {
@@ -115,6 +121,15 @@ export const useLibrary = defineStore('library', {
     toggleFavorite(id: string) {
       const entry = this.entries.find((e) => e.id === id)
       if (entry) entry.favorite = !entry.favorite
+    },
+    // Add or remove a label on a note, trimmed and kept unique, so the library can be filtered by it.
+    toggleTag(id: string, tag: string) {
+      const clean = tag.trim().toLowerCase()
+      if (!clean) return
+      const entry = this.entries.find((e) => e.id === id)
+      if (!entry) return
+      const tags = entry.tags ?? []
+      entry.tags = tags.includes(clean) ? tags.filter((t) => t !== clean) : [...tags, clean]
     },
   },
 })

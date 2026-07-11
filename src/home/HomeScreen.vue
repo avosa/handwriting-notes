@@ -24,11 +24,19 @@ const renameInput = ref<HTMLInputElement | null>(null)
 // contents and not only titles.
 onMounted(() => void buildSearchIndex())
 
+const activeTag = ref<string | null>(null)
 const shown = computed(() => {
-  const list = tab.value === 'favorites' ? library.favorites : library.recent
+  let list = tab.value === 'favorites' ? library.favorites : library.recent
+  if (activeTag.value) list = list.filter((e) => (e.tags ?? []).includes(activeTag.value!))
   const q = query.value.trim()
   return q ? list.filter((e) => matches(e.id, e.title, q)) : list
 })
+const newTag = ref('')
+function addTag(id: string) {
+  const t = newTag.value.trim()
+  if (t) library.toggleTag(id, t)
+  newTag.value = ''
+}
 // A short excerpt for a searched note, shown under its title so a match is explained.
 function excerptFor(id: string): string {
   return query.value.trim() ? snippet(id, query.value) : ''
@@ -104,6 +112,19 @@ function commitRename(id: string) {
           </button>
         </div>
 
+        <div v-if="library.allTags.length" class="tag-filter">
+          <button class="tag-chip" :class="{ on: !activeTag }" @click="activeTag = null">All</button>
+          <button
+            v-for="t in library.allTags"
+            :key="t"
+            class="tag-chip"
+            :class="{ on: activeTag === t }"
+            @click="activeTag = activeTag === t ? null : t"
+          >
+            #{{ t }}
+          </button>
+        </div>
+
         <div v-if="shown.length" class="grid">
           <div v-for="e in shown" :key="e.id" class="card" :class="{ current: e.id === library.currentId }">
             <button class="open" @click="open(e.id)"><NoteThumbnail :title="e.title" /></button>
@@ -141,12 +162,37 @@ function commitRename(id: string) {
                       <Icon name="copy" :size="16" /><span>Duplicate</span>
                     </button>
                     <div class="sep" />
+                    <div class="tag-editor">
+                      <div v-if="(e.tags ?? []).length" class="tag-list">
+                        <button
+                          v-for="t in e.tags"
+                          :key="t"
+                          class="tag-chip small"
+                          title="Remove tag"
+                          @click="library.toggleTag(e.id, t)"
+                        >
+                          #{{ t }} ✕
+                        </button>
+                      </div>
+                      <input
+                        class="tag-input"
+                        placeholder="Add a tag…"
+                        :value="renamingId === e.id ? '' : newTag"
+                        @focus="newTag = ''"
+                        @input="newTag = ($event.target as HTMLInputElement).value"
+                        @keydown.enter.prevent="addTag(e.id)"
+                      />
+                    </div>
+                    <div class="sep" />
                     <button class="menu-item danger" @click="library.deleteNote(e.id)">
                       <Icon name="trash" :size="16" /><span>Delete</span>
                     </button>
                   </div>
                 </template>
               </Popover>
+            </div>
+            <div v-if="(e.tags ?? []).length" class="card-tags">
+              <span v-for="t in e.tags" :key="t" class="tag-chip small ghost">#{{ t }}</span>
             </div>
             <span class="date">{{ when(e.updatedAt) }}</span>
             <p v-if="excerptFor(e.id)" class="excerpt">{{ excerptFor(e.id) }}</p>
@@ -425,6 +471,62 @@ h2 {
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+.tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 10px;
+}
+.tag-chip {
+  border: none;
+  border-radius: 999px;
+  padding: 4px 11px;
+  font-size: 12px;
+  cursor: pointer;
+  background: var(--accent-wash, rgba(74, 114, 176, 0.1));
+  color: var(--ink, #33334c);
+}
+.tag-chip.on {
+  background: var(--accent, #4a72b0);
+  color: #fff;
+}
+.tag-chip.small {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+.tag-chip.ghost {
+  background: transparent;
+  border: 1px solid var(--hairline, rgba(0, 0, 0, 0.12));
+  color: var(--text-muted);
+  cursor: default;
+}
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 0;
+}
+.tag-editor {
+  padding: 4px 8px;
+}
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 5px;
+}
+.tag-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  outline: none;
+  background: var(--accent-wash, rgba(74, 114, 176, 0.08));
+  color: inherit;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
 }
 .menu {
   display: flex;

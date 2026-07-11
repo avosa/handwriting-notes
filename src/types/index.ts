@@ -272,6 +272,8 @@ export interface LibraryEntry {
   createdAt: number
   updatedAt: number
   favorite: boolean
+  /** Free-form labels the writer puts on a note, for filtering the library. */
+  tags?: string[]
 }
 
 export type AttachmentKind = 'image' | 'video' | 'document' | 'audio'
