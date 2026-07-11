@@ -17,4 +17,17 @@ describe('settings store', () => {
     s.toggleA11y('readerSpacing')
     expect(s.a11y?.readerSpacing).toBe(true)
   })
+
+  it('nudges the text scale within bounds and resets it', () => {
+    const s = useSettings()
+    expect(s.textScale).toBeUndefined()
+    s.nudgeTextScale(0.1)
+    expect(s.textScale).toBeCloseTo(1.1)
+    for (let i = 0; i < 20; i++) s.nudgeTextScale(0.1)
+    expect(s.textScale).toBeLessThanOrEqual(1.6)
+    for (let i = 0; i < 30; i++) s.nudgeTextScale(-0.1)
+    expect(s.textScale).toBeGreaterThanOrEqual(0.8)
+    s.resetTextScale()
+    expect(s.textScale).toBe(1)
+  })
 })

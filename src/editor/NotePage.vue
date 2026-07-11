@@ -9,6 +9,7 @@ import type { Page } from '@/types'
 import { getPreset, ruleYsForHeight } from '@/paper/sheetSpec'
 import { textMetrics } from './alignment'
 import { useDocument } from '@/store/document'
+import { useSettings } from '@/store/settings'
 import Sheet from '@/paper/Sheet.vue'
 import TextLayer from './TextLayer.vue'
 import FreeFigureLayer from './FreeFigureLayer.vue'
@@ -48,7 +49,16 @@ function onPageClick(event: MouseEvent) {
   documentStore.addNote(props.pageIndex, xMm, line)
 }
 
-const preset = computed(() => getPreset(props.page.presetId))
+const settings = useSettings()
+// The chosen paper, with its ruling widened or tightened by the note's text-size dial. Everything
+// downstream — the drawn rules, the line height, and the font sizes — reads from the ruling
+// spacing, so scaling it here scales the whole page together and pagination follows naturally.
+const preset = computed(() => {
+  const base = getPreset(props.page.presetId)
+  const scale = settings.textScale ?? 1
+  if (scale === 1) return base
+  return { ...base, rule: { ...base.rule, spacing: base.rule.spacing * scale, topGap: base.rule.topGap * scale } }
+})
 const pxPerMm = computed(() => props.widthPx / preset.value.width)
 const metrics = computed(() => textMetrics(preset.value))
 

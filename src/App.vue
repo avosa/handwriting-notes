@@ -321,6 +321,12 @@ watch(
   { immediate: true },
 )
 
+// Changing the writing size re-rules every page, so the content is re-paginated to the new lines.
+watch(
+  () => settings.textScale,
+  () => void nextTick(() => reflowPages()),
+)
+
 // Carry the accessibility preferences onto the document root as data attributes, so the styles
 // that read them turn on across every page at once.
 watch(
@@ -423,6 +429,21 @@ const commands = computed<Command[]>(() => [
   { id: 'theme-light', title: 'Theme: Light', icon: 'sun', run: () => settings.setTheme('light') },
   { id: 'theme-dark', title: 'Theme: Dark', icon: 'moon', run: () => settings.setTheme('dark') },
   { id: 'theme-system', title: 'Theme: System', icon: 'device', run: () => settings.setTheme('system') },
+  {
+    id: 'text-larger',
+    title: 'Text size: larger',
+    hint: `${Math.round((settings.textScale ?? 1) * 100)}%`,
+    icon: 'title',
+    run: () => settings.nudgeTextScale(0.1),
+  },
+  {
+    id: 'text-smaller',
+    title: 'Text size: smaller',
+    hint: `${Math.round((settings.textScale ?? 1) * 100)}%`,
+    icon: 'title',
+    run: () => settings.nudgeTextScale(-0.1),
+  },
+  { id: 'text-reset', title: 'Text size: reset', icon: 'title', run: () => settings.resetTextScale() },
   {
     id: 'a11y-contrast',
     title: `High contrast: ${settings.a11y?.highContrast ? 'on' : 'off'}`,

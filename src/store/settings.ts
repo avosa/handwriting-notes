@@ -58,6 +58,14 @@ export const useSettings = defineStore('settings', {
       const current = this.a11y ?? {}
       this.a11y = { ...current, [key]: !current[key] }
     },
+    // Dial the writing size up or down a step, within sensible bounds, for the whole note.
+    nudgeTextScale(delta: number) {
+      const next = Math.round(((this.textScale ?? 1) + delta) * 100) / 100
+      this.textScale = Math.max(0.8, Math.min(1.6, next))
+    },
+    resetTextScale() {
+      this.textScale = 1
+    },
     hydrate(saved: Settings) {
       this.$patch({
         ...saved,

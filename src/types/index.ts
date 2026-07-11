@@ -323,6 +323,9 @@ export interface Settings {
   activeTool: PenType
   activeColor: string
   activeWidth: number
+  /** A multiplier on the writing size across the note, so the whole page can be dialled larger
+   *  or smaller with its rules. Unset reads as 1. */
+  textScale?: number
   /** Accessibility preferences, applied across the note. All default off/normal. */
   a11y?: {
     /** Lay the writing out right to left, for scripts that read that way. */
