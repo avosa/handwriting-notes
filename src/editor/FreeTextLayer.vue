@@ -67,7 +67,29 @@ function onEnter(note: FreeText) {
   documentStore.addNote(props.pageIndex, note.x, note.y + props.metrics.lineHeight)
 }
 function onBackspace(note: FreeText) {
+  // Clearing an empty note removes it, but the caret is never left to vanish: it moves to the
+  // note before it, or, failing that, to the last written line, so the writer sees where the
+  // cursor went rather than losing it.
+  const notes = props.page.notes ?? []
+  const prev = notes[notes.findIndex((n) => n.id === note.id) - 1]
   documentStore.removeNote(props.pageIndex, note.id)
+  void nextTick(() => {
+    if (prev) {
+      editables.value.get(prev.id)?.focus()
+      return
+    }
+    const lines = document.querySelectorAll('.note-page .text-layer .editable')
+    const last = lines[lines.length - 1] as HTMLElement | undefined
+    if (last) {
+      last.focus()
+      const range = document.createRange()
+      range.selectNodeContents(last)
+      range.collapse(false)
+      const sel = window.getSelection()
+      sel?.removeAllRanges()
+      sel?.addRange(range)
+    }
+  })
 }
 function updateRuns(noteId: string, runs: TextRun[]) {
   documentStore.setNoteRuns(props.pageIndex, noteId, runs)

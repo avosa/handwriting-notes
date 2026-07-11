@@ -4,10 +4,11 @@
 // it is fully dynamic: a column or row can be added at either edge, and any column or row
 // removed, with small controls that appear on hover, so the table is the writer's to
 // shape rather than fixed at the size it was inserted.
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { Block } from '@/types'
 import { rect, line, hashSeed } from '@/diagrams/wobble'
 import { useDocument } from '@/store/document'
+import { evalFormula, isFormula } from '@/util/tableFormula'
 import Icon from '@/ui/Icon.vue'
 
 const props = withDefaults(
@@ -83,6 +84,44 @@ function editCell(r: number, c: number, event: Event) {
   props.block.rows[r][c] = (event.target as HTMLElement).innerText
   emit('change')
 }
+// A cell being edited shows its raw text so a formula can be typed; any other cell shows its
+// value, so a formula reads as the number it computes rather than its source.
+const editingCell = ref<string | null>(null)
+function cellDisplay(r: number, c: number): string {
+  const raw = props.block.rows[r][c] ?? ''
+  if (editingCell.value === `${r}-${c}`) return raw
+  return isFormula(raw) ? evalFormula(raw, props.block.header, props.block.rows) : raw
+}
+// Set a cell's shown text without disturbing the caret. It writes on mount and whenever the value
+// changes from outside, but never while the cell is being typed into, so a keystroke is never
+// undone by a re-render — the bug that made a cell spell its text backwards.
+const vCellText = {
+  mounted: (el: HTMLElement, binding: { value: string }) => {
+    el.textContent = binding.value
+  },
+  updated: (el: HTMLElement, binding: { value: string }) => {
+    if (document.activeElement !== el && el.textContent !== binding.value) el.textContent = binding.value
+  },
+}
+function placeCaretEnd(el: HTMLElement) {
+  const range = document.createRange()
+  range.selectNodeContents(el)
+  range.collapse(false)
+  const sel = window.getSelection()
+  sel?.removeAllRanges()
+  sel?.addRange(range)
+}
+function onCellFocus(r: number, c: number, event: FocusEvent) {
+  editingCell.value = `${r}-${c}`
+  const el = event.target as HTMLElement
+  const raw = props.block.rows[r][c] ?? ''
+  // Reveal the raw formula for editing, then leave the caret at the end.
+  if (el.textContent !== raw) {
+    el.textContent = raw
+    placeCaretEnd(el)
+  }
+  emit('focus')
+}
 </script>
 
 <template>
@@ -109,28 +148,28 @@ function editCell(r: number, c: number, event: Event) {
       <div
         v-for="(h, c) in block.header"
         :key="`h${c}`"
+        v-cell-text="h"
         class="cell head"
         :contenteditable="editable"
         spellcheck="false"
         :style="cellStyle(c)"
         @focus="emit('focus')"
         @input="editHeader(c, $event)"
-      >
-        {{ h }}
-      </div>
+      ></div>
       <template v-for="(row, r) in block.rows" :key="`r${r}`">
         <div
           v-for="(cell, c) in row"
           :key="`c${r}-${c}`"
+          v-cell-text="cellDisplay(r, c)"
           class="cell"
+          :class="{ formula: isFormula(cell) }"
           :contenteditable="editable"
           spellcheck="false"
           :style="cellStyle(c)"
-          @focus="emit('focus')"
+          @focus="onCellFocus(r, c, $event)"
+          @blur="editingCell = null"
           @input="editCell(r, c, $event)"
-        >
-          {{ cell }}
-        </div>
+        ></div>
       </template>
     </div>
 

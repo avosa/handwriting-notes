@@ -40,6 +40,8 @@ function onPageClick(event: MouseEvent) {
 
   const target = event.target as HTMLElement
   if (target.closest('.editable, .cell')) return
+  // Write anywhere: a click on empty page drops a free note at the nearest ruled line, so the
+  // writer can jot beside a figure or in a margin, not only in the flowing column.
   const xMm = Math.min(Math.max(rawX, p.text.left), p.text.right - 6)
   const rules = ruleYsForHeight(p, heightMm.value)
   const line = rules.reduce((best, y) => (Math.abs(y - clickYMm) < Math.abs(best - clickYMm) ? y : best), rules[0])
