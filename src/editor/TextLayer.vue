@@ -338,6 +338,18 @@ function joinOntoLineAbove(blockId: string, runs: TextRun[]): { key: string; off
   return null
 }
 
+// Backspace at the start of a line whose block above holds no text — a divider, image, table,
+// or code block — removes that block above, so the line moves up into its place the way a word
+// processor deletes the object above on a backspace. The caret stays at the line's start.
+// Returns true when there was such a block above to remove.
+function removeFigureAbove(blockId: string, focusKey: string): boolean {
+  const index = props.page.blocks.findIndex((b) => b.id === blockId)
+  if (index <= 0) return false
+  documentStore.removeBlock(props.page.blocks[index - 1].id)
+  pendingFocus.value = { key: focusKey, offset: 0 }
+  return true
+}
+
 // Backspace at the start of a paragraph joins it onto the line above, be it another paragraph
 // or a bullet, dropping the caret at the seam, so the words come up onto the previous line.
 function onParagraphMergeBack(block: Extract<Block, { type: 'text' }>, runs: TextRun[]) {
@@ -347,6 +359,8 @@ function onParagraphMergeBack(block: Extract<Block, { type: 'text' }>, runs: Tex
     pendingFocus.value = target
     return
   }
+  // A line with words sitting under a figure moves up by removing the figure above it.
+  if (plainText(runs).trim() !== '' && removeFigureAbove(block.id, `text:${block.id}`)) return
   // The first line of a page: backspace here joins it onto the page above, and a page left
   // empty gives its space back. The caret rests where the two lines meet on the new page.
   const up = documentStore.mergeToPrevPageEnd(block.id, runs)
@@ -359,6 +373,7 @@ function onParagraphMergeBack(block: Extract<Block, { type: 'text' }>, runs: Tex
     })
     return
   }
+  // An empty line with nothing above it to join simply goes, giving its row back.
   if (plainText(runs).trim() === '' && props.page.blocks.findIndex((b) => b.id === block.id) > 0) {
     documentStore.removeBlock(block.id)
   }
@@ -419,6 +434,8 @@ function onListMergeBack(block: Extract<Block, { type: 'list' }>, itemIndex: num
     pendingFocus.value = target
     return
   }
+  // A first bullet with words under a figure moves up by removing the figure above it.
+  if (plainText(runs).trim() !== '' && removeFigureAbove(block.id, `list:${block.id}:0`)) return
   if (block.items.length === 1 && plainText(runs).trim() === '') documentStore.removeBlock(block.id)
 }
 
@@ -436,9 +453,11 @@ function onQuoteMergeBack(block: Extract<Block, { type: 'quote' }>, runs: TextRu
   if (target) {
     documentStore.removeBlock(block.id)
     pendingFocus.value = target
-  } else if (plainText(runs).trim() === '') {
-    documentStore.removeBlock(block.id)
+    return
   }
+  // A quote with words under a figure moves up by removing the figure above it.
+  if (plainText(runs).trim() !== '' && removeFigureAbove(block.id, `text:${block.id}`)) return
+  if (plainText(runs).trim() === '') documentStore.removeBlock(block.id)
 }
 // Save a code block as it is typed and grow the field to fit its lines, so all of the code
 // stays in view without an inner scrollbar.
