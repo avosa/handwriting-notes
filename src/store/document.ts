@@ -397,6 +397,29 @@ export const useDocument = defineStore('document', {
       this.pendingFocusId = id
       return id
     },
+    // A quoted passage set apart from the writing, edited as its own line of runs.
+    addQuote(blockId: string | null): string {
+      const id = this.insertAfter(blockId, { id: uid('b'), type: 'quote', runs: [{ text: '' }] })
+      this.pendingFocusId = id
+      return id
+    },
+    // A block of code kept in a plain monospace face with its spacing and line breaks intact.
+    addCode(blockId: string | null): string {
+      const id = this.insertAfter(blockId, { id: uid('b'), type: 'code', text: '' })
+      this.pendingFocusId = id
+      return id
+    },
+    setCode(blockId: string, text: string) {
+      const at = this.locate(blockId)
+      if (at?.block.type === 'code') {
+        at.block.text = text
+        this.touch()
+      }
+    },
+    // A plain rule across the column that separates one part of the note from the next.
+    addDivider(blockId: string | null): string {
+      return this.insertAfter(blockId, { id: uid('b'), type: 'divider' })
+    },
     // Tick or untick one item of a checklist.
     toggleListCheck(blockId: string, index: number) {
       const at = this.locate(blockId)

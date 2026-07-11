@@ -474,6 +474,60 @@ function layoutBlocks(
       const heightPt = block.heightRules * mm(lineH)
       if (pdfPage) drawDiagram(pdfPage, block, mm(left), mm(cursor), mm(colWidth), heightPt, fonts.body)
       cursor += block.heightRules * lineH
+    } else if (block.type === 'quote') {
+      const size = metrics.fontSize.body
+      const words = runsToWords(block.runs)
+      const lines = words.length ? wrapWords(fonts.body, words, mm(size), mm(colWidth - 6)) : [[]]
+      const barTop = cursor
+      for (const line of lines) {
+        if (pdfPage && line.length)
+          drawWordLine(
+            pdfPage,
+            fonts.body,
+            line,
+            mm(size),
+            mm(left + 6),
+            mm(cursor + lineH * 0.78),
+            mm(colWidth - 6),
+            handwriting.palette.ink,
+            'left',
+          )
+        cursor += lineH
+      }
+      if (pdfPage)
+        pdfPage.drawRectangle({
+          x: mm(left),
+          y: pdfPage.getHeight() - mm(cursor),
+          width: mm(1),
+          height: mm(cursor - barTop),
+          color: color('#4A72B0'),
+        })
+    } else if (block.type === 'code') {
+      const size = metrics.fontSize.body * 0.9
+      const codeLines = block.text.split('\n')
+      for (const codeLine of codeLines) {
+        if (pdfPage && codeLine)
+          drawShaped(
+            pdfPage,
+            fonts.body,
+            codeLine,
+            mm(size),
+            mm(left + 3),
+            mm(cursor + lineH * 0.78),
+            color(handwriting.palette.ink),
+            false,
+          )
+        cursor += lineH
+      }
+    } else if (block.type === 'divider') {
+      if (pdfPage)
+        pdfPage.drawLine({
+          start: { x: mm(left), y: pdfPage.getHeight() - mm(cursor + lineH * 0.5) },
+          end: { x: mm(left + colWidth), y: pdfPage.getHeight() - mm(cursor + lineH * 0.5) },
+          thickness: mm(0.5),
+          color: color('#999999'),
+        })
+      cursor += lineH
     }
   }
   return cursor

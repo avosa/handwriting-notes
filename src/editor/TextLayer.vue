@@ -79,6 +79,14 @@ function listStyle(block: Extract<Block, { type: 'list' }>): CSSProperties {
     color: handwriting.value.palette.ink,
   }
 }
+function quoteStyle(): CSSProperties {
+  return {
+    fontFamily: bodyFontStack(handwriting.value),
+    fontSize: `${props.metrics.fontSize.body * props.pxPerMm}px`,
+    lineHeight: `${lineHeightPx.value}px`,
+    color: handwriting.value.palette.ink,
+  }
+}
 function captionStyle(): CSSProperties {
   return {
     fontFamily: bodyFontStack(handwriting.value),
@@ -286,6 +294,43 @@ function onListMergeBack(block: Extract<Block, { type: 'list' }>, itemIndex: num
   if (block.items.length === 1 && plainText(runs).trim() === '') documentStore.removeBlock(block.id)
 }
 
+// Enter at the end of a quote carries on as a normal paragraph after it, and any words past
+// the caret move down with it, so a quote is left behind cleanly.
+function onQuoteEnter(block: Extract<Block, { type: 'quote' }>, after: TextRun[]) {
+  const id = documentStore.addParagraphAfter(block.id, 'body')
+  documentStore.setRuns(id, after)
+  pendingFocus.value = { key: `text:${id}` }
+}
+// Backspace at the start of a quote joins it onto the line above, or clears the quote away if
+// it is empty, so it never traps the caret.
+function onQuoteMergeBack(block: Extract<Block, { type: 'quote' }>, runs: TextRun[]) {
+  const target = joinOntoLineAbove(block.id, runs)
+  if (target) {
+    documentStore.removeBlock(block.id)
+    pendingFocus.value = target
+  } else if (plainText(runs).trim() === '') {
+    documentStore.removeBlock(block.id)
+  }
+}
+// Save a code block as it is typed and grow the field to fit its lines, so all of the code
+// stays in view without an inner scrollbar.
+function onCodeInput(block: Extract<Block, { type: 'code' }>, event: Event) {
+  const area = event.target as HTMLTextAreaElement
+  documentStore.setCode(block.id, area.value)
+  area.style.height = 'auto'
+  area.style.height = `${area.scrollHeight}px`
+}
+// Grow a code field to fit its content as it mounts and whenever it changes, so a code block
+// loaded from a note shows all its lines without an inner scrollbar.
+function fit(el: HTMLTextAreaElement) {
+  el.style.height = 'auto'
+  el.style.height = `${el.scrollHeight}px`
+}
+const vAutoGrow = {
+  mounted: (el: HTMLTextAreaElement) => fit(el),
+  updated: (el: HTMLTextAreaElement) => fit(el),
+}
+
 // A gentle hint only where it helps: the empty document invites the first line, and a
 // freshly inserted heading or title names itself. Plain body lines stay clean, so a
 // new line after Enter never repeats a placeholder.
@@ -468,6 +513,66 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
           <span />
         </button>
       </div>
+
+      <blockquote v-else-if="block.type === 'quote'" class="quote-slot" :data-block-id="block.id" :style="quoteStyle()">
+        <EditableText
+          :ref="bindEditable(`text:${block.id}`)"
+          v-model="block.runs"
+          class="quote-text"
+          placeholder="Quote"
+          split-lines
+          @focus="onFocusBlock(block.id)"
+          @enter="onQuoteEnter(block, $event)"
+          @merge-back="onQuoteMergeBack(block, $event)"
+          @select-all-note="documentStore.selectWholeNote()"
+        />
+        <button
+          v-if="editable"
+          class="figure-remove"
+          title="Remove quote"
+          @click.stop="documentStore.removeBlock(block.id)"
+        >
+          <Icon name="trash" :size="15" />
+        </button>
+      </blockquote>
+
+      <div v-else-if="block.type === 'code'" class="code-slot" :data-block-id="block.id">
+        <textarea
+          v-auto-grow
+          class="code-text"
+          :value="block.text"
+          placeholder="Code"
+          spellcheck="false"
+          rows="1"
+          @focus="onFocusBlock(block.id)"
+          @input="onCodeInput(block, $event)"
+        />
+        <button
+          v-if="editable"
+          class="figure-remove"
+          title="Remove code"
+          @click.stop="documentStore.removeBlock(block.id)"
+        >
+          <Icon name="trash" :size="15" />
+        </button>
+      </div>
+
+      <div
+        v-else-if="block.type === 'divider'"
+        class="divider-slot"
+        :data-block-id="block.id"
+        @click="onFocusBlock(block.id)"
+      >
+        <hr class="divider-line" />
+        <button
+          v-if="editable"
+          class="figure-remove"
+          title="Remove divider"
+          @click.stop="documentStore.removeBlock(block.id)"
+        >
+          <Icon name="trash" :size="15" />
+        </button>
+      </div>
     </template>
   </div>
 </template>
@@ -564,6 +669,57 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
 .list .li-text.done {
   text-decoration: line-through;
   opacity: 0.55;
+}
+/* A quote set apart by a coloured bar down its left edge, its words in the body hand. */
+.quote-slot {
+  position: relative;
+  margin: 2px 0;
+  padding-left: 14px;
+  border-left: 3px solid var(--accent, #4a72b0);
+}
+.quote-text {
+  font-style: italic;
+  opacity: 0.9;
+}
+/* A block of code in a plain monospace face on a faint panel, its spacing kept exactly. */
+.code-slot {
+  position: relative;
+  margin: 4px 0;
+}
+.code-text {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  overflow: hidden;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--accent-wash, rgba(74, 114, 176, 0.08));
+  color: var(--ink, #33334c);
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre;
+  tab-size: 2;
+}
+.code-text:focus {
+  outline: 2px solid var(--accent-wash-2, rgba(74, 114, 176, 0.2));
+}
+/* A rule across the writing column that parts one section from the next. */
+.divider-slot {
+  position: relative;
+  padding: 8px 0;
+}
+.divider-line {
+  border: none;
+  border-top: 2px solid var(--hairline, rgba(51, 51, 76, 0.18));
+  margin: 0;
+}
+.quote-slot:hover .figure-remove,
+.code-slot:hover .figure-remove,
+.divider-slot:hover .figure-remove {
+  opacity: 1;
 }
 .table-slot,
 .callouts-slot {

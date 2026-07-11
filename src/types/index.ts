@@ -190,6 +190,9 @@ export type Block =
       float?: FloatPos
       scale?: FontScale
     }
+  | { id: string; type: 'quote'; runs: TextRun[]; float?: FloatPos; scale?: FontScale }
+  | { id: string; type: 'code'; text: string; float?: FloatPos; scale?: FontScale }
+  | { id: string; type: 'divider'; float?: FloatPos; scale?: FontScale }
 
 /**
  * A line of writing placed anywhere on the page, the way you would jot a note beside a

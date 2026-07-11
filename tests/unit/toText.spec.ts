@@ -71,6 +71,23 @@ describe('note text export', () => {
     expect(html).toContain('<input type="checkbox" disabled> call mum')
   })
 
+  it('writes a quote, a code block, and a divider in each format', () => {
+    const d = doc()
+    d.pages[0].blocks.push(
+      { id: 'q', type: 'quote', runs: [{ text: 'to be' }] },
+      { id: 'c', type: 'code', text: 'a\nb' },
+      { id: 'hr', type: 'divider' },
+    )
+    const md = toMarkdown(d)
+    expect(md).toContain('> to be')
+    expect(md).toContain('```')
+    expect(md).toContain('---')
+    const html = toHtml(d)
+    expect(html).toContain('<blockquote>to be</blockquote>')
+    expect(html).toContain('<pre><code>a\nb</code></pre>')
+    expect(html).toContain('<hr />')
+  })
+
   it('escapes angle brackets so note text cannot inject markup', () => {
     const d = doc()
     d.pages[0].blocks[1] = { id: 'b', type: 'text', text: { id: 'y', role: 'body', runs: [{ text: '<script>x' }] } }

@@ -93,6 +93,16 @@ function blockLines(block: Block, d: Dress, kind: 'text' | 'md' | 'html'): strin
       out.push(block.header.join('\t'))
       for (const row of block.rows) out.push(row.join('\t'))
     }
+  } else if (block.type === 'quote') {
+    const text = d.runs(block.runs).trim()
+    if (text) out.push(kind === 'html' ? `<blockquote>${text}</blockquote>` : `> ${text}`)
+  } else if (block.type === 'code') {
+    const code = block.text
+    if (kind === 'html') out.push(`<pre><code>${escapeHtml(code)}</code></pre>`)
+    else if (kind === 'md') out.push('```', code, '```')
+    else out.push(...code.split('\n').map((l) => `    ${l}`))
+  } else if (block.type === 'divider') {
+    out.push(kind === 'html' ? '<hr />' : kind === 'md' ? '---' : '⎯⎯⎯⎯⎯⎯⎯⎯')
   } else if (block.type === 'image') {
     const label = block.alt?.trim() || 'image'
     out.push(kind === 'html' ? `<p><em>[${escapeHtml(label)}]</em></p>` : `[${label}]`)

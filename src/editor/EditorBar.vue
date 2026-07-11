@@ -69,6 +69,15 @@ function insertList(ordered: boolean) {
 function insertTaskList() {
   documentStore.select(documentStore.addTaskList(selectedId.value))
 }
+function insertQuote() {
+  documentStore.select(documentStore.addQuote(selectedId.value))
+}
+function insertCode() {
+  documentStore.select(documentStore.addCode(selectedId.value))
+}
+function insertDivider() {
+  documentStore.select(documentStore.addDivider(selectedId.value))
+}
 function insertTable() {
   documentStore.select(documentStore.addTable(selectedId.value, 3, 2))
 }
@@ -239,6 +248,13 @@ function imageRatio(file: Blob): Promise<number> {
               </button>
               <button class="menu-item" @click="insertCallouts()">
                 <Icon name="callout" :size="18" /><span>Callout boxes</span>
+              </button>
+              <button class="menu-item" @click="insertQuote()">
+                <Icon name="paragraph" :size="18" /><span>Quote</span>
+              </button>
+              <button class="menu-item" @click="insertCode()"><Icon name="file" :size="18" /><span>Code</span></button>
+              <button class="menu-item" @click="insertDivider()">
+                <Icon name="pageBreak" :size="18" /><span>Divider</span>
               </button>
               <button class="menu-item" @click="pickImage()"><Icon name="image" :size="18" /><span>Image</span></button>
               <div class="menu-divider" />

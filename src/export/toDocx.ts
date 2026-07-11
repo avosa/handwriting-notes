@@ -280,6 +280,35 @@ async function blockToChildren(
     out.push(new Table({ width: { size: px(colWidthMm) * 15, type: WidthType.DXA }, rows: [row] }))
     return out
   }
+  if (block.type === 'quote') {
+    return [
+      new Paragraph({
+        spacing: { line: lineTwip, lineRule: 'exact' },
+        indent: { left: twip(6) },
+        border: { left: { style: 'single', size: 18, space: 8, color: '4A72B0' } },
+        children: runs(block.runs, bodyFont, sized(ROLE_SIZE.body), palette.ink),
+      }),
+    ]
+  }
+  if (block.type === 'code') {
+    return block.text.split('\n').map(
+      (line) =>
+        new Paragraph({
+          spacing: { line: lineTwip, lineRule: 'exact' },
+          shading: { fill: 'F0F2F6' },
+          children: [new DocxTextRun({ text: line || ' ', font: 'Consolas', size: sized(ROLE_SIZE.body) })],
+        }),
+    )
+  }
+  if (block.type === 'divider') {
+    return [
+      new Paragraph({
+        spacing: { line: lineTwip, lineRule: 'exact' },
+        border: { bottom: { style: 'single', size: 8, space: 1, color: 'AAAAAA' } },
+        children: [new DocxTextRun({ text: '', font: bodyFont })],
+      }),
+    ]
+  }
   if (block.type === 'image') {
     const blob = await getBlob(block.blobRef)
     const kind = blob && imageKind(blob.type)
