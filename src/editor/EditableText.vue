@@ -247,6 +247,9 @@ defineExpose({
     }
     host.focus()
     if (offset !== undefined) placeCaret(host, offset)
+    // Keep the caret in sight: when a merge moves this line onto another page or up the page, the
+    // line may sit off screen, so it is scrolled into view rather than leaving the caret hidden.
+    host.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   },
 })
 </script>

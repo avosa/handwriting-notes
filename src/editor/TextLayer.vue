@@ -347,11 +347,15 @@ function flowUp(guard = 0) {
   })
 }
 // Put the caret at a character offset within a block's editable, wherever the block now lives.
+// The block may have moved to another page — up when a line joins the page above, down when it
+// overflows — so its line is scrolled into view, keeping the caret visible rather than leaving it
+// stranded on a page that is off screen.
 function focusBlockCaret(id: string, offset: number) {
   const el = document.querySelector(`[data-block-id="${CSS.escape(id)}"]`) as HTMLElement | null
   const editable = (el?.classList.contains('editable') ? el : el?.querySelector('.editable')) as HTMLElement | null
   if (!editable) return
   editable.focus()
+  editable.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   const selection = window.getSelection()
   const range = document.createRange()
   let remaining = offset
