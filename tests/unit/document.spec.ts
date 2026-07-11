@@ -473,6 +473,24 @@ describe('document store', () => {
     expect(table().align).toEqual(['center', 'center', 'right'])
   })
 
+  it('resizes a column and takes the width from its neighbour, keeping their total', () => {
+    const doc = useDocument()
+    const first = doc.doc.pages[0].blocks[0].id
+    const id = doc.addTable(first, 3, 1)
+    const table = () => doc.locate(id)!.block as Extract<Block, { type: 'table' }>
+    doc.setTableColumnWidth(id, 0, 1.6)
+    expect(table().widths![0]).toBeCloseTo(1.6)
+    expect(table().widths![1]).toBeCloseTo(0.4)
+    expect(table().widths![2]).toBe(1)
+    // The last column has no neighbour to the right, so it cannot be resized this way.
+    doc.setTableColumnWidth(id, 2, 5)
+    expect(table().widths![0]).toBeCloseTo(1.6)
+    // A too-greedy width is clamped so its neighbour keeps a minimum.
+    doc.setTableColumnWidth(id, 0, 99)
+    expect(table().widths![0] + table().widths![1]).toBeCloseTo(2)
+    expect(table().widths![1]).toBeCloseTo(0.2)
+  })
+
   it('adds a math block, edits its LaTeX, and reaches it with find and replace', () => {
     const doc = useDocument()
     const first = doc.doc.pages[0].blocks[0].id

@@ -788,6 +788,14 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
           :editable="editable"
           @focus="onFocusBlock(block.id)"
         />
+        <button
+          v-if="editable"
+          class="figure-remove"
+          title="Remove table"
+          @click.stop="documentStore.removeBlock(block.id)"
+        >
+          <Icon name="trash" :size="15" />
+        </button>
       </div>
 
       <div v-else-if="block.type === 'callouts'" class="callouts-slot" :data-block-id="block.id">
@@ -799,6 +807,14 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
           :editable="editable"
           @focus="onFocusBlock(block.id)"
         />
+        <button
+          v-if="editable"
+          class="figure-remove"
+          title="Remove callouts"
+          @click.stop="documentStore.removeBlock(block.id)"
+        >
+          <Icon name="trash" :size="15" />
+        </button>
       </div>
 
       <div
@@ -819,6 +835,14 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
           :animate="isWriting(block.id)"
           @edit-label="(shapeIndex, text) => documentStore.setDiagramLabel(block.id, shapeIndex, text)"
         />
+        <button
+          v-if="editable"
+          class="figure-remove"
+          title="Remove diagram"
+          @click.stop="documentStore.removeBlock(block.id)"
+        >
+          <Icon name="trash" :size="15" />
+        </button>
         <button
           v-if="editable"
           class="resize-handle"
@@ -1253,12 +1277,19 @@ function startResize(blockId: string, fromRules: number, event: PointerEvent) {
 .code-slot:hover .figure-remove,
 .toggle-slot:hover .figure-remove,
 .math-slot:hover .figure-remove,
-.divider-slot:hover .figure-remove {
+.divider-slot:hover .figure-remove,
+.table-slot:hover .figure-remove,
+.callouts-slot:hover .figure-remove,
+.diagram-slot:hover .figure-remove {
   opacity: 1;
 }
 .table-slot,
 .callouts-slot {
   padding: 6px 0;
+  position: relative;
+}
+.diagram-slot {
+  position: relative;
 }
 .caption {
   margin-bottom: 2px;

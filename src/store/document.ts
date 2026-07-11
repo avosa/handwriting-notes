@@ -676,6 +676,22 @@ export const useDocument = defineStore('document', {
       table.sort = { col, dir }
       this.touch()
     },
+    // Set a column's width fraction, taking the difference from its right neighbour so the two
+    // share a fixed total and the rest of the table stays put as the border between them is dragged.
+    setTableColumnWidth(blockId: string, col: number, widthFr: number) {
+      const loc = this.locate(blockId)
+      if (!loc || loc.block.type !== 'table') return
+      const table = loc.block
+      const n = table.header.length
+      if (col < 0 || col >= n - 1) return
+      const widths = table.widths && table.widths.length === n ? [...table.widths] : table.header.map(() => 1)
+      const min = 0.2
+      const total = widths[col] + widths[col + 1]
+      widths[col] = Math.max(min, Math.min(widthFr, total - min))
+      widths[col + 1] = total - widths[col]
+      table.widths = widths
+      this.touch()
+    },
     // Set a column's text alignment, so figures can sit right and labels left.
     setTableColumnAlign(blockId: string, col: number, align: 'left' | 'center' | 'right') {
       const loc = this.locate(blockId)

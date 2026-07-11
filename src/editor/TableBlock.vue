@@ -33,12 +33,30 @@ const heightMm = computed(() => rowCount.value * props.rowHeightMm)
 const seed = computed(() => hashSeed(props.block.id))
 const stroke = computed(() => Math.max(props.widthMm, heightMm.value) * 0.004)
 
+// The columns' relative widths as flex fractions, defaulting to equal columns. The cumulative
+// edges (0..1) drive both the drawn grid and the drag handles, so a resized column stays exact.
+const fractions = computed(() => {
+  const n = cols.value
+  const w = props.block.widths
+  return w && w.length === n && w.every((f) => f > 0) ? w : Array.from({ length: n }, () => 1)
+})
+const edges = computed(() => {
+  const total = fractions.value.reduce((s, f) => s + f, 0)
+  const out: number[] = []
+  let acc = 0
+  for (const f of fractions.value) {
+    acc += f
+    out.push(acc / total)
+  }
+  return out // fraction 0..1 of the right edge of each column
+})
+
 const grid = computed(() => {
   const w = props.widthMm
   const h = heightMm.value
   const paths: string[] = [rect(1, 1, w - 2, h - 2, seed.value)]
   for (let c = 1; c < cols.value; c++) {
-    const x = (w / cols.value) * c
+    const x = w * edges.value[c - 1]
     paths.push(line(x, 1, x, h - 1, seed.value + c * 7))
   }
   for (let r = 1; r < rowCount.value; r++) {
@@ -47,6 +65,28 @@ const grid = computed(() => {
   }
   return paths
 })
+
+// Drag a column border to resize it and its neighbour. The pixel move is turned into a change in
+// flex fraction using the table's own width, so the handle tracks the pointer exactly.
+const root = ref<HTMLElement | null>(null)
+function startResize(col: number, event: PointerEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+  const startX = event.clientX
+  const tableWidth = root.value?.getBoundingClientRect().width ?? 1
+  const totalFr = fractions.value.reduce((s, f) => s + f, 0)
+  const startWidth = fractions.value[col]
+  const move = (e: PointerEvent) => {
+    const deltaFr = ((e.clientX - startX) / tableWidth) * totalFr
+    documentStore.setTableColumnWidth(props.block.id, col, startWidth + deltaFr)
+  }
+  const up = () => {
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', up)
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', up)
+}
 
 function editHeader(index: number, event: Event) {
   // eslint-disable-next-line vue/no-mutating-props -- the block is a store-owned reactive cell edited in place
@@ -125,7 +165,7 @@ function onCellFocus(r: number, c: number, event: FocusEvent) {
 </script>
 
 <template>
-  <div class="table" :class="{ editable }">
+  <div ref="root" class="table" :class="{ editable }">
     <svg class="grid" :viewBox="`0 0 ${widthMm} ${heightMm}`" preserveAspectRatio="none">
       <path
         v-for="(d, i) in grid"
@@ -137,10 +177,20 @@ function onCellFocus(r: number, c: number, event: FocusEvent) {
         stroke-linejoin="round"
       />
     </svg>
+    <!-- Drag a column border to resize it and its neighbour. -->
+    <button
+      v-for="c in cols - 1"
+      v-show="editable"
+      :key="`rs${c}`"
+      class="col-resize"
+      :style="{ left: `${edges[c - 1] * 100}%` }"
+      title="Drag to resize column"
+      @pointerdown="startResize(c - 1, $event)"
+    />
     <div
       class="cells"
       :style="{
-        gridTemplateColumns: `repeat(${cols}, 1fr)`,
+        gridTemplateColumns: fractions.map((f) => `${f}fr`).join(' '),
         gridTemplateRows: `repeat(${rowCount}, 1fr)`,
         fontSize: `${scale}em`,
       }"
@@ -240,6 +290,38 @@ function onCellFocus(r: number, c: number, event: FocusEvent) {
   text-align: center;
   outline: none;
   padding: 2px;
+}
+/* A thin grab strip over each internal column border, revealed on hover of the table. */
+.col-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  transform: translateX(-50%);
+  border: none;
+  background: transparent;
+  cursor: col-resize;
+  padding: 0;
+  z-index: 2;
+  opacity: 0;
+}
+.table.editable:hover .col-resize {
+  opacity: 1;
+}
+.col-resize::after {
+  content: '';
+  position: absolute;
+  top: 10%;
+  bottom: 10%;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--accent, #4a72b0);
+  border-radius: 2px;
+  opacity: 0.35;
+}
+.col-resize:hover::after {
+  opacity: 0.8;
 }
 .cell.head {
   font-weight: 600;

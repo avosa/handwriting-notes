@@ -189,6 +189,9 @@ export type Block =
       sort?: { col: number; dir: 'asc' | 'desc' }
       /** Per-column text alignment; a missing entry reads as centre, the table default. */
       align?: ('left' | 'center' | 'right')[]
+      /** Relative column widths as flex fractions; a missing or short array reads as equal
+       *  columns, so an older table simply keeps its even grid. */
+      widths?: number[]
       float?: FloatPos
       scale?: FontScale
     }
