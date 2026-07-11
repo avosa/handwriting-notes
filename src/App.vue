@@ -25,6 +25,7 @@ import ShortcutsSheet from './ui/ShortcutsSheet.vue'
 import WelcomeSheet from './ui/WelcomeSheet.vue'
 import WhatsNewSheet from './ui/WhatsNewSheet.vue'
 import { APP_DOMAIN } from './brand'
+import { exportNoteAsText } from './export/toText'
 import HandwritingPicker from './tools/HandwritingPicker.vue'
 import ThemeSwitch from './ui/ThemeSwitch.vue'
 import NavDrawer from './ui/NavDrawer.vue'
@@ -202,6 +203,9 @@ const commands = computed<Command[]>(() => [
   { id: 'draw', title: 'Draw mode', icon: 'draw', run: () => (mode.value = 'draw') },
   { id: 'pdf', title: 'Export as PDF', icon: 'download', run: () => void saveAs('pdf') },
   { id: 'docx', title: 'Export as Word', icon: 'download', run: () => void saveAs('docx') },
+  { id: 'md', title: 'Export as Markdown', icon: 'download', run: () => exportNoteAsText(documentStore.doc, 'md') },
+  { id: 'txt', title: 'Export as text', icon: 'download', run: () => exportNoteAsText(documentStore.doc, 'txt') },
+  { id: 'html', title: 'Export as HTML', icon: 'download', run: () => exportNoteAsText(documentStore.doc, 'html') },
   { id: 'keys', title: 'AI keys', icon: 'key', run: () => (showKey.value = true) },
   { id: 'undo', title: 'Undo', icon: 'undo', run: () => documentStore.undo() },
   { id: 'redo', title: 'Redo', icon: 'redo', run: () => documentStore.redo() },
