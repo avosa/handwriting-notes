@@ -5,6 +5,7 @@
 // app renders.
 import { openDB, type IDBPDatabase } from 'idb'
 import type { Folder, LibraryEntry, NoteDocument, ProviderId, SavedSearch, Settings } from '@/types'
+import type { Card } from '@/study/card'
 import { useDocument } from './document'
 import { useSettings } from './settings'
 import { useLibrary } from './library'
@@ -48,13 +49,14 @@ interface Stores {
   meta: string | LibraryEntry[] | Folder[] | SavedSearch[]
   versions: VersionRecord
   vectors: VectorRecord
+  cards: Card
 }
 
 let dbPromise: Promise<IDBPDatabase<Stores>> | null = null
 
 // Every object store the app relies on. document/settings/blobs/meta are the originals; versions
 // holds per-note history; vectors holds the local semantic index (one embedding per block).
-const REQUIRED_STORES = ['document', 'settings', 'blobs', 'meta', 'versions', 'vectors'] as const
+const REQUIRED_STORES = ['document', 'settings', 'blobs', 'meta', 'versions', 'vectors', 'cards'] as const
 
 // Create any store that is missing, by name rather than by version number, so a database left in a
 // partial state is repaired rather than being stuck without a store its version says it has.
@@ -249,6 +251,26 @@ export async function deleteVectorsForNote(noteId: string): Promise<void> {
   const keys = (await database.getAllKeys('vectors')) as string[]
   for (const key of keys) {
     if (key.startsWith(`${noteId}::`)) await database.delete('vectors', key)
+  }
+}
+
+// --- Flashcards --------------------------------------------------------------------------------
+export async function putCard(card: Card): Promise<void> {
+  await (await db()).put('cards', plain(card), card.id)
+}
+
+export async function getAllCards(): Promise<Card[]> {
+  return (await db()).getAll('cards')
+}
+
+export async function deleteCard(id: string): Promise<void> {
+  await (await db()).delete('cards', id)
+}
+
+export async function deleteCardsForNote(noteId: string): Promise<void> {
+  const database = await db()
+  for (const card of await database.getAll('cards')) {
+    if (card.noteId === noteId) await database.delete('cards', card.id)
   }
 }
 

@@ -21,6 +21,7 @@ import {
   getVersion,
   deleteVersionsFor,
   deleteVectorsForNote,
+  deleteCardsForNote,
 } from './persistence'
 
 interface LibraryState {
@@ -185,6 +186,7 @@ export const useLibrary = defineStore('library', {
       await removeNote(id)
       await deleteVersionsFor(id)
       await deleteVectorsForNote(id)
+      await deleteCardsForNote(id)
       if (doc) {
         for (const page of doc.pages) {
           for (const block of page.blocks) {
