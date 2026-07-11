@@ -3,7 +3,7 @@
 // deleting, and marking a favourite. The open note itself lives in the document store;
 // this keeps that in step with the list and with what is saved on disk.
 import { defineStore } from 'pinia'
-import type { LibraryEntry, NoteDocument } from '@/types'
+import type { Folder, LibraryEntry, NoteDocument } from '@/types'
 import { blankDocument, noteFromTemplate } from '@/content/blankDocument'
 import { uid } from '@/util/id'
 import { useDocument } from './document'
@@ -22,6 +22,7 @@ import {
 
 interface LibraryState {
   entries: LibraryEntry[]
+  folders: Folder[]
   currentId: string
 }
 
@@ -30,7 +31,7 @@ function entryFor(doc: NoteDocument, favorite = false): LibraryEntry {
 }
 
 export const useLibrary = defineStore('library', {
-  state: (): LibraryState => ({ entries: [], currentId: '' }),
+  state: (): LibraryState => ({ entries: [], folders: [], currentId: '' }),
   getters: {
     // The live notes, newest first. Trashed and archived notes are held in `entries` but
     // kept out of the main list, so a note that was deleted or filed away disappears from
@@ -54,10 +55,36 @@ export const useLibrary = defineStore('library', {
       return [...set].sort()
     },
     current: (state) => state.entries.find((e) => e.id === state.currentId) ?? null,
+    // The subfolders directly inside a folder (or the top level when null), sorted by name.
+    foldersIn(state) {
+      return (parentId: string | null): Folder[] =>
+        state.folders.filter((f) => f.parentId === parentId).sort((a, b) => a.name.localeCompare(b.name))
+    },
+    folderById(state) {
+      return (id: string | null): Folder | null => (id ? (state.folders.find((f) => f.id === id) ?? null) : null)
+    },
+    // The trail from the top level down to a folder, for a breadcrumb. Guards against a broken
+    // parent chain so a stray loop can never hang the walk.
+    folderPath(state) {
+      return (id: string | null): Folder[] => {
+        const trail: Folder[] = []
+        const seen = new Set<string>()
+        let current = id
+        while (current && !seen.has(current)) {
+          seen.add(current)
+          const folder = state.folders.find((f) => f.id === current)
+          if (!folder) break
+          trail.unshift(folder)
+          current = folder.parentId
+        }
+        return trail
+      }
+    },
   },
   actions: {
-    hydrate(entries: LibraryEntry[], currentId: string) {
+    hydrate(entries: LibraryEntry[], currentId: string, folders: Folder[] = []) {
       this.entries = entries
+      this.folders = folders
       this.currentId = currentId
     },
     // Keep a note's list row in step as it is edited.
@@ -86,12 +113,14 @@ export const useLibrary = defineStore('library', {
       documentStore.hydrate(doc)
       this.currentId = id
     },
-    async createNote(template = 'blank') {
+    async createNote(template = 'blank', folderId: string | null = null) {
       const documentStore = useDocument()
       await this.parkCurrent()
       const doc = template === 'blank' ? blankDocument() : noteFromTemplate(template)
       await saveNote(doc)
-      this.entries.push(entryFor(doc))
+      const entry = entryFor(doc)
+      if (folderId) entry.folderId = folderId
+      this.entries.push(entry)
       documentStore.hydrate(doc)
       this.currentId = doc.id
       return doc.id
@@ -224,6 +253,32 @@ export const useLibrary = defineStore('library', {
         delete entry.archivedAt
         entry.updatedAt = Date.now()
       }
+    },
+    // Make a folder inside another (or at the top level when parentId is null) and return its id.
+    createFolder(name: string, parentId: string | null = null): string {
+      const clean = name.trim() || 'New folder'
+      const folder: Folder = { id: uid('fol'), name: clean, parentId, createdAt: Date.now() }
+      this.folders.push(folder)
+      return folder.id
+    },
+    renameFolder(id: string, name: string) {
+      const folder = this.folders.find((f) => f.id === id)
+      if (folder) folder.name = name.trim() || folder.name
+    },
+    // Remove a folder, lifting whatever it held up to its own parent so nothing is lost: its
+    // notes move to the parent folder and its subfolders are reparented there too.
+    deleteFolder(id: string) {
+      const folder = this.folders.find((f) => f.id === id)
+      if (!folder) return
+      const up = folder.parentId
+      for (const child of this.folders) if (child.parentId === id) child.parentId = up
+      for (const entry of this.entries) if (entry.folderId === id) entry.folderId = up
+      this.folders = this.folders.filter((f) => f.id !== id)
+    },
+    // File a note into a folder, or to the top level when folderId is null.
+    moveNoteToFolder(noteId: string, folderId: string | null) {
+      const entry = this.entries.find((e) => e.id === noteId)
+      if (entry) entry.folderId = folderId
     },
     // Add or remove a label on a note, trimmed and kept unique, so the library can be filtered by it.
     toggleTag(id: string, tag: string) {

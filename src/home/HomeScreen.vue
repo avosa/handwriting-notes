@@ -28,6 +28,50 @@ onMounted(() => void buildSearchIndex())
 
 const activeTag = ref<string | null>(null)
 
+// Which folder the recent view is looking inside; null is the top level. Folders only shape
+// the recent tab; favourites, archive, and trash stay flat across the whole library.
+const currentFolder = ref<string | null>(null)
+const breadcrumb = computed(() => library.folderPath(currentFolder.value))
+const subfolders = computed(() => library.foldersIn(currentFolder.value))
+// Folders are browsed only when there is nothing narrowing the view; a search or a tag filter
+// looks across every folder at once so a match is never hidden inside a closed folder.
+const browsingFolders = computed(() => tab.value === 'recent' && !query.value.trim() && !activeTag.value)
+
+const renamingFolderId = ref<string | null>(null)
+const folderRenameInput = ref<HTMLInputElement | null>(null)
+
+// How many notes and subfolders a folder holds, shown on its card so an empty one is obvious.
+function folderCount(id: string): number {
+  const notes = library.recent.filter((e) => (e.folderId ?? null) === id).length
+  return notes + library.foldersIn(id).length
+}
+
+function openFolder(id: string | null) {
+  currentFolder.value = id
+}
+async function makeFolder() {
+  const id = library.createFolder('New folder', currentFolder.value)
+  renamingFolderId.value = id
+  await nextTick()
+  folderRenameInput.value?.focus()
+  folderRenameInput.value?.select()
+}
+async function startFolderRename(id: string) {
+  renamingFolderId.value = id
+  await nextTick()
+  folderRenameInput.value?.focus()
+  folderRenameInput.value?.select()
+}
+function commitFolderRename(id: string) {
+  if (folderRenameInput.value) library.renameFolder(id, folderRenameInput.value.value)
+  renamingFolderId.value = null
+}
+function removeFolder(id: string) {
+  const parent = library.folderById(id)?.parentId ?? null
+  library.deleteFolder(id)
+  if (currentFolder.value === id) currentFolder.value = parent
+}
+
 // Order a list by the chosen sort, always floating pinned notes to the top so a pin holds
 // wherever the sort would otherwise put the note.
 function sortList(list: LibraryEntry[]): LibraryEntry[] {
@@ -47,10 +91,24 @@ const shown = computed(() => {
   if (tab.value === 'trash') return library.trash
   if (tab.value === 'archive') return sortList(library.archived)
   let list = tab.value === 'favorites' ? library.favorites : library.recent
+  if (browsingFolders.value) list = list.filter((e) => (e.folderId ?? null) === currentFolder.value)
   if (activeTag.value) list = list.filter((e) => (e.tags ?? []).includes(activeTag.value!))
   const q = query.value.trim()
   if (q) list = list.filter((e) => matches(e.id, e.title, q))
   return sortList(list)
+})
+
+// Every folder as a flat, indented list, for the move-to menu on a note.
+const folderChoices = computed(() => {
+  const out: { id: string; label: string }[] = []
+  const walk = (parentId: string | null, depth: number) => {
+    for (const folder of library.foldersIn(parentId)) {
+      out.push({ id: folder.id, label: `${' '.repeat(depth)}${folder.name}` })
+      walk(folder.id, depth + 1)
+    }
+  }
+  walk(null, 0)
+  return out
 })
 const newTag = ref('')
 function addTag(id: string) {
@@ -77,7 +135,8 @@ function when(ts: number): string {
 }
 
 async function newNote(key: string) {
-  await library.createNote(key)
+  // A note started while browsing a folder is filed there, so it lands where the writer is.
+  await library.createNote(key, browsingFolders.value ? currentFolder.value : null)
   emit('close')
 }
 async function open(id: string) {
@@ -168,6 +227,63 @@ function commitRename(id: string) {
           </button>
         </div>
 
+        <!-- Folder navigation, only while browsing the recent tab. A breadcrumb walks back up,
+             and a row of subfolders sits above the notes in the current folder. -->
+        <div v-if="browsingFolders" class="folder-bar">
+          <nav class="crumbs">
+            <button class="crumb" :class="{ on: currentFolder === null }" @click="openFolder(null)">
+              <Icon name="home" :size="14" /> All notes
+            </button>
+            <template v-for="f in breadcrumb" :key="f.id">
+              <Icon name="chevronRight" :size="13" class="sep-i" />
+              <button class="crumb" :class="{ on: currentFolder === f.id }" @click="openFolder(f.id)">
+                {{ f.name }}
+              </button>
+            </template>
+          </nav>
+          <button class="new-folder" title="New folder" @click="makeFolder">
+            <Icon name="folderPlus" :size="15" /> New folder
+          </button>
+        </div>
+
+        <div v-if="browsingFolders && subfolders.length" class="folder-grid">
+          <div v-for="f in subfolders" :key="f.id" class="folder-card">
+            <button class="folder-open" @dblclick="openFolder(f.id)" @click="openFolder(f.id)">
+              <Icon name="folder" :size="22" />
+              <input
+                v-if="renamingFolderId === f.id"
+                ref="folderRenameInput"
+                class="folder-rename"
+                :value="f.name"
+                @click.stop
+                @blur="commitFolderRename(f.id)"
+                @keydown.enter.prevent="commitFolderRename(f.id)"
+              />
+              <span v-else class="folder-name">{{ f.name }}</span>
+              <span class="folder-count">{{ folderCount(f.id) }}</span>
+            </button>
+            <Popover align="right">
+              <template #trigger>
+                <button class="folder-more" title="Folder actions"><Icon name="dots" :size="15" /></button>
+              </template>
+              <template #default>
+                <div class="menu">
+                  <button class="menu-item" @click="openFolder(f.id)">
+                    <Icon name="folder" :size="16" /><span>Open</span>
+                  </button>
+                  <button class="menu-item" @click="startFolderRename(f.id)">
+                    <Icon name="write" :size="16" /><span>Rename</span>
+                  </button>
+                  <div class="sep" />
+                  <button class="menu-item danger" @click="removeFolder(f.id)">
+                    <Icon name="trash" :size="16" /><span>Delete folder</span>
+                  </button>
+                </div>
+              </template>
+            </Popover>
+          </div>
+        </div>
+
         <div v-if="shown.length" class="grid">
           <div v-for="e in shown" :key="e.id" class="card" :class="{ current: e.id === library.currentId && !filed }">
             <button v-if="tab === 'trash'" class="open dim" title="Restore" @click="library.restoreNote(e.id)">
@@ -252,6 +368,26 @@ function commitRename(id: string) {
                       <Icon name="archive" :size="16" /><span>Archive</span>
                     </button>
                     <div class="sep" />
+                    <div class="move-to">
+                      <span class="move-label">Move to</span>
+                      <button
+                        class="menu-item small"
+                        :class="{ on: (e.folderId ?? null) === null }"
+                        @click="library.moveNoteToFolder(e.id, null)"
+                      >
+                        <Icon name="home" :size="15" /><span>Top level</span>
+                      </button>
+                      <button
+                        v-for="c in folderChoices"
+                        :key="c.id"
+                        class="menu-item small"
+                        :class="{ on: e.folderId === c.id }"
+                        @click="library.moveNoteToFolder(e.id, c.id)"
+                      >
+                        <Icon name="folder" :size="15" /><span>{{ c.label }}</span>
+                      </button>
+                    </div>
+                    <div class="sep" />
                     <div class="tag-editor">
                       <div v-if="(e.tags ?? []).length" class="tag-list">
                         <button
@@ -289,7 +425,7 @@ function commitRename(id: string) {
           </div>
         </div>
 
-        <div v-else class="empty">
+        <div v-else-if="!(browsingFolders && subfolders.length)" class="empty">
           <Icon
             :name="tab === 'favorites' ? 'star' : tab === 'archive' ? 'archive' : tab === 'trash' ? 'trash' : 'grid'"
             :size="26"
@@ -302,7 +438,9 @@ function commitRename(id: string) {
                   ? 'Archive a note to file it away here.'
                   : tab === 'trash'
                     ? 'The trash is empty.'
-                    : 'No notes yet. Start one above.'
+                    : browsingFolders && currentFolder
+                      ? 'This folder is empty. Start a note or add a folder.'
+                      : 'No notes yet. Start one above.'
             }}
           </p>
         </div>
@@ -664,6 +802,160 @@ h2 {
   height: 1px;
   background: var(--border);
   margin: 5px 8px;
+}
+.folder-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+.crumb:hover {
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+.crumb.on {
+  color: var(--text);
+  font-weight: 600;
+}
+.sep-i {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+.new-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 9px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.new-folder:hover {
+  background: var(--accent-wash);
+}
+.folder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.folder-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.folder-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 12px 40px 12px 12px;
+  cursor: pointer;
+  color: var(--accent);
+  text-align: left;
+  box-shadow: 0 2px 8px rgba(51, 51, 76, 0.06);
+}
+.folder-open:hover {
+  background: var(--accent-wash);
+}
+.folder-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.folder-rename {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 3px 6px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  outline: none;
+}
+.folder-count {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.folder-more {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 7px;
+}
+.folder-more:hover {
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+.move-to {
+  padding: 2px 0;
+  max-height: 190px;
+  overflow-y: auto;
+}
+.move-label {
+  display: block;
+  padding: 4px 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.menu-item.small {
+  padding: 7px 10px;
+  font-size: 13px;
+}
+.menu-item.small.on {
+  color: var(--accent);
+  font-weight: 600;
+}
+.menu-item.small span {
+  white-space: pre;
 }
 .sort {
   margin-left: auto;

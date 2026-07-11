@@ -265,6 +265,16 @@ export interface NoteDocument {
   comments?: Record<string, string>
 }
 
+/** A folder in the library. Folders nest: a folder with a `parentId` sits inside that folder,
+ *  and one with no parent sits at the top level. */
+export interface Folder {
+  id: string
+  name: string
+  /** The folder this one sits inside, or null at the top level. */
+  parentId: string | null
+  createdAt: number
+}
+
 /** One row in the notes library: enough to list and open a note without loading it. */
 export interface LibraryEntry {
   id: string
@@ -274,6 +284,8 @@ export interface LibraryEntry {
   favorite: boolean
   /** Free-form labels the writer puts on a note, for filtering the library. */
   tags?: string[]
+  /** The folder the note is filed in, or unset for the top level. */
+  folderId?: string | null
   /** When the note was moved to the trash, in epoch ms. Unset means it is a live note.
    *  A trashed note is hidden from the library but kept, so it can be restored; it is
    *  purged for good after a grace period or when the trash is emptied. */

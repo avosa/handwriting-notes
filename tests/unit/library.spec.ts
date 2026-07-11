@@ -112,3 +112,58 @@ describe('library archive and pin', () => {
     expect(lib.trash.map((e) => e.id)).toEqual(['b'])
   })
 })
+
+describe('library folders', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  function seed() {
+    const lib = useLibrary()
+    lib.hydrate(
+      [
+        { id: 'a', title: 'A', createdAt: 0, updatedAt: 2, favorite: false },
+        { id: 'b', title: 'B', createdAt: 0, updatedAt: 1, favorite: false },
+      ],
+      'x',
+      [],
+    )
+    return lib
+  }
+
+  it('nests folders and reads the path from the top down', () => {
+    const lib = seed()
+    const work = lib.createFolder('Work', null)
+    const proj = lib.createFolder('Project', work)
+    expect(lib.foldersIn(null).map((f) => f.name)).toEqual(['Work'])
+    expect(lib.foldersIn(work).map((f) => f.name)).toEqual(['Project'])
+    expect(lib.folderPath(proj).map((f) => f.name)).toEqual(['Work', 'Project'])
+  })
+
+  it('files a note into a folder and back to the top level', () => {
+    const lib = seed()
+    const work = lib.createFolder('Work', null)
+    lib.moveNoteToFolder('a', work)
+    expect(lib.entries.find((e) => e.id === 'a')!.folderId).toBe(work)
+    lib.moveNoteToFolder('a', null)
+    expect(lib.entries.find((e) => e.id === 'a')!.folderId).toBe(null)
+  })
+
+  it('deleting a folder lifts its notes and subfolders up to the parent', () => {
+    const lib = seed()
+    const work = lib.createFolder('Work', null)
+    const proj = lib.createFolder('Project', work)
+    lib.moveNoteToFolder('a', proj)
+    lib.deleteFolder(proj)
+    // The note and any child rise to Project's parent, Work.
+    expect(lib.entries.find((e) => e.id === 'a')!.folderId).toBe(work)
+    expect(lib.folders.some((f) => f.id === proj)).toBe(false)
+  })
+
+  it('folderPath does not hang on a broken parent loop', () => {
+    const lib = seed()
+    const one = lib.createFolder('One', null)
+    const two = lib.createFolder('Two', one)
+    // Force a cycle and make sure the walk still terminates.
+    lib.folders.find((f) => f.id === one)!.parentId = two
+    expect(lib.folderPath(two).length).toBeLessThanOrEqual(2)
+  })
+})

@@ -4,7 +4,7 @@
 // the home screen. Writes are debounced; the first load hydrates the stores before the
 // app renders.
 import { openDB, type IDBPDatabase } from 'idb'
-import type { LibraryEntry, NoteDocument, ProviderId, Settings } from '@/types'
+import type { Folder, LibraryEntry, NoteDocument, ProviderId, Settings } from '@/types'
 import { useDocument } from './document'
 import { useSettings } from './settings'
 import { useLibrary } from './library'
@@ -14,6 +14,7 @@ const DB_VERSION = 2
 const SETTINGS_KEY = 'current'
 const API_KEY_KEY = 'anthropic-api-key'
 const LIBRARY_KEY = 'library'
+const FOLDERS_KEY = 'folders'
 const CURRENT_ID_KEY = 'current-note-id'
 const VERSION_KEY = 'schema-version'
 // Notes carry the shape they were written with. The library format is version 3; a note
@@ -34,7 +35,7 @@ interface Stores {
   document: NoteDocument
   settings: Settings
   blobs: Blob
-  meta: string | LibraryEntry[]
+  meta: string | LibraryEntry[] | Folder[]
   versions: VersionRecord
 }
 
@@ -92,13 +93,14 @@ export async function exportAll(): Promise<object> {
   const database = await db()
   const notes = (await database.getAll('document')).filter(isValidDocument)
   const library = (await database.get('meta', LIBRARY_KEY)) ?? []
+  const folders = (await database.get('meta', FOLDERS_KEY)) ?? []
   const keys = await database.getAllKeys('blobs')
   const blobs: { key: string; mime: string; data: string }[] = []
   for (const key of keys) {
     const blob = await database.get('blobs', key as string)
     if (blob) blobs.push({ key: key as string, mime: blob.type, data: await blobToBase64(blob) })
   }
-  return { app: 'handwriting-notes', version: 1, exportedAt: Date.now(), notes, library, blobs }
+  return { app: 'handwriting-notes', version: 1, exportedAt: Date.now(), notes, library, folders, blobs }
 }
 
 // Restore a backup, merging it into whatever is already saved: notes and blobs are written by id
@@ -106,6 +108,7 @@ export async function exportAll(): Promise<object> {
 export async function importAll(data: {
   notes?: NoteDocument[]
   library?: LibraryEntry[]
+  folders?: Folder[]
   blobs?: { key: string; mime: string; data: string }[]
 }): Promise<void> {
   const database = await db()
@@ -114,6 +117,10 @@ export async function importAll(data: {
   const byId = new Map(existing.map((e) => [e.id, e]))
   for (const e of data.library ?? []) byId.set(e.id, e)
   await database.put('meta', plain([...byId.values()]), LIBRARY_KEY)
+  const existingFolders = ((await database.get('meta', FOLDERS_KEY)) ?? []) as Folder[]
+  const foldersById = new Map(existingFolders.map((f) => [f.id, f]))
+  for (const f of data.folders ?? []) foldersById.set(f.id, f)
+  await database.put('meta', plain([...foldersById.values()]), FOLDERS_KEY)
   for (const b of data.blobs ?? []) {
     const bytes = Uint8Array.from(atob(b.data), (c) => c.charCodeAt(0))
     await database.put('blobs', new Blob([bytes], { type: b.mime }), b.key)
@@ -185,6 +192,15 @@ export async function loadLibrary(): Promise<LibraryEntry[]> {
 
 export async function saveLibrary(entries: LibraryEntry[]): Promise<void> {
   await (await db()).put('meta', plain(entries), LIBRARY_KEY)
+}
+
+export async function loadFolders(): Promise<Folder[]> {
+  const list = await (await db()).get('meta', FOLDERS_KEY)
+  return Array.isArray(list) ? (list as Folder[]) : []
+}
+
+export async function saveFolders(folders: Folder[]): Promise<void> {
+  await (await db()).put('meta', plain(folders), FOLDERS_KEY)
 }
 
 export async function loadCurrentId(): Promise<string | undefined> {
@@ -290,8 +306,10 @@ export async function installPersistence(): Promise<void> {
   }
   currentId = openDoc.id
 
+  const folders = await loadFolders()
+
   documentStore.hydrate(openDoc)
-  libraryStore.hydrate(entries, currentId)
+  libraryStore.hydrate(entries, currentId, folders)
   await saveLibrary(entries)
   await saveCurrentId(currentId)
   // Clear out notes that have sat in the trash past the grace period, so it never grows without
@@ -304,6 +322,7 @@ export async function installPersistence(): Promise<void> {
   }, 400)
   const persistSettings = debounce((settings: Settings) => void saveSettings(settings), 300)
   const persistLibrary = debounce((list: LibraryEntry[]) => void saveLibrary(list), 300)
+  const persistFolders = debounce((list: Folder[]) => void saveFolders(list), 300)
   // Group a burst of typing into one undo step by recording once it settles.
   const recordHistory = debounce(() => documentStore.recordHistory(), 500)
 
@@ -314,6 +333,7 @@ export async function installPersistence(): Promise<void> {
   settingsStore.$subscribe((_m, state) => persistSettings(state))
   libraryStore.$subscribe((_m, state) => {
     persistLibrary(state.entries)
+    persistFolders(state.folders)
     void saveCurrentId(state.currentId)
   })
 }
