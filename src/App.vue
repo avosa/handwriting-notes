@@ -924,27 +924,11 @@ function addPage() {
             </template>
             <template #default>
               <div class="menu ai-menu">
-                <button class="menu-item" @click="showCompose = true">
-                  <Icon name="wand" :size="16" /><span>Write with AI</span>
-                </button>
                 <button class="menu-item" @click="showChat = true">
                   <Icon name="aiChat" :size="16" /><span>Chat with your notes</span>
                 </button>
-                <div class="menu-label">This note</div>
-                <button class="menu-item" @click="summarizeNote()">
-                  <Icon name="paragraph" :size="16" /><span>Summarise</span>
-                </button>
-                <button class="menu-item" @click="autoTitle()">
-                  <Icon name="title" :size="16" /><span>Auto-title</span>
-                </button>
-                <button class="menu-item" @click="autoTag()">
-                  <Icon name="tag" :size="16" /><span>Auto-tag</span>
-                </button>
-                <button class="menu-item" @click="aiOnNote(PROOFREAD_INSTRUCTION)">
-                  <Icon name="check" :size="16" /><span>Proofread</span>
-                </button>
-                <button class="menu-item" @click="aiOnNote(EXTRACT_ACTIONS_INSTRUCTION)">
-                  <Icon name="listBullet" :size="16" /><span>Extract action items</span>
+                <button class="menu-item" @click="showCompose = true">
+                  <Icon name="wand" :size="16" /><span>Write with AI</span>
                 </button>
                 <div class="sep" />
                 <button class="menu-item" @click="importInput?.click()">
