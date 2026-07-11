@@ -57,11 +57,21 @@ function shade(hex: string, amt: number): string {
     </template>
 
     <template v-else-if="tool === 'eraser'">
-      <rect x="10" y="30" width="24" height="80" rx="5" fill="#F7CAD0" />
-      <rect x="10" y="30" width="7" height="80" fill="#EBA9B4" opacity="0.6" />
-      <rect x="8" y="58" width="28" height="24" rx="3" fill="#F3F1EA" />
-      <rect x="8" y="58" width="28" height="24" rx="3" fill="none" stroke="#D8D5CC" stroke-width="1" />
-      <line x1="8" y1="66" x2="36" y2="66" stroke="#D8D5CC" stroke-width="1" />
+      <!-- A classic school rubber: a short, chunky block held at a slight angle, its lower
+           corner worn from use, with the familiar pink body, blue ink end, and a kraft paper
+           sleeve — so a glance reads "eraser", not another pen. -->
+      <g transform="rotate(-15 22 74)">
+        <!-- pink body with a worn, bevelled bottom corner -->
+        <path d="M10 44 h24 v46 l-6 6 h-12 l-6 -6 z" fill="#F48FB1" />
+        <!-- blue ink-eraser end -->
+        <path d="M10 44 h24 v14 h-24 z" fill="#5C9CE6" />
+        <!-- kraft paper sleeve across the middle -->
+        <rect x="8" y="60" width="28" height="20" rx="2" fill="#E7D3A8" />
+        <line x1="8" y1="66" x2="36" y2="66" stroke="#CBB584" stroke-width="1.2" />
+        <line x1="8" y1="74" x2="36" y2="74" stroke="#CBB584" stroke-width="1.2" />
+        <!-- soft highlight down the left edge -->
+        <rect x="12" y="46" width="5" height="48" rx="2.5" fill="#ffffff" opacity="0.28" />
+      </g>
     </template>
 
     <template v-else-if="tool === 'fill'">

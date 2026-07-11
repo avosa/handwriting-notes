@@ -94,29 +94,47 @@ function update() {
     visible.value = false
     return
   }
-  // Remember where the selection sits; the menu is then placed relative to it, but always
-  // clamped to stay on screen (see place()).
-  anchor = { cx: rect.left + rect.width / 2, top: rect.top, bottom: rect.bottom }
+  // Remember where the selection sits, along with the edges of the page it is on, so the menu
+  // is placed over the selection but never spills off the sheet onto the desk beside it.
+  const node = sel.anchorNode
+  const host = node instanceof Element ? node : (node?.parentElement ?? null)
+  const pageEl = host?.closest('.note-page') as HTMLElement | null
+  const pr = pageEl?.getBoundingClientRect() ?? null
+  anchor = {
+    cx: rect.left + rect.width / 2,
+    top: rect.top,
+    bottom: rect.bottom,
+    pageLeft: pr ? pr.left : null,
+    pageRight: pr ? pr.right : null,
+  }
   visible.value = true
   void nextTick(place)
 }
 
-// The gap kept between the menu and the edges of the screen so it never runs off the page.
+// The gap kept between the menu and the edges it is held inside, so it never touches them.
 const MARGIN = 8
 const menuEl = ref<HTMLElement | null>(null)
-let anchor: { cx: number; top: number; bottom: number } | null = null
+let anchor: { cx: number; top: number; bottom: number; pageLeft: number | null; pageRight: number | null } | null = null
 
-// Position the menu over the selection, then pull it back inside the viewport on every side.
-// It measures its own size after rendering, so it stays in view however wide it has wrapped and
-// whether it sits on a phone or a wide desktop. When there is no room above the selection it
-// flips to sit just below it.
+// Position the menu over the selection, then pull it back inside the page it belongs to (falling
+// back to the viewport) on every side. It measures its own size after rendering, so it stays in
+// bounds however wide it has wrapped and whether it sits on a phone or a wide desktop. When there
+// is no room above the selection it flips to sit just below it.
 function place() {
   if (!anchor || !menuEl.value) return
   const w = menuEl.value.offsetWidth
   const h = menuEl.value.offsetHeight
   const vw = window.innerWidth
   const vh = window.innerHeight
-  const left = Math.max(MARGIN, Math.min(anchor.cx - w / 2, vw - w - MARGIN))
+  // Keep the menu within the page, but never past the screen. If the menu is wider than the
+  // page (a narrow sheet on a small screen), the viewport wins so it is not squeezed off-screen.
+  let leftBound = MARGIN
+  let rightBound = vw - MARGIN
+  if (anchor.pageLeft !== null && anchor.pageRight !== null && anchor.pageRight - anchor.pageLeft >= w + 2 * MARGIN) {
+    leftBound = Math.max(leftBound, anchor.pageLeft + MARGIN)
+    rightBound = Math.min(rightBound, anchor.pageRight - MARGIN)
+  }
+  const left = Math.max(leftBound, Math.min(anchor.cx - w / 2, rightBound - w))
   let top = anchor.top - 10 - h
   if (top < MARGIN) top = anchor.bottom + 10
   top = Math.max(MARGIN, Math.min(top, vh - h - MARGIN))
