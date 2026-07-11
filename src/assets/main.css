@@ -183,6 +183,64 @@ button {
   outline-offset: 2px;
 }
 
+/* Printing leaves only the sheets: the desk, the bars, the dock, and every floating control
+   are dropped, the scrolling frame is opened up so all pages flow, and each page is sent to
+   its own printed sheet with nothing split across a break. */
+@media print {
+  html,
+  body,
+  .app-root,
+  .app,
+  .surface,
+  .stack {
+    background: #fff !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .topbar,
+  .dock-wrap,
+  .drawer,
+  .drawer-scrim,
+  .menu-toggle,
+  .skip-link,
+  .surface-backdrop,
+  .page-num,
+  .page-more,
+  .page-menu-scrim,
+  .add-page,
+  .ai-cursor,
+  .selection-menu,
+  .whole-bar,
+  .line-bar,
+  .status,
+  .backdrop {
+    display: none !important;
+  }
+  .stack {
+    display: block !important;
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+  .page-wrap {
+    margin: 0 !important;
+    box-shadow: none !important;
+    break-after: page;
+    page-break-after: always;
+  }
+  .page-wrap:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+  .note-page {
+    break-inside: avoid;
+    box-shadow: none !important;
+  }
+  @page {
+    margin: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
