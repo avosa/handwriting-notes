@@ -21,6 +21,7 @@ export const changelog: Release[] = [
       'Collapsible sections: a heading with a chevron that folds its notes away, from / or Insert.',
       'Write mathematics in LaTeX and see it typeset, rendered on the device and exported cleanly.',
       'Tables gain per-column sorting (numbers by value) and left, centre, or right alignment.',
+      'An emoji picker in the toolbar drops an emoji straight into the line, searchable by name.',
       'Manus now reads attached images, PDFs, documents, and voice notes, not just text.',
     ],
   },

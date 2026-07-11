@@ -14,6 +14,17 @@ export function rememberSelection() {
   if (sel && sel.rangeCount && !sel.isCollapsed) savedRange = sel.getRangeAt(0).cloneRange()
 }
 
+/** Capture the caret, even when nothing is selected, so a picker can drop text where it was. */
+export function rememberCaret() {
+  const sel = window.getSelection()
+  if (sel && sel.rangeCount) savedRange = sel.getRangeAt(0).cloneRange()
+}
+
+/** Drop text in at the remembered caret, letting the line read it back into the note. */
+export function insertAtSelection(text: string) {
+  if (restoreSelection()) document.execCommand('insertText', false, text)
+}
+
 function restoreSelection(): boolean {
   if (!savedRange) return false
   const node = savedRange.commonAncestorContainer

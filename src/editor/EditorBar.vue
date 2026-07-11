@@ -10,7 +10,17 @@ import { putBlob } from '@/store/persistence'
 import { uid } from '@/util/id'
 import { useSettings } from '@/store/settings'
 import { penOrder, penProfile } from '@/tools/penTypes'
-import { toggleBold, toggleItalic, toggleUnderline, setTextColor, setHighlight, rememberSelection } from './marks'
+import {
+  toggleBold,
+  toggleItalic,
+  toggleUnderline,
+  setTextColor,
+  setHighlight,
+  rememberSelection,
+  rememberCaret,
+  insertAtSelection,
+} from './marks'
+import EmojiPicker from '@/ui/EmojiPicker.vue'
 import { diagramBlock, diagramPresets } from '@/diagrams/presets'
 import Icon from '@/ui/Icon.vue'
 import Popover from '@/ui/Popover.vue'
@@ -221,6 +231,14 @@ function imageRatio(file: Blob): Promise<number> {
         </div>
 
         <div class="group">
+          <Popover align="center">
+            <template #trigger>
+              <button title="Emoji" @mousedown.prevent="rememberCaret"><Icon name="smile" :size="18" /></button>
+            </template>
+            <template #default>
+              <EmojiPicker @pick="insertAtSelection" />
+            </template>
+          </Popover>
           <button title="Align left" @click="applyAlign('left')"><Icon name="alignLeft" :size="18" /></button>
           <button title="Centre" @click="applyAlign('center')"><Icon name="alignCenter" :size="18" /></button>
           <button title="Justify" @click="applyAlign('justify')"><Icon name="alignJustify" :size="18" /></button>
