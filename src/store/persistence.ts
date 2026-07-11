@@ -10,7 +10,6 @@ import { useSettings } from './settings'
 import { useLibrary } from './library'
 
 const DB_NAME = 'handwriting-notes'
-const DB_VERSION = 4
 const SETTINGS_KEY = 'current'
 const API_KEY_KEY = 'anthropic-api-key'
 const LIBRARY_KEY = 'library'
@@ -65,22 +64,26 @@ function createMissingStores(database: IDBPDatabase<Stores>): void {
   }
 }
 
-// Open the database and guarantee every store exists, whatever state it was left in. This is
-// bulletproof against an interrupted upgrade (a store that never got created) regardless of the
-// version number: if any store is missing after opening, it forces one more upgrade at the next
-// version to create it. A database already newer than this build is opened as-is rather than
-// downgraded (which would throw).
+// Open the database and guarantee every store exists, whatever state it was left in, without ever
+// asking for a particular version. Requesting a fixed version lower than the one already on disk is
+// a downgrade, and Chrome does not error on that cleanly — it stalls the open, so the app never
+// boots and the page stays blank. That is exactly what a database left at a higher version by a
+// later build, or by a change that was then reverted, would trigger. So we only ever move forward:
+// open unversioned to take the database as-is, and if any store this build needs is missing (a
+// brand-new or interrupted database) bump one version to create it. Version-independent, so it heals
+// a fresh, an old, an incomplete, or a newer-than-code database alike, and can never downgrade.
 async function openHealthy(): Promise<IDBPDatabase<Stores>> {
-  let database: IDBPDatabase<Stores>
-  try {
-    database = await openDB<Stores>(DB_NAME, DB_VERSION, { upgrade: createMissingStores })
-  } catch {
-    database = await openDB<Stores>(DB_NAME)
-  }
+  let database = await openDB<Stores>(DB_NAME)
   if (!REQUIRED_STORES.every((name) => database.objectStoreNames.contains(name))) {
     const nextVersion = database.version + 1
     database.close()
-    database = await openDB<Stores>(DB_NAME, nextVersion, { upgrade: createMissingStores })
+    try {
+      database = await openDB<Stores>(DB_NAME, nextVersion, { upgrade: createMissingStores })
+    } catch {
+      // Another tab may have upgraded the database past this version between the two opens; re-adopt
+      // whatever version exists now rather than throwing on the stale downgrade request.
+      database = await openDB<Stores>(DB_NAME)
+    }
   }
   return database
 }
