@@ -53,6 +53,13 @@ export const useSettings = defineStore('settings', {
     setProvider(provider: ProviderId) {
       this.activeProvider = provider
     },
+    // Turn the on-device model on or off, and choose which one to run.
+    setLocalAiEnabled(enabled: boolean) {
+      this.localAiEnabled = enabled
+    },
+    setLocalModel(id: string) {
+      this.localModelId = id
+    },
     // Flip one accessibility preference on or off, keeping the others as they are.
     toggleA11y(key: 'rtl' | 'highContrast' | 'readerSpacing') {
       const current = this.a11y ?? {}

@@ -31,6 +31,7 @@ import LinksPanel from './ui/LinksPanel.vue'
 import GraphView from './ui/GraphView.vue'
 import PwaPrompts from './ui/PwaPrompts.vue'
 import StoragePanel from './ui/StoragePanel.vue'
+import LocalAiSheet from './ui/LocalAiSheet.vue'
 import NotesChat from './ui/NotesChat.vue'
 import FindBar from './ui/FindBar.vue'
 import { APP_DOMAIN } from './brand'
@@ -63,6 +64,7 @@ const showHistory = ref(false)
 const showLinks = ref(false)
 const showGraph = ref(false)
 const showStorage = ref(false)
+const showLocalAi = ref(false)
 const showChat = ref(false)
 const showFind = ref(false)
 
@@ -634,6 +636,13 @@ const commands = computed<Command[]>(() => [
     run: () => (showChat.value = true),
   },
   {
+    id: 'local-ai',
+    title: 'On-device AI',
+    hint: 'key-free AI on your GPU',
+    icon: 'sparkleEdit',
+    run: () => (showLocalAi.value = true),
+  },
+  {
     id: 'storage',
     title: 'Storage',
     hint: 'usage, clean up space',
@@ -984,6 +993,8 @@ function addPage() {
     <GraphView v-if="showGraph" @close="showGraph = false" @open="openNoteById" />
 
     <StoragePanel v-if="showStorage" @close="showStorage = false" />
+
+    <LocalAiSheet v-if="showLocalAi" @close="showLocalAi = false" />
 
     <!-- A floating button to chat with your notes, kept out of the crowded top bar. It tucks
          away while the chat, the home screen, or a full-screen overlay is open. -->

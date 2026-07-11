@@ -14,6 +14,10 @@ let worker: Worker | null = null
 let nextId = 1
 const pending = new Map<number, { resolve: (v: number[][]) => void; reject: (e: Error) => void }>()
 
+// How long a single embed request may wait before it is treated as failed. Generous, because the
+// very first request downloads and compiles the model.
+const EMBED_TIMEOUT_MS = 120_000
+
 function ensureWorker(): Worker {
   if (worker) return worker
   embedStatus.value = 'loading'
@@ -55,7 +59,22 @@ export function embed(texts: string[]): Promise<number[][]> {
   const w = ensureWorker()
   const id = nextId++
   return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject })
+    // A safety net: if the worker never answers (a stalled first-time model download, a wedged
+    // GPU), the request fails instead of hanging the caller forever. The first call includes the
+    // one-time model fetch, so the window is generous.
+    const timer = setTimeout(() => {
+      if (pending.delete(id)) reject(new Error('The on-device model took too long to respond.'))
+    }, EMBED_TIMEOUT_MS)
+    pending.set(id, {
+      resolve: (v) => {
+        clearTimeout(timer)
+        resolve(v)
+      },
+      reject: (e) => {
+        clearTimeout(timer)
+        reject(e)
+      },
+    })
     w.postMessage({ type: 'embed', id, texts })
   })
 }

@@ -371,4 +371,9 @@ export interface Settings {
     /** Open the letters and words a little for easier reading. */
     readerSpacing?: boolean
   }
+  /** Run AI on the device with an in-browser model, so no API key is needed. Unset reads as off;
+   *  it only takes effect where the hardware (WebGPU) can run a model. */
+  localAiEnabled?: boolean
+  /** Which on-device model is chosen, by its id in the local model list. Unset uses the default. */
+  localModelId?: string
 }

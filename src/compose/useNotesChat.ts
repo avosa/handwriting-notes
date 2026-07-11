@@ -11,6 +11,13 @@ import { useLibrary } from '@/store/library'
 import { useDocument } from '@/store/document'
 import { useAi } from './useAi'
 import { indexAll, searchBlocks } from '@/ai/embeddings/semanticIndex'
+import { webgpuAvailable, localStream } from '@/ai/local/localLlm'
+import { modelById } from '@/ai/local/localModels'
+
+// A quick, call-free guess at whether a message wants the note changed, used when there is no
+// provider key to classify with (on-device only). Leans toward answering to avoid unwanted edits.
+const EDIT_HINT =
+  /\b(rewrite|re-write|edit|revise|add|insert|append|fix|correct|change|replace|make it|turn (it|this)|shorten|expand|elaborate|restructure|reword|rephrase|format|tidy|clean up|improve|update|delete|remove|bullet|summari[sz]e (it|this|the note))\b/i
 
 export interface ChatSource {
   n: number
@@ -67,8 +74,16 @@ export function useNotesChat() {
     messages.value = []
     error.value = null
   }
+  // Stop the current turn. It aborts the request and, crucially, releases the UI right away even
+  // if a slow model download is still pending underneath — so the chat never gets stuck "thinking".
   function stop(): void {
     controller?.abort()
+    const last = messages.value[messages.value.length - 1]
+    if (last && last.role === 'assistant' && last.streaming) {
+      last.streaming = false
+      if (!last.text) last.text = 'Stopped.'
+    }
+    busy.value = false
   }
 
   async function ask(question: string): Promise<void> {
@@ -79,7 +94,12 @@ export function useNotesChat() {
 
     const provider = getProvider(settings.activeProvider)
     const key = await loadApiKey(provider.id)
-    if (!key) {
+    // Prefer the on-device model when the writer has turned it on and the hardware can run it, so
+    // answers are free and private. A connected key is the fallback; only when neither exists does
+    // the chat ask for a key.
+    const useLocal = !!settings.localAiEnabled && webgpuAvailable()
+    const localMlcId = modelById(settings.localModelId).mlcId
+    if (!key && !useLocal) {
       needsKey.value = true
       return
     }
@@ -87,21 +107,40 @@ export function useNotesChat() {
     messages.value.push({ role: 'user', text: q })
     const idx = messages.value.push({ role: 'assistant', text: '', sources: [], streaming: true }) - 1
     busy.value = true
-
-    // Decide whether the writer wants the note changed or a question answered. A one-word
-    // classification keeps it natural — they just type — while staying reliable.
-    let intent: 'edit' | 'ask' = 'ask'
-    try {
-      const routed = await provider.complete(ROUTE_SYSTEM, q, key, 4)
-      if (/edit/i.test(routed)) intent = 'edit'
-    } catch {
-      // If routing fails, fall back to answering — never edit a note the writer didn't ask to change.
+    controller = new AbortController()
+    const signal = controller.signal
+    // Release the UI once, whatever path we took, and never overwrite a message the writer stopped.
+    const finish = () => {
+      if (messages.value[idx]) messages.value[idx].streaming = false
+      busy.value = false
+      controller = null
     }
 
+    // Decide whether the writer wants the note changed or a question answered, so the chat can act
+    // as well as answer. With a key, a one-word model classification is used; on-device-only, a
+    // quick keyword guess keeps it call-free. Both lean toward answering.
+    let intent: 'edit' | 'ask' = 'ask'
+    if (key) {
+      try {
+        const routed = await provider.complete(ROUTE_SYSTEM, q, key, 4)
+        if (/edit/i.test(routed)) intent = 'edit'
+      } catch {
+        // Routing failure falls back to answering — never edit a note that was not clearly asked to change.
+      }
+    } else if (EDIT_HINT.test(q)) {
+      intent = 'edit'
+    }
+    if (signal.aborted) return finish()
+
     // EDIT: hand off to the same engine "Write with AI" uses, so the chat can rewrite, add to, or
-    // restructure the open note in place. The change is applied to the note beside the chat.
+    // restructure the open note in place. Editing uses the connected key for now; on-device-only,
+    // it is not offered yet, so the writer is told plainly.
     if (intent === 'edit') {
       messages.value[idx].mode = 'edit'
+      if (!key) {
+        messages.value[idx].text = 'Editing the note needs a connected AI key for now. On-device editing is coming.'
+        return finish()
+      }
       try {
         const { noteToAddressableText } = await import('@/ai/noteContext')
         const ok = await generate(q, [], noteToAddressableText(documentStore.doc))
@@ -111,20 +150,15 @@ export function useNotesChat() {
       } catch (e) {
         console.error('Notes chat: note edit failed', e)
         messages.value[idx].text = "I couldn't make that change. Check your key and try again."
-      } finally {
-        messages.value[idx].streaming = false
-        busy.value = false
       }
-      return
+      return finish()
     }
 
     // ASK: ground an answer in the retrieved notes. Retrieval runs on-device and is a separate
     // failure domain from the model call, so its errors are reported as retrieval errors — not
-    // misattributed to the AI provider.
+    // misattributed to the AI provider. The embedder times out rather than hanging forever.
     let sources: ChatSource[]
     try {
-      // Warm and refresh the local index (downloads the embedding model once), then retrieve from
-      // the live library only — trashed and archived notes never ground an answer.
       await indexAll()
       const liveIds = new Set(library.recent.map((e) => e.id))
       const hits = (await searchBlocks(q, TOP_K * 3)).filter((h) => liveIds.has(h.noteId)).slice(0, TOP_K)
@@ -141,38 +175,42 @@ export function useNotesChat() {
       const reason = String(e instanceof Error ? e.message : e)
         .replace(/^Error:\s*/, '')
         .slice(0, 140)
-      error.value = `Could not prepare on-device search: ${reason || 'unknown error'}. Reload and try again.`
-      messages.value[idx].streaming = false
-      busy.value = false
-      return
+      if (!signal.aborted) error.value = `Could not prepare on-device search: ${reason || 'unknown error'}.`
+      return finish()
     }
+    if (signal.aborted) return finish()
 
     messages.value[idx].sources = sources
     if (!sources.length) {
       messages.value[idx].text =
         "I couldn't find anything about that in your notes yet. Write a note on it and ask again."
-      messages.value[idx].streaming = false
-      busy.value = false
-      return
+      return finish()
     }
 
     try {
       const context = sources.map((s) => `[${s.n}] (${s.title}) ${s.text}`).join('\n')
       const prompt = `MY NOTES:\n${context}\n\nQUESTION: ${q}`
-      controller = new AbortController()
-      const request = { system: RAG_SYSTEM, prompt, attachments: [], maxTokens: 1000 }
-      for await (const delta of provider.stream(request, key, controller.signal)) {
-        messages.value[idx].text += delta
+      // On-device model when it is on; otherwise the connected provider. Both stream the same
+      // grounded prompt, so the answer and its citations are identical either way.
+      if (useLocal) {
+        for await (const delta of localStream(localMlcId, RAG_SYSTEM, prompt, 1000, signal)) {
+          messages.value[idx].text += delta
+        }
+      } else {
+        const request = { system: RAG_SYSTEM, prompt, attachments: [], maxTokens: 1000 }
+        for await (const delta of provider.stream(request, key!, signal)) {
+          messages.value[idx].text += delta
+        }
       }
     } catch (e) {
       if (!(e instanceof DOMException && e.name === 'AbortError')) {
         console.error('Notes chat: generation failed', e)
-        error.value = `Could not get an answer from ${provider.name}. Check your key and connection.`
+        error.value = useLocal
+          ? 'The on-device model could not answer. Try a smaller model in On-device AI, or connect a key.'
+          : `Could not get an answer from ${provider.name}. Check your key and connection.`
       }
     } finally {
-      messages.value[idx].streaming = false
-      busy.value = false
-      controller = null
+      finish()
     }
   }
 

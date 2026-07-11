@@ -6,6 +6,7 @@ import { nextTick, ref, watch } from 'vue'
 import { useNotesChat } from '@/compose/useNotesChat'
 import { embedStatus, embedProgress } from '@/ai/embeddings/embedder'
 import { indexing } from '@/ai/embeddings/semanticIndex'
+import { localStatus, localProgress } from '@/ai/local/localLlm'
 import Icon from './Icon.vue'
 import AnswerMarkdown from './AnswerMarkdown.vue'
 
@@ -42,8 +43,10 @@ watch(
 
 // While an answer is pending but no text has arrived yet, say what the device is doing.
 const statusLine = () => {
+  if (localStatus.value === 'loading')
+    return `Preparing the on-device model${localProgress.value != null ? ` … ${Math.round(localProgress.value * 100)}%` : '…'}`
   if (embedStatus.value === 'loading')
-    return `Preparing the on-device model${embedProgress.value != null ? ` … ${Math.round(embedProgress.value * 100)}%` : '…'}`
+    return `Preparing on-device search${embedProgress.value != null ? ` … ${Math.round(embedProgress.value * 100)}%` : '…'}`
   if (indexing.value) return 'Reading your notes…'
   return 'Searching your notes…'
 }
