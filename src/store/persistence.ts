@@ -416,6 +416,13 @@ export async function installPersistence(): Promise<void> {
   const libraryStore = useLibrary()
   const database = await db()
 
+  // Ask the browser, once at startup, to keep this site's storage from being evicted under
+  // pressure. Without this the notes database and — more visibly — a downloaded on-device model
+  // (WebLLM keeps its ~1 GB of weights in the Cache Storage) can be cleared by the browser on its
+  // own, so the model would silently need downloading again. Fire-and-forget so it never delays the
+  // first paint; the browser grants it quietly where it can.
+  void requestPersistentStorage()
+
   const savedSettings = await loadSettings()
   if (savedSettings) settingsStore.hydrate(savedSettings)
 
