@@ -566,7 +566,7 @@ const commands = computed<Command[]>(() => [
     id: 'chat',
     title: 'Chat with your notes',
     hint: 'grounded, cited answers',
-    icon: 'sparkleEdit',
+    icon: 'aiChat',
     run: () => (showChat.value = true),
   },
   {
@@ -783,9 +783,6 @@ function addPage() {
           <button class="icon-btn hide-mobile" title="Claude API key" @click="showKey = true">
             <Icon name="key" :size="18" />
           </button>
-          <button class="chip" title="Chat with your notes — grounded, cited answers" @click="showChat = true">
-            <Icon name="sparkleEdit" :size="18" /><span class="chip-text">Ask AI</span>
-          </button>
           <button v-if="generating" class="chip primary stop" title="Stop the AI" @click="stop">
             <Icon name="stop" :size="18" /><span class="chip-text">Stop</span>
           </button>
@@ -911,6 +908,18 @@ function addPage() {
     <GraphView v-if="showGraph" @close="showGraph = false" @open="openNoteById" />
 
     <StoragePanel v-if="showStorage" @close="showStorage = false" />
+
+    <!-- A floating button to chat with your notes, kept out of the crowded top bar. It tucks
+         away while the chat, the home screen, or a full-screen overlay is open. -->
+    <button
+      v-if="!showChat && !showHome && !showGraph"
+      class="ai-fab"
+      title="Chat with your notes"
+      aria-label="Chat with your notes"
+      @click="showChat = true"
+    >
+      <Icon name="aiChat" :size="24" />
+    </button>
 
     <NotesChat v-if="showChat" @close="showChat = false" @open="openNoteById" @need-key="showKey = true" />
 
@@ -1231,6 +1240,42 @@ function addPage() {
   bottom: max(18px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
   z-index: 40;
+}
+.ai-fab {
+  position: fixed;
+  right: max(20px, env(safe-area-inset-right));
+  bottom: calc(max(18px, env(safe-area-inset-bottom)) + 4px);
+  z-index: 60;
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #fff;
+  background: linear-gradient(135deg, #4a72b0, #7e3f8a);
+  box-shadow:
+    0 8px 22px var(--accent-shadow, rgba(74, 114, 176, 0.4)),
+    0 2px 6px rgba(0, 0, 0, 0.18);
+  transition:
+    transform 0.14s ease,
+    filter 0.14s ease;
+}
+.ai-fab:hover {
+  transform: translateY(-2px) scale(1.04);
+  filter: brightness(1.06);
+}
+.ai-fab:active {
+  transform: scale(0.96);
+}
+/* On phones the tool dock sits centre-bottom, so lift the button clear of it. */
+@media (max-width: 720px) {
+  .ai-fab {
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 76px);
+    width: 50px;
+    height: 50px;
+  }
 }
 .live-wrap {
   position: fixed;

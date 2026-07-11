@@ -73,6 +73,8 @@ export const icons: Record<string, string> = {
   folderPlus:
     '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>',
   chevronRight: '<path d="M9 6l6 6-6 6"/>',
+  aiChat:
+    '<path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-4-1L3 20l1-4.5a8.5 8.5 0 1 1 17-4z"/><path d="M12 8.1l.95 2.2 2.2.95-2.2.95L12 15.4l-.95-2.2-2.2-.95 2.2-.95z"/>',
   alignLeft:
     '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/>',
   alignCenter:

@@ -36,7 +36,7 @@ const emit = defineEmits<{
 
       <div class="section">AI</div>
       <button class="item" @click="emit('chat')">
-        <Icon name="sparkleEdit" :size="20" /><span>Chat with your notes</span>
+        <Icon name="aiChat" :size="20" /><span>Chat with your notes</span>
       </button>
       <button class="item" @click="emit('map')"><Icon name="diagram" :size="20" /><span>Note map</span></button>
 

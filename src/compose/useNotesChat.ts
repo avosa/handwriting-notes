@@ -75,28 +75,44 @@ export function useNotesChat() {
     const idx = messages.value.push({ role: 'assistant', text: '', sources: [], streaming: true }) - 1
     busy.value = true
 
+    // Retrieval runs on-device and is a separate failure domain from the model call, so its
+    // errors are reported as retrieval errors — not misattributed to the AI provider.
+    let sources: ChatSource[]
     try {
-      // Warm and refresh the local index (downloads the model once), then retrieve from the
-      // live library only — trashed and archived notes never ground an answer.
+      // Warm and refresh the local index (downloads the embedding model once), then retrieve from
+      // the live library only — trashed and archived notes never ground an answer.
       await indexAll()
       const liveIds = new Set(library.recent.map((e) => e.id))
       const hits = (await searchBlocks(q, TOP_K * 3)).filter((h) => liveIds.has(h.noteId)).slice(0, TOP_K)
       const titleOf = (id: string) => library.entries.find((e) => e.id === id)?.title || 'Untitled'
-      const sources: ChatSource[] = hits.map((h, i) => ({
+      sources = hits.map((h, i) => ({
         n: i + 1,
         noteId: h.noteId,
         title: titleOf(h.noteId),
         text: h.text,
         score: h.score,
       }))
-      messages.value[idx].sources = sources
+    } catch (e) {
+      console.error('Notes chat: on-device retrieval failed', e)
+      const reason = String(e instanceof Error ? e.message : e)
+        .replace(/^Error:\s*/, '')
+        .slice(0, 140)
+      error.value = `Could not prepare on-device search: ${reason || 'unknown error'}. Reload and try again.`
+      messages.value[idx].streaming = false
+      busy.value = false
+      return
+    }
 
-      if (!sources.length) {
-        messages.value[idx].text =
-          "I couldn't find anything about that in your notes yet. Write a note on it and ask again."
-        return
-      }
+    messages.value[idx].sources = sources
+    if (!sources.length) {
+      messages.value[idx].text =
+        "I couldn't find anything about that in your notes yet. Write a note on it and ask again."
+      messages.value[idx].streaming = false
+      busy.value = false
+      return
+    }
 
+    try {
       const context = sources.map((s) => `[${s.n}] (${s.title}) ${s.text}`).join('\n')
       const prompt = `MY NOTES:\n${context}\n\nQUESTION: ${q}`
       controller = new AbortController()
@@ -106,6 +122,7 @@ export function useNotesChat() {
       }
     } catch (e) {
       if (!(e instanceof DOMException && e.name === 'AbortError')) {
+        console.error('Notes chat: generation failed', e)
         error.value = `Could not get an answer from ${provider.name}. Check your key and connection.`
       }
     } finally {

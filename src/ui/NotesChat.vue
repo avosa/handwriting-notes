@@ -56,7 +56,7 @@ const statusLine = () => {
     <aside ref="card" class="panel" role="dialog" aria-modal="true" aria-label="Chat with your notes" tabindex="-1">
       <header class="head">
         <div class="title">
-          <Icon name="sparkleEdit" :size="16" />
+          <Icon name="aiChat" :size="17" />
           <h2>Chat with your notes</h2>
         </div>
         <button class="close" title="Close" @click="emit('close')"><Icon name="close" :size="16" /></button>
