@@ -55,6 +55,10 @@ async function aiOnNote(instruction: string) {
   const { noteToAddressableText } = await import('./ai/noteContext')
   void generate(instruction, [], noteToAddressableText(documentStore.doc))
 }
+const PROOFREAD_INSTRUCTION =
+  'Fix any spelling and grammar mistakes across the note, keeping my words, meaning, and layout. Do not rewrite lines that are already correct.'
+const EXTRACT_ACTIONS_INSTRUCTION =
+  'Find the tasks and action items in the note and add them as a task list at the end, one item per line. Do not change the rest of the note.'
 const { resolved: resolvedTheme } = useTheme()
 
 const mode = ref<'write' | 'draw'>('write')
@@ -552,20 +556,14 @@ const commands = computed<Command[]>(() => [
     title: 'Proofread this note (AI)',
     hint: 'fix spelling and grammar',
     icon: 'wand',
-    run: () =>
-      void aiOnNote(
-        'Fix any spelling and grammar mistakes across the note, keeping my words, meaning, and layout. Do not rewrite lines that are already correct.',
-      ),
+    run: () => void aiOnNote(PROOFREAD_INSTRUCTION),
   },
   {
     id: 'actions',
     title: 'Extract action items (AI)',
     hint: 'add a task list',
     icon: 'listBullet',
-    run: () =>
-      void aiOnNote(
-        'Find the tasks and action items in the note and add them as a task list at the end, one item per line. Do not change the rest of the note.',
-      ),
+    run: () => void aiOnNote(EXTRACT_ACTIONS_INSTRUCTION),
   },
   { id: 'write', title: 'Write mode', icon: 'write', run: () => (mode.value = 'write') },
   { id: 'draw', title: 'Draw mode', icon: 'draw', run: () => (mode.value = 'draw') },
@@ -918,9 +916,46 @@ function addPage() {
           <button v-if="generating" class="chip primary stop" title="Stop the AI" @click="stop">
             <Icon name="stop" :size="18" /><span class="chip-text">Stop</span>
           </button>
-          <button v-else class="chip primary" title="Write with AI" @click="showCompose = true">
-            <Icon name="wand" :size="18" /><span class="chip-text">Write with AI</span>
-          </button>
+          <Popover v-else align="right">
+            <template #trigger>
+              <button class="chip primary" title="AI">
+                <Icon name="aiChat" :size="18" /><span class="chip-text">AI</span>
+              </button>
+            </template>
+            <template #default>
+              <div class="menu ai-menu">
+                <button class="menu-item" @click="showCompose = true">
+                  <Icon name="wand" :size="16" /><span>Write with AI</span>
+                </button>
+                <button class="menu-item" @click="showChat = true">
+                  <Icon name="aiChat" :size="16" /><span>Chat with your notes</span>
+                </button>
+                <div class="menu-label">This note</div>
+                <button class="menu-item" @click="summarizeNote()">
+                  <Icon name="paragraph" :size="16" /><span>Summarise</span>
+                </button>
+                <button class="menu-item" @click="autoTitle()">
+                  <Icon name="title" :size="16" /><span>Auto-title</span>
+                </button>
+                <button class="menu-item" @click="autoTag()">
+                  <Icon name="tag" :size="16" /><span>Auto-tag</span>
+                </button>
+                <button class="menu-item" @click="aiOnNote(PROOFREAD_INSTRUCTION)">
+                  <Icon name="check" :size="16" /><span>Proofread</span>
+                </button>
+                <button class="menu-item" @click="aiOnNote(EXTRACT_ACTIONS_INSTRUCTION)">
+                  <Icon name="listBullet" :size="16" /><span>Extract action items</span>
+                </button>
+                <div class="sep" />
+                <button class="menu-item" @click="importInput?.click()">
+                  <Icon name="file" :size="16" /><span>Import a document</span>
+                </button>
+                <button class="menu-item" @click="showLocalAi = true">
+                  <Icon name="device" :size="16" /><span>On-device AI</span>
+                </button>
+              </div>
+            </template>
+          </Popover>
         </div>
       </header>
 
@@ -1579,6 +1614,17 @@ function addPage() {
 }
 .menu-item:hover {
   background: var(--accent-wash-2);
+}
+.menu-label {
+  padding: 10px 11px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.ai-menu {
+  min-width: 224px;
 }
 
 /* The drawer and its toggle belong to the phone; the desktop keeps its full top bar. */
