@@ -23,6 +23,8 @@ import CommandPalette from './ui/CommandPalette.vue'
 import type { Command } from './ui/CommandPalette.vue'
 import ShortcutsSheet from './ui/ShortcutsSheet.vue'
 import WelcomeSheet from './ui/WelcomeSheet.vue'
+import WhatsNewSheet from './ui/WhatsNewSheet.vue'
+import { APP_DOMAIN } from './brand'
 import HandwritingPicker from './tools/HandwritingPicker.vue'
 import ThemeSwitch from './ui/ThemeSwitch.vue'
 import NavDrawer from './ui/NavDrawer.vue'
@@ -43,7 +45,14 @@ const showHome = ref(false)
 const showPalette = ref(false)
 const showShortcuts = ref(false)
 const showWelcome = ref(false)
+const showWhatsNew = ref(false)
 const drawerOpen = ref(false)
+
+// Open the reader's mail app with a message addressed to the project, so a note of feedback
+// is one click away without any account or form.
+function sendFeedback() {
+  window.location.href = `mailto:feedback@${APP_DOMAIN}?subject=Feedback`
+}
 
 // The welcome card is shown once, the first time the app is opened on this device. A stored
 // mark keeps it from returning; it can still be reopened from the command bar.
@@ -201,6 +210,8 @@ const commands = computed<Command[]>(() => [
   { id: 'theme-system', title: 'Theme: System', icon: 'device', run: () => settings.setTheme('system') },
   { id: 'shortcuts', title: 'Keyboard shortcuts', hint: '?', run: () => (showShortcuts.value = true) },
   { id: 'welcome', title: 'Show welcome', icon: 'wand', run: () => (showWelcome.value = true) },
+  { id: 'whats-new', title: "What's new", run: () => (showWhatsNew.value = true) },
+  { id: 'feedback', title: 'Send feedback', icon: 'send', run: sendFeedback },
 ])
 
 // Whether the keyboard focus sits somewhere that owns the keystroke, so app shortcuts that
@@ -505,6 +516,8 @@ function addPage() {
     <ShortcutsSheet v-if="showShortcuts" @close="showShortcuts = false" />
 
     <WelcomeSheet v-if="showWelcome" @close="dismissWelcome" />
+
+    <WhatsNewSheet v-if="showWhatsNew" @close="showWhatsNew = false" />
 
     <Transition name="home-fade">
       <HomeScreen v-if="showHome" @close="showHome = false" />
