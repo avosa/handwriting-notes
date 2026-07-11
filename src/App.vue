@@ -27,6 +27,8 @@ import WhatsNewSheet from './ui/WhatsNewSheet.vue'
 import NoteInfo from './ui/NoteInfo.vue'
 import OutlinePanel from './ui/OutlinePanel.vue'
 import VersionHistory from './ui/VersionHistory.vue'
+import LinksPanel from './ui/LinksPanel.vue'
+import GraphView from './ui/GraphView.vue'
 import FindBar from './ui/FindBar.vue'
 import { APP_DOMAIN } from './brand'
 import { exportNoteAsText } from './export/toText'
@@ -55,7 +57,21 @@ const showWhatsNew = ref(false)
 const showInfo = ref(false)
 const showOutline = ref(false)
 const showHistory = ref(false)
+const showLinks = ref(false)
+const showGraph = ref(false)
 const showFind = ref(false)
+
+// Open a note chosen in the links panel or the map, then leave those overlays.
+async function openNoteById(id: string) {
+  await library.openNote(id)
+  showLinks.value = false
+  showGraph.value = false
+}
+// Swap the links panel for the full map.
+function openMap() {
+  showLinks.value = false
+  showGraph.value = true
+}
 const drawerOpen = ref(false)
 
 // Open the reader's mail app with a message addressed to the project, so a note of feedback
@@ -518,6 +534,20 @@ const commands = computed<Command[]>(() => [
     icon: 'undo',
     run: () => (showHistory.value = true),
   },
+  {
+    id: 'links',
+    title: 'Links and backlinks',
+    hint: '[[wiki links]]',
+    icon: 'external',
+    run: () => (showLinks.value = true),
+  },
+  {
+    id: 'graph',
+    title: 'Note map',
+    hint: 'graph of linked notes',
+    icon: 'diagram',
+    run: () => (showGraph.value = true),
+  },
   { id: 'whats-new', title: "What's new", run: () => (showWhatsNew.value = true) },
   { id: 'feedback', title: 'Send feedback', icon: 'send', run: sendFeedback },
 ])
@@ -842,6 +872,10 @@ function addPage() {
     <OutlinePanel v-if="showOutline" @close="showOutline = false" @jump="(id) => scrollToBlock(id, 'center')" />
 
     <VersionHistory v-if="showHistory" @close="showHistory = false" />
+
+    <LinksPanel v-if="showLinks" @close="showLinks = false" @open="openNoteById" @map="openMap" />
+
+    <GraphView v-if="showGraph" @close="showGraph = false" @open="openNoteById" />
 
     <FindBar v-if="showFind" @close="showFind = false" />
 
