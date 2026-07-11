@@ -5,7 +5,12 @@
 // app works with no network. There is no precise precache list: whatever the app fetches is kept.
 const CACHE = 'notes-shell-v1'
 
-self.addEventListener('install', () => self.skipWaiting())
+// A new worker used to take over the moment it installed. Now it waits instead, so the app can
+// show an "update ready" prompt and let the reader reload when they choose. The page asks the
+// waiting worker to take over by posting { type: 'skip-waiting' }.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'skip-waiting') self.skipWaiting()
+})
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(

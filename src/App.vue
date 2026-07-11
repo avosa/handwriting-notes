@@ -29,6 +29,7 @@ import OutlinePanel from './ui/OutlinePanel.vue'
 import VersionHistory from './ui/VersionHistory.vue'
 import LinksPanel from './ui/LinksPanel.vue'
 import GraphView from './ui/GraphView.vue'
+import PwaPrompts from './ui/PwaPrompts.vue'
 import FindBar from './ui/FindBar.vue'
 import { APP_DOMAIN } from './brand'
 import { exportNoteAsText } from './export/toText'
@@ -878,6 +879,8 @@ function addPage() {
     <GraphView v-if="showGraph" @close="showGraph = false" @open="openNoteById" />
 
     <FindBar v-if="showFind" @close="showFind = false" />
+
+    <PwaPrompts />
 
     <Transition name="home-fade">
       <HomeScreen v-if="showHome" @close="showHome = false" />

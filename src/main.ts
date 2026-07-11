@@ -13,12 +13,7 @@ async function bootstrap() {
   app.mount('#app')
 }
 
-// Register the service worker so the app installs and runs offline. It is optional: without
-// support, or if registration fails, the app still works, just without offline loading.
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js').catch(() => {})
-  })
-}
+// The service worker is registered from the app shell (see usePwa), so it can also surface the
+// install offer and the update-ready prompt. The app still works without it.
 
 void bootstrap()
