@@ -1,6 +1,35 @@
 // The app's icon set as inline SVG. Every icon is stroke based on a 24 unit grid and
 // inherits the current text colour, so buttons stay crisp at any size and never fall
 // back to an emoji. Each entry is the inner markup of a 24x24 SVG.
+export interface IconShape {
+  tag: string
+  attrs: Record<string, string>
+}
+
+// The inner markup of an icon parsed into its shapes once, so the icon component can render
+// real path and line elements rather than inject a string of markup. Parsing a trusted,
+// fixed set this way keeps icons out of any inline-markup path a strict policy forbids.
+const shapeCache = new Map<string, IconShape[]>()
+export function iconShapes(name: string): IconShape[] {
+  const cached = shapeCache.get(name)
+  if (cached) return cached
+  const markup = icons[name] ?? ''
+  const shapes: IconShape[] = []
+  if (markup && typeof DOMParser !== 'undefined') {
+    const parsed = new DOMParser().parseFromString(
+      `<svg xmlns="http://www.w3.org/2000/svg">${markup}</svg>`,
+      'image/svg+xml',
+    )
+    for (const el of Array.from(parsed.documentElement.children)) {
+      const attrs: Record<string, string> = {}
+      for (const attr of Array.from(el.attributes)) attrs[attr.name] = attr.value
+      shapes.push({ tag: el.tagName.toLowerCase(), attrs })
+    }
+  }
+  shapeCache.set(name, shapes)
+  return shapes
+}
+
 export const icons: Record<string, string> = {
   write: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   draw: '<path d="M15.5 3.5a2.12 2.12 0 0 1 3 3L7 18l-4 1 1-4Z"/><path d="M14 5l3 3"/>',
