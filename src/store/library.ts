@@ -15,6 +15,9 @@ import {
   exportAll,
   importAll,
   loadLibrary,
+  saveVersion,
+  getVersion,
+  deleteVersionsFor,
 } from './persistence'
 
 interface LibraryState {
@@ -65,11 +68,14 @@ export const useLibrary = defineStore('library', {
         entry.updatedAt = updatedAt
       }
     },
-    // Save the open note and keep its list row in step before moving away from it.
+    // Save the open note and keep its list row in step before moving away from it. Leaving a
+    // note is a natural moment to record a snapshot, so the history gathers a point each editing
+    // session; saveVersion decides for itself whether enough has changed to be worth keeping.
     async parkCurrent() {
       const documentStore = useDocument()
       this.touch(documentStore.doc.id, documentStore.doc.title, documentStore.doc.updatedAt)
       await saveNote(documentStore.doc)
+      await saveVersion(documentStore.doc)
     },
     async openNote(id: string) {
       const documentStore = useDocument()
@@ -131,6 +137,7 @@ export const useLibrary = defineStore('library', {
     async purgeNote(id: string) {
       const doc = await loadNote(id)
       await removeNote(id)
+      await deleteVersionsFor(id)
       if (doc) {
         for (const page of doc.pages) {
           for (const block of page.blocks) {
@@ -139,6 +146,27 @@ export const useLibrary = defineStore('library', {
         }
       }
       this.entries = this.entries.filter((e) => e.id !== id)
+    },
+    // Record a snapshot of the open note on demand, so the writer can mark a point to come back
+    // to. Forced, so it is kept even if little has changed since the last one.
+    async snapshotCurrent() {
+      const documentStore = useDocument()
+      await saveNote(documentStore.doc)
+      await saveVersion(documentStore.doc, true)
+    },
+    // Roll the open note back to an earlier snapshot. The current state is snapshotted first, so
+    // a restore is itself undoable from the history; then the old version is loaded and saved.
+    async restoreVersion(versionId: string) {
+      const documentStore = useDocument()
+      const version = await getVersion(versionId)
+      if (!version || version.noteId !== this.currentId) return
+      await saveVersion(documentStore.doc, true)
+      // Bring the old content back as a fresh edit, so the restored note sits at the top of the
+      // library rather than sinking to where its original timestamp would put it.
+      const restored: NoteDocument = { ...JSON.parse(JSON.stringify(version.doc)), updatedAt: Date.now() }
+      documentStore.hydrate(restored)
+      await saveNote(restored)
+      this.touch(restored.id, restored.title, restored.updatedAt)
     },
     // Empty the whole trash at once, purging every note in it for good.
     async emptyTrash() {

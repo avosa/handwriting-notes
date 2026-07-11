@@ -10,7 +10,7 @@ import { useSettings } from './settings'
 import { useLibrary } from './library'
 
 const DB_NAME = 'handwriting-notes'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const SETTINGS_KEY = 'current'
 const API_KEY_KEY = 'anthropic-api-key'
 const LIBRARY_KEY = 'library'
@@ -21,11 +21,21 @@ const VERSION_KEY = 'schema-version'
 // rendered, so a stored note can never blank the page.
 const SCHEMA_VERSION = 3
 
+/** A saved snapshot of a note at a moment in time, for the version history. */
+export interface VersionRecord {
+  id: string
+  noteId: string
+  ts: number
+  title: string
+  doc: NoteDocument
+}
+
 interface Stores {
   document: NoteDocument
   settings: Settings
   blobs: Blob
   meta: string | LibraryEntry[]
+  versions: VersionRecord
 }
 
 let dbPromise: Promise<IDBPDatabase<Stores>> | null = null
@@ -33,11 +43,15 @@ let dbPromise: Promise<IDBPDatabase<Stores>> | null = null
 function db(): Promise<IDBPDatabase<Stores>> {
   if (!dbPromise) {
     dbPromise = openDB<Stores>(DB_NAME, DB_VERSION, {
-      upgrade(database) {
-        database.createObjectStore('document')
-        database.createObjectStore('settings')
-        database.createObjectStore('blobs')
-        database.createObjectStore('meta')
+      upgrade(database, oldVersion) {
+        if (oldVersion < 1) {
+          database.createObjectStore('document')
+          database.createObjectStore('settings')
+          database.createObjectStore('blobs')
+          database.createObjectStore('meta')
+        }
+        // Version 2 adds the history store: past snapshots of each note, keyed by their own id.
+        if (oldVersion < 2) database.createObjectStore('versions')
       },
     })
   }
@@ -108,6 +122,56 @@ export async function importAll(data: {
 
 export async function saveNote(doc: NoteDocument): Promise<void> {
   await (await db()).put('document', plain(doc), doc.id)
+}
+
+// The most snapshots kept per note, and the least time between two automatic ones. Together
+// these bound the history to a manageable timeline without recording every keystroke.
+const MAX_VERSIONS = 40
+const MIN_VERSION_GAP_MS = 3 * 60 * 1000
+
+// Every stored snapshot for a note, newest first.
+export async function listVersions(noteId: string): Promise<VersionRecord[]> {
+  const all = await (await db()).getAll('versions')
+  return all.filter((v) => v.noteId === noteId).sort((a, b) => b.ts - a.ts)
+}
+
+export async function getVersion(id: string): Promise<VersionRecord | undefined> {
+  return (await db()).get('versions', id)
+}
+
+// Trim a note's history down to the newest MAX_VERSIONS, dropping the oldest beyond that.
+async function pruneVersions(noteId: string): Promise<void> {
+  const versions = await listVersions(noteId)
+  const database = await db()
+  for (const old of versions.slice(MAX_VERSIONS)) await database.delete('versions', old.id)
+}
+
+/**
+ * Record a snapshot of a note. An automatic save is skipped when the newest snapshot is very
+ * recent or the note is unchanged since it, so the history stays a timeline of real edits;
+ * `force` records regardless, for a snapshot the writer asked for or one taken before a restore.
+ * Returns whether a snapshot was actually written.
+ */
+export async function saveVersion(doc: NoteDocument, force = false): Promise<boolean> {
+  const database = await db()
+  const versions = await listVersions(doc.id)
+  const latest = versions[0]
+  if (!force && latest) {
+    const tooSoon = doc.updatedAt - latest.ts < MIN_VERSION_GAP_MS
+    const unchanged = JSON.stringify(latest.doc) === JSON.stringify(plain(doc))
+    if (tooSoon || unchanged) return false
+  }
+  const ts = Date.now()
+  const id = `${doc.id}:${ts}:${versions.length}`
+  const record: VersionRecord = { id, noteId: doc.id, ts, title: doc.title, doc: plain(doc) }
+  await database.put('versions', record, id)
+  await pruneVersions(doc.id)
+  return true
+}
+
+export async function deleteVersionsFor(noteId: string): Promise<void> {
+  const database = await db()
+  for (const v of await listVersions(noteId)) await database.delete('versions', v.id)
 }
 
 export async function deleteNote(id: string): Promise<void> {

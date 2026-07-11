@@ -26,6 +26,7 @@ import WelcomeSheet from './ui/WelcomeSheet.vue'
 import WhatsNewSheet from './ui/WhatsNewSheet.vue'
 import NoteInfo from './ui/NoteInfo.vue'
 import OutlinePanel from './ui/OutlinePanel.vue'
+import VersionHistory from './ui/VersionHistory.vue'
 import FindBar from './ui/FindBar.vue'
 import { APP_DOMAIN } from './brand'
 import { exportNoteAsText } from './export/toText'
@@ -53,6 +54,7 @@ const showWelcome = ref(false)
 const showWhatsNew = ref(false)
 const showInfo = ref(false)
 const showOutline = ref(false)
+const showHistory = ref(false)
 const showFind = ref(false)
 const drawerOpen = ref(false)
 
@@ -509,6 +511,13 @@ const commands = computed<Command[]>(() => [
     icon: 'listBullet',
     run: () => (showOutline.value = true),
   },
+  {
+    id: 'history',
+    title: 'Version history',
+    hint: 'restore an earlier version',
+    icon: 'undo',
+    run: () => (showHistory.value = true),
+  },
   { id: 'whats-new', title: "What's new", run: () => (showWhatsNew.value = true) },
   { id: 'feedback', title: 'Send feedback', icon: 'send', run: sendFeedback },
 ])
@@ -831,6 +840,8 @@ function addPage() {
     <NoteInfo v-if="showInfo" @close="showInfo = false" />
 
     <OutlinePanel v-if="showOutline" @close="showOutline = false" @jump="(id) => scrollToBlock(id, 'center')" />
+
+    <VersionHistory v-if="showHistory" @close="showHistory = false" />
 
     <FindBar v-if="showFind" @close="showFind = false" />
 
