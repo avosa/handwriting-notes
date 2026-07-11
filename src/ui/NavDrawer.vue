@@ -17,6 +17,8 @@ const emit = defineEmits<{
   (e: 'save-docx'): void
   (e: 'api-key'): void
   (e: 'compose'): void
+  (e: 'chat'): void
+  (e: 'map'): void
   (e: 'close'): void
 }>()
 </script>
@@ -31,6 +33,12 @@ const emit = defineEmits<{
     <div class="scroll">
       <button class="item" @click="emit('home')"><Icon name="grid" :size="20" /><span>All notes</span></button>
       <button class="item" @click="emit('new')"><Icon name="plus" :size="20" /><span>New note</span></button>
+
+      <div class="section">AI</div>
+      <button class="item" @click="emit('chat')">
+        <Icon name="sparkleEdit" :size="20" /><span>Chat with your notes</span>
+      </button>
+      <button class="item" @click="emit('map')"><Icon name="diagram" :size="20" /><span>Note map</span></button>
 
       <div class="section">Export</div>
       <button class="item" :disabled="exporting !== null" @click="emit('save-pdf')">
