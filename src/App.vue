@@ -117,6 +117,11 @@ async function openNoteById(id: string) {
   showGraph.value = false
   showChat.value = false
 }
+// Opening a cited note from chat switches the note behind the panel but leaves the chat open —
+// closing the conversation is the reader's choice, so they can follow several citations in a row.
+async function openNoteFromChat(id: string) {
+  await library.openNote(id)
+}
 // Swap the links panel for the full map.
 function openMap() {
   showLinks.value = false
@@ -977,7 +982,7 @@ function addPage() {
       <Icon name="aiChat" :size="24" />
     </button>
 
-    <NotesChat v-if="showChat" @close="showChat = false" @open="openNoteById" @need-key="showKey = true" />
+    <NotesChat v-if="showChat" @close="showChat = false" @open="openNoteFromChat" @need-key="showKey = true" />
 
     <FindBar v-if="showFind" @close="showFind = false" />
 
