@@ -8,6 +8,17 @@ export interface Release {
 
 export const changelog: Release[] = [
   {
+    version: '0.8',
+    date: 'July 2026',
+    items: [
+      'Search your notes by their contents, not only titles, and tag notes to filter the library.',
+      'Install the app and use it fully offline; your notes were always saved on the device.',
+      'Collapsible sections, math in LaTeX, table sort, resize, merge, and formulas.',
+      'Right-to-left writing, a high-contrast mode, larger or smaller text, and an emoji picker.',
+      'Comment on any line, and delete a table, callout, or diagram right where it sits.',
+    ],
+  },
+  {
     version: '0.7',
     date: 'July 2026',
     items: [
