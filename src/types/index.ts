@@ -274,6 +274,10 @@ export interface LibraryEntry {
   favorite: boolean
   /** Free-form labels the writer puts on a note, for filtering the library. */
   tags?: string[]
+  /** When the note was moved to the trash, in epoch ms. Unset means it is a live note.
+   *  A trashed note is hidden from the library but kept, so it can be restored; it is
+   *  purged for good after a grace period or when the trash is emptied. */
+  deletedAt?: number
 }
 
 export type AttachmentKind = 'image' | 'video' | 'document' | 'audio'

@@ -29,14 +29,18 @@ function entryFor(doc: NoteDocument, favorite = false): LibraryEntry {
 export const useLibrary = defineStore('library', {
   state: (): LibraryState => ({ entries: [], currentId: '' }),
   getters: {
-    recent: (state) => [...state.entries].sort((a, b) => b.updatedAt - a.updatedAt),
+    // The live notes, newest first. Trashed notes are held in `entries` but kept out of
+    // every list the writer browses, so a deleted note disappears until it is restored.
+    recent: (state) => state.entries.filter((e) => !e.deletedAt).sort((a, b) => b.updatedAt - a.updatedAt),
     favorites(): LibraryEntry[] {
       return this.recent.filter((e) => e.favorite)
     },
-    // Every label used across the library, sorted, for a filter row.
+    // Notes in the trash, most recently deleted first, for the recently-deleted view.
+    trash: (state) => state.entries.filter((e) => e.deletedAt).sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0)),
+    // Every label used across the live library, sorted, for a filter row.
     allTags(): string[] {
       const set = new Set<string>()
-      for (const e of this.entries) for (const t of e.tags ?? []) set.add(t)
+      for (const e of this.entries) if (!e.deletedAt) for (const t of e.tags ?? []) set.add(t)
       return [...set].sort()
     },
     current: (state) => state.entries.find((e) => e.id === state.currentId) ?? null,
@@ -94,9 +98,30 @@ export const useLibrary = defineStore('library', {
       await saveNote(copy)
       this.entries.push(entryFor(copy))
     },
+    // Move a note to the trash. The note and its pictures are kept so it can be brought
+    // back; it simply leaves every list. If the open note is the one deleted, another live
+    // note is opened, or a fresh one started when none remain.
     async deleteNote(id: string) {
-      // Free the pictures the note held before dropping it, so a deleted note leaves nothing
-      // behind in storage. A deleted note cannot be brought back, so its blobs are safe to go.
+      const entry = this.entries.find((e) => e.id === id)
+      if (!entry) return
+      entry.deletedAt = Date.now()
+      if (id === this.currentId) {
+        const next = this.recent[0]
+        if (next) await this.openInto(next.id)
+        else await this.createNote('blank')
+      }
+    },
+    // Bring a note back from the trash into the live library.
+    async restoreNote(id: string) {
+      const entry = this.entries.find((e) => e.id === id)
+      if (entry) {
+        delete entry.deletedAt
+        entry.updatedAt = Date.now()
+      }
+    },
+    // Delete a note for good: drop its record and free the pictures it held, so it leaves
+    // nothing behind in storage. This cannot be undone.
+    async purgeNote(id: string) {
       const doc = await loadNote(id)
       await removeNote(id)
       if (doc) {
@@ -107,9 +132,17 @@ export const useLibrary = defineStore('library', {
         }
       }
       this.entries = this.entries.filter((e) => e.id !== id)
-      if (id === this.currentId) {
-        if (this.entries.length) await this.openInto(this.recent[0].id)
-        else await this.createNote('blank')
+    },
+    // Empty the whole trash at once, purging every note in it for good.
+    async emptyTrash() {
+      for (const entry of this.trash) await this.purgeNote(entry.id)
+    },
+    // Purge trashed notes older than the grace period, run once at startup so the trash
+    // does not grow without bound. Thirty days matches the familiar recently-deleted window.
+    async purgeExpiredTrash() {
+      const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
+      for (const entry of this.trash) {
+        if ((entry.deletedAt ?? 0) < cutoff) await this.purgeNote(entry.id)
       }
     },
     async openInto(id: string) {

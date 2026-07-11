@@ -15,7 +15,7 @@ const emit = defineEmits<{ (e: 'close'): void }>()
 const library = useLibrary()
 const { matches, snippet } = useNoteSearch()
 
-const tab = ref<'recent' | 'favorites'>('recent')
+const tab = ref<'recent' | 'favorites' | 'trash'>('recent')
 const query = ref('')
 const renamingId = ref<string | null>(null)
 const renameInput = ref<HTMLInputElement | null>(null)
@@ -26,6 +26,7 @@ onMounted(() => void buildSearchIndex())
 
 const activeTag = ref<string | null>(null)
 const shown = computed(() => {
+  if (tab.value === 'trash') return library.trash
   let list = tab.value === 'favorites' ? library.favorites : library.recent
   if (activeTag.value) list = list.filter((e) => (e.tags ?? []).includes(activeTag.value!))
   const q = query.value.trim()
@@ -110,9 +111,18 @@ function commitRename(id: string) {
           <button :class="{ on: tab === 'favorites' }" @click="tab = 'favorites'">
             <Icon name="star" :size="15" /> Favourites
           </button>
+          <button :class="{ on: tab === 'trash' }" @click="tab = 'trash'">
+            <Icon name="trash" :size="15" /> Trash
+            <span v-if="library.trash.length" class="count">{{ library.trash.length }}</span>
+          </button>
         </div>
 
-        <div v-if="library.allTags.length" class="tag-filter">
+        <div v-if="tab === 'trash' && library.trash.length" class="trash-bar">
+          <span>Notes here are removed for good after 30 days.</span>
+          <button class="empty-trash" @click="library.emptyTrash()">Empty trash now</button>
+        </div>
+
+        <div v-if="tab !== 'trash' && library.allTags.length" class="tag-filter">
           <button class="tag-chip" :class="{ on: !activeTag }" @click="activeTag = null">All</button>
           <button
             v-for="t in library.allTags"
@@ -126,9 +136,18 @@ function commitRename(id: string) {
         </div>
 
         <div v-if="shown.length" class="grid">
-          <div v-for="e in shown" :key="e.id" class="card" :class="{ current: e.id === library.currentId }">
-            <button class="open" @click="open(e.id)"><NoteThumbnail :title="e.title" /></button>
+          <div
+            v-for="e in shown"
+            :key="e.id"
+            class="card"
+            :class="{ current: e.id === library.currentId && tab !== 'trash' }"
+          >
+            <button v-if="tab === 'trash'" class="open dim" title="Restore" @click="library.restoreNote(e.id)">
+              <NoteThumbnail :title="e.title" />
+            </button>
+            <button v-else class="open" @click="open(e.id)"><NoteThumbnail :title="e.title" /></button>
             <button
+              v-if="tab !== 'trash'"
               class="fav"
               :class="{ on: e.favorite }"
               :title="e.favorite ? 'Unfavourite' : 'Favourite'"
@@ -136,7 +155,21 @@ function commitRename(id: string) {
             >
               <Icon :name="e.favorite ? 'starFilled' : 'star'" :size="16" />
             </button>
-            <div class="meta">
+
+            <div v-if="tab === 'trash'" class="trash-card">
+              <span class="name plain">{{ e.title || 'Untitled' }}</span>
+              <span class="date">Deleted {{ when(e.deletedAt ?? 0) }}</span>
+              <div class="trash-actions">
+                <button class="tbtn" @click="library.restoreNote(e.id)">
+                  <Icon name="arrowLeft" :size="14" /> Restore
+                </button>
+                <button class="tbtn danger" @click="library.purgeNote(e.id)">
+                  <Icon name="trash" :size="14" /> Delete forever
+                </button>
+              </div>
+            </div>
+
+            <div v-else class="meta">
               <input
                 v-if="renamingId === e.id"
                 ref="renameInput"
@@ -191,17 +224,25 @@ function commitRename(id: string) {
                 </template>
               </Popover>
             </div>
-            <div v-if="(e.tags ?? []).length" class="card-tags">
+            <div v-if="tab !== 'trash' && (e.tags ?? []).length" class="card-tags">
               <span v-for="t in e.tags" :key="t" class="tag-chip small ghost">#{{ t }}</span>
             </div>
-            <span class="date">{{ when(e.updatedAt) }}</span>
-            <p v-if="excerptFor(e.id)" class="excerpt">{{ excerptFor(e.id) }}</p>
+            <span v-if="tab !== 'trash'" class="date">{{ when(e.updatedAt) }}</span>
+            <p v-if="tab !== 'trash' && excerptFor(e.id)" class="excerpt">{{ excerptFor(e.id) }}</p>
           </div>
         </div>
 
         <div v-else class="empty">
-          <Icon :name="tab === 'favorites' ? 'star' : 'grid'" :size="26" />
-          <p>{{ tab === 'favorites' ? 'Star a note to keep it here.' : 'No notes yet. Start one above.' }}</p>
+          <Icon :name="tab === 'favorites' ? 'star' : tab === 'trash' ? 'trash' : 'grid'" :size="26" />
+          <p>
+            {{
+              tab === 'favorites'
+                ? 'Star a note to keep it here.'
+                : tab === 'trash'
+                  ? 'The trash is empty.'
+                  : 'No notes yet. Start one above.'
+            }}
+          </p>
         </div>
       </section>
     </div>
@@ -560,6 +601,87 @@ h2 {
   height: 1px;
   background: var(--border);
   margin: 5px 8px;
+}
+.count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.trash-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.empty-trash {
+  border: 1px solid var(--danger, #c0392b);
+  background: transparent;
+  color: var(--danger, #c0392b);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.empty-trash:hover {
+  background: var(--danger-wash, rgba(192, 57, 43, 0.1));
+}
+.open.dim {
+  opacity: 0.7;
+}
+.open.dim:hover {
+  opacity: 1;
+}
+.trash-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 8px;
+}
+.name.plain {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.trash-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.tbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 5px 9px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+.tbtn:hover {
+  background: var(--accent-wash);
+}
+.tbtn.danger {
+  color: var(--danger, #c0392b);
+  border-color: transparent;
+}
+.tbtn.danger:hover {
+  background: var(--danger-wash, rgba(192, 57, 43, 0.1));
 }
 .empty {
   display: flex;

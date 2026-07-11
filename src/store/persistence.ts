@@ -212,11 +212,13 @@ export async function installPersistence(): Promise<void> {
     await database.put('meta', String(SCHEMA_VERSION), VERSION_KEY)
   }
 
-  // Open the most recent note, or start a fresh one if the library is empty.
+  // Open the most recent live note, or start a fresh one if the library is empty. A note in
+  // the trash is never reopened, so a device does not come back to a note the writer deleted.
+  const live = entries.filter((e) => !e.deletedAt)
   let currentId = await loadCurrentId()
   let openDoc: NoteDocument | undefined
-  if (currentId) openDoc = await loadNote(currentId)
-  if (!openDoc && entries.length) openDoc = await loadNote(entries[0].id)
+  if (currentId && live.some((e) => e.id === currentId)) openDoc = await loadNote(currentId)
+  if (!openDoc && live.length) openDoc = await loadNote(live[0].id)
   if (!openDoc) {
     openDoc = documentStore.doc
     entries = [entryFor(openDoc), ...entries]
@@ -228,6 +230,9 @@ export async function installPersistence(): Promise<void> {
   libraryStore.hydrate(entries, currentId)
   await saveLibrary(entries)
   await saveCurrentId(currentId)
+  // Clear out notes that have sat in the trash past the grace period, so it never grows without
+  // bound. Done after hydrate so the list on screen is already up.
+  void libraryStore.purgeExpiredTrash()
 
   const persistDoc = debounce((doc: NoteDocument) => {
     void saveNote(doc)
