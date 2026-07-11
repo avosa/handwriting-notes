@@ -47,7 +47,14 @@ import Popover from './ui/Popover.vue'
 const documentStore = useDocument()
 const library = useLibrary()
 const settings = useSettings()
-const { generating, phase, providerName, error: aiError, generate, stop, summarizeNote, autoTitle } = useAi()
+const { generating, phase, providerName, error: aiError, generate, stop, summarizeNote, autoTitle, autoTag } = useAi()
+
+// Run an AI instruction on the open note in place, the way "Work on this note" does — used by the
+// one-tap note actions (proofread, extract action items).
+async function aiOnNote(instruction: string) {
+  const { noteToAddressableText } = await import('./ai/noteContext')
+  void generate(instruction, [], noteToAddressableText(documentStore.doc))
+}
 const { resolved: resolvedTheme } = useTheme()
 
 const mode = ref<'write' | 'draw'>('write')
@@ -539,6 +546,27 @@ const commands = computed<Command[]>(() => [
   { id: 'compose', title: 'Write with AI', icon: 'wand', run: () => (showCompose.value = true) },
   { id: 'summarize', title: 'Summarise this note (AI)', icon: 'wand', run: () => void summarizeNote() },
   { id: 'autotitle', title: 'Title this note (AI)', icon: 'wand', run: () => void autoTitle() },
+  { id: 'autotag', title: 'Tag this note (AI)', icon: 'tag', run: () => void autoTag() },
+  {
+    id: 'proofread',
+    title: 'Proofread this note (AI)',
+    hint: 'fix spelling and grammar',
+    icon: 'wand',
+    run: () =>
+      void aiOnNote(
+        'Fix any spelling and grammar mistakes across the note, keeping my words, meaning, and layout. Do not rewrite lines that are already correct.',
+      ),
+  },
+  {
+    id: 'actions',
+    title: 'Extract action items (AI)',
+    hint: 'add a task list',
+    icon: 'listBullet',
+    run: () =>
+      void aiOnNote(
+        'Find the tasks and action items in the note and add them as a task list at the end, one item per line. Do not change the rest of the note.',
+      ),
+  },
   { id: 'write', title: 'Write mode', icon: 'write', run: () => (mode.value = 'write') },
   { id: 'draw', title: 'Draw mode', icon: 'draw', run: () => (mode.value = 'draw') },
   { id: 'pdf', title: 'Export as PDF', icon: 'download', run: () => void saveAs('pdf') },

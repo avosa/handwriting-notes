@@ -19,6 +19,7 @@ import { uid } from '@/util/id'
 import { loadApiKey } from '@/store/persistence'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
+import { useLibrary } from '@/store/library'
 import { getHandwriting } from '@/handwriting/registry'
 
 // The pace the words appear at: a few characters every short tick, quick but slow enough to
@@ -268,6 +269,8 @@ const SUMMARY_SYSTEM =
   'Summarise the notes the user gives into 3 to 6 short bullet points capturing the key ideas. Reply with only the points, each on its own line starting with "- ", no heading and no preamble. Never use a hyphen or dash as punctuation within a point.'
 const TITLE_SYSTEM =
   'Give a short, specific title of 3 to 6 words for the notes the user gives. Reply with only the title: no quotes, no preamble, no trailing punctuation.'
+const TAGS_SYSTEM =
+  'Suggest 3 to 5 short topic tags for the notes the user gives, each one or two words, lowercase. Reply with only the tags separated by commas, no preamble.'
 
 // A failed fetch throws a TypeError with no useful text; the provider's own errors already
 // read well, so only the bare network case needs dressing up.
@@ -526,6 +529,42 @@ export function useAi() {
     }
   }
 
+  // Suggest a few topic tags for the note and apply them to its library row, so a note files
+  // itself. Existing tags are left in place; only new ones are added.
+  async function autoTag(): Promise<boolean> {
+    error.value = null
+    const text = toPlainText(documentStore.doc).trim()
+    if (!text) {
+      error.value = 'Write some notes to tag first.'
+      return false
+    }
+    const provider = getProvider(settings.activeProvider)
+    const key = await loadApiKey(provider.id)
+    if (!key) {
+      error.value = `Add your ${provider.vendor} API key first, using the key button.`
+      return false
+    }
+    refining.value = true
+    try {
+      const out = await provider.complete(TAGS_SYSTEM, text, key, 60)
+      const tags = (out ?? '')
+        .split(/[,\n]/)
+        .map((t) => t.trim().toLowerCase().replace(/^#/, ''))
+        .filter((t) => t && t.length <= 24)
+        .slice(0, 5)
+      if (!tags.length) throw new Error(`${provider.name} suggested no tags.`)
+      const library = useLibrary()
+      const existing = new Set(library.current?.tags ?? [])
+      for (const tag of tags) if (!existing.has(tag)) library.toggleTag(library.currentId, tag)
+      return true
+    } catch (e) {
+      error.value = reason(e, provider.name, 'Tags could not be suggested.')
+      return false
+    } finally {
+      refining.value = false
+    }
+  }
+
   return {
     generating,
     phase,
@@ -538,5 +577,6 @@ export function useAi() {
     refining,
     summarizeNote,
     autoTitle,
+    autoTag,
   }
 }
