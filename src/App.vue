@@ -166,13 +166,91 @@ function followWriting() {
 // A little room left at the foot of a page, matching the writing column, so paginated content
 // stops short of the edge like real paper.
 const PAGE_FOOT_MM = 12
+// The text length of an editable, not counting the zero-width placeholder used for empty lines.
+function textLength(editable: HTMLElement): number {
+  return (editable.textContent ?? '').split('\u200B').join('').length
+}
+// Map a plainText offset within an editable back to a DOM node and offset, skipping placeholders,
+// so a range can be measured or set exactly where a character sits.
+function domPointAt(editable: HTMLElement, target: number): { node: Node; offset: number } {
+  const walker = document.createTreeWalker(editable, NodeFilter.SHOW_TEXT)
+  let remaining = target
+  let node = walker.nextNode()
+  let last: Node | null = node
+  while (node) {
+    const raw = node.textContent ?? ''
+    const real = raw.replace(/\u200B/g, '').length
+    if (remaining <= real) {
+      let idx = 0
+      let seen = 0
+      while (idx < raw.length && seen < remaining) {
+        if (raw[idx] !== '\u200B') seen += 1
+        idx += 1
+      }
+      return { node, offset: idx }
+    }
+    remaining -= real
+    last = node
+    node = walker.nextNode()
+  }
+  return last ? { node: last, offset: (last.textContent ?? '').length } : { node: editable, offset: 0 }
+}
+// The top of the caret at an offset, relative to the page top. Measured from a range, so it is
+// independent of how the page is scrolled, unlike a hit test against viewport coordinates.
+function caretTopRel(editable: HTMLElement, offset: number, pageTop: number): number {
+  const at = domPointAt(editable, offset)
+  const range = document.createRange()
+  range.setStart(at.node, at.offset)
+  range.setEnd(at.node, at.offset)
+  let rect = range.getBoundingClientRect()
+  if (!rect.height) {
+    const end = domPointAt(editable, Math.min(offset + 1, textLength(editable)))
+    range.setEnd(end.node, end.offset)
+    rect = range.getBoundingClientRect()
+  }
+  return rect.top - pageTop
+}
+// Where to split a paragraph so the part that fits stays on the page: the offset of the first
+// character on the first wrapped line whose bottom would spill past the limit. -1 when even the
+// first line does not fit, or when there is nothing to split, so the caller moves the block whole.
+function splitOffsetFor(blockEl: HTMLElement, pageTop: number, limit: number): number {
+  const editable = (
+    blockEl.classList.contains('editable') ? blockEl : blockEl.querySelector('.editable')
+  ) as HTMLElement | null
+  if (!editable) return -1
+  // A range over the whole content yields one rect per wrapped line, unlike the element box.
+  const contents = document.createRange()
+  contents.selectNodeContents(editable)
+  const lines = Array.from(contents.getClientRects())
+  const spill = lines.find((r) => r.bottom - pageTop > limit)
+  if (!spill) return -1
+  const spillTop = spill.top - pageTop
+  if (spillTop < 2) return -1
+  // Binary-search the first offset that sits on the spilling line or below it.
+  const total = textLength(editable)
+  let lo = 0
+  let hi = total
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (caretTopRel(editable, mid, pageTop) >= spillTop - 1) hi = mid
+    else lo = mid + 1
+  }
+  return lo > 0 && lo < total ? lo : -1
+}
+
 // Carry anything that overruns a fixed page onto the next sheet, page by page, until every page
 // holds only what fits. The AI writes onto a page that grows as it goes; once it finishes and the
-// page snaps back to a single sheet, this splits the overflow across as many pages as it takes,
-// so nothing is ever clipped past the page edge. Whole blocks move, never text, so it cannot
-// corrupt a line. A block taller than a page on its own is left where it is, so it cannot loop.
-function reflowPages(guard = 0) {
-  if (guard > 400) return
+// page snaps back to a single sheet, this flows the overflow across as many pages as it takes, so
+// nothing is ever clipped past the page edge. A paragraph too tall for the space left is split at
+// the line boundary so the part that fits stays and the rest flows on, filling the page rather
+// than jumping whole and leaving a gap; a block that cannot be split moves whole. Split paragraphs
+// are re-joined first so the breaks are always recomputed fresh and never accumulate.
+function reflowPages() {
+  documentStore.mergeSplitContinuations()
+  void nextTick(() => reflowStep(0))
+}
+function reflowStep(guard: number) {
+  if (guard > 800) return
   const pages = Array.from(document.querySelectorAll('.note-page')) as HTMLElement[]
   for (const pageEl of pages) {
     // Measure against the page's target height from its inline style, not clientHeight: the page
@@ -184,12 +262,30 @@ function reflowPages(guard = 0) {
     const limit = height - (PAGE_FOOT_MM * pageEl.clientWidth) / 210
     const top = pageEl.getBoundingClientRect().top
     const blocks = Array.from(pageEl.querySelectorAll('.text-layer > [data-block-id]')) as HTMLElement[]
-    for (let j = 1; j < blocks.length; j++) {
-      if (blocks[j].getBoundingClientRect().bottom - top > limit) {
-        documentStore.movePageTail(blocks[j].getAttribute('data-block-id')!)
-        void nextTick(() => reflowPages(guard + 1))
-        return
+    for (let j = 0; j < blocks.length; j++) {
+      const el = blocks[j]
+      if (el.getBoundingClientRect().bottom - top <= limit) continue
+      const id = el.getAttribute('data-block-id')!
+      // A paragraph that overruns the page is split so the fitting lines stay and the rest flows
+      // on. Splitting is safe even for the page's first block, since the head stays put; only a
+      // whole-block move is barred for the first block, which would empty the page into a loop.
+      if (el.classList.contains('paragraph')) {
+        const offset = splitOffsetFor(el, top, limit)
+        if (offset > 0) {
+          const tailId = documentStore.splitParagraphAt(id, offset)
+          if (tailId) {
+            documentStore.movePageTail(tailId)
+            void nextTick(() => reflowStep(guard + 1))
+            return
+          }
+        }
       }
+      // A block that cannot be split moves whole, unless it is the page's first block, which is
+      // left where it is (a lone figure or unsplittable line taller than a page cannot be helped).
+      if (j === 0) continue
+      documentStore.movePageTail(id)
+      void nextTick(() => reflowStep(guard + 1))
+      return
     }
   }
 }

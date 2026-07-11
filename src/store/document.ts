@@ -6,7 +6,7 @@ import type { Block, CalloutBox, NoteDocument, Page, Stroke, TextRole, TextRun }
 import { blankDocument, blankPage } from '@/content/blankDocument'
 import { toScene } from '@/diagrams/diagramSpec'
 import { uid } from '@/util/id'
-import { replaceInRuns } from '@/ui/richText'
+import { replaceInRuns, splitRuns } from '@/ui/richText'
 
 interface DocumentState {
   doc: NoteDocument
@@ -740,6 +740,69 @@ export const useDocument = defineStore('document', {
       this.doc.pages.forEach((p, i) => (p.index = i))
       this.touch()
       return true
+    },
+    // Split a paragraph at a character offset so the words up to there stay put and the rest
+    // becomes a new paragraph right below, marked as a continuation. Used when a paragraph is too
+    // tall to fit the space left on a page: the part that fits stays, the tail flows on, so the
+    // page is filled rather than the whole block jumping and leaving a gap. Returns the tail's id.
+    splitParagraphAt(blockId: string, offset: number): string | null {
+      const at = this.locate(blockId)
+      if (at?.block.type !== 'text') return null
+      const runs = at.block.text.runs
+      const total = runs.reduce((n, r) => n + r.text.length, 0)
+      if (offset <= 0 || offset >= total) return null
+      const [head, tail] = splitRuns(runs, offset)
+      at.block.text.runs = head.length ? head : [{ text: '' }]
+      const src = at.block.text
+      const tailBlock: Block = {
+        id: uid('b'),
+        type: 'text',
+        text: {
+          id: uid('t'),
+          role: src.role,
+          align: src.align,
+          indent: src.indent,
+          runs: tail.length ? tail : [{ text: '' }],
+          splitContinues: true,
+        },
+      }
+      this.doc.pages[at.pageIndex].blocks.splice(at.blockIndex + 1, 0, tailBlock)
+      this.touch()
+      return tailBlock.id
+    },
+    // Re-join every paragraph that was split at a page boundary, so paragraphs are whole again
+    // before pagination decides afresh where the breaks fall. A continuation's words are appended
+    // to the text block right above it in reading order — even across a page — and the now empty
+    // continuation is removed; a page left blank by this is dropped. Returns whether anything
+    // changed, so a caller can re-measure only when it must.
+    mergeSplitContinuations(): boolean {
+      let changed = false
+      let prev: Extract<Block, { type: 'text' }> | null = null
+      for (const page of this.doc.pages) {
+        for (let i = 0; i < page.blocks.length;) {
+          const b = page.blocks[i]
+          if (b.type === 'text' && b.text.splitContinues && prev) {
+            prev.text.runs = [...prev.text.runs, ...b.text.runs].filter((r) => r.text.length)
+            if (!prev.text.runs.length) prev.text.runs = [{ text: '' }]
+            page.blocks.splice(i, 1)
+            changed = true
+            continue
+          }
+          prev = b.type === 'text' ? b : null
+          i += 1
+        }
+      }
+      if (changed) {
+        for (let i = this.doc.pages.length - 1; i > 0; i--) {
+          const p = this.doc.pages[i]
+          if (!p.blocks.length && (p.strokes?.length ?? 0) === 0 && (p.notes?.length ?? 0) === 0) {
+            this.doc.pages.splice(i, 1)
+          }
+        }
+        this.doc.pages.forEach((p, i) => (p.index = i))
+        this.touch()
+      }
+      return changed
     },
     // Pull the first block of a page onto the end of the page before it, so content flows back
     // up to fill the space above. A page left with nothing on it is dropped, closing the gap.

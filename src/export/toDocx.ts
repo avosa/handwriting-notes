@@ -17,6 +17,7 @@ import {
   type ISectionOptions,
 } from 'docx'
 import type { Block, NoteDocument, Page, TextRole, TextRun } from '@/types'
+import { joinSplitParagraphs } from './continuations'
 import { getPreset, ruleYs, type SheetPreset } from '@/paper/sheetSpec'
 import { getHandwriting } from '@/handwriting/registry'
 import { renderDiagram } from '@/diagrams/render'
@@ -353,6 +354,7 @@ async function pageChildren(
 }
 
 export async function documentToDocx(doc: NoteDocument): Promise<Blob> {
+  doc = joinSplitParagraphs(doc)
   const handwriting = getHandwriting(useSettings().activeHandwritingId)
   const bodyFont = handwriting.bodyFont
   const headerFont = handwriting.headerFont

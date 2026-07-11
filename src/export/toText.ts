@@ -2,6 +2,7 @@
 // Markdown for a document that keeps its structure, and a self-contained HTML page. Each walks
 // the same blocks and differs only in how a line is dressed, so the three never drift apart.
 import type { Block, NoteDocument, Page, TextRun } from '@/types'
+import { joinSplitParagraphs } from './continuations'
 
 function plain(runs: TextRun[]): string {
   return runs.map((r) => r.text).join('')
@@ -168,6 +169,7 @@ function pageLines(page: Page, d: Dress, kind: 'text' | 'md' | 'html'): string[]
 }
 
 export function toPlainText(doc: NoteDocument): string {
+  doc = joinSplitParagraphs(doc)
   const d = { runs: plain }
   const lines: string[] = []
   if (doc.title.trim()) lines.push(doc.title.trim(), '')
@@ -181,6 +183,7 @@ export function toPlainText(doc: NoteDocument): string {
 }
 
 export function toMarkdown(doc: NoteDocument): string {
+  doc = joinSplitParagraphs(doc)
   const d = { runs: markdownRuns }
   const lines: string[] = []
   if (doc.title.trim()) lines.push(`# ${doc.title.trim()}`, '')
@@ -194,6 +197,7 @@ export function toMarkdown(doc: NoteDocument): string {
 }
 
 export function toHtml(doc: NoteDocument): string {
+  doc = joinSplitParagraphs(doc)
   const d = { runs: htmlRuns }
   const body: string[] = []
   for (const page of doc.pages) body.push(...pageLines(page, d, 'html'))

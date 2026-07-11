@@ -50,6 +50,10 @@ export interface Paragraph {
   align?: TextAlign
   /** Extra left inset in millimetres, for indented passages. */
   indent?: number
+  /** True when this block is the continuation of a paragraph that was split at a page boundary,
+   *  so its words carry on from the block above. Pagination re-joins these before it re-splits,
+   *  and exports merge them back into one paragraph. */
+  splitContinues?: boolean
 }
 
 /** A coloured, bordered box holding a heading and a few lines, drawn hand-ruled. */

@@ -17,6 +17,7 @@ export const changelog: Release[] = [
       'Right-click a page for a page break anywhere, and pages flow and merge like a document.',
       'Backspace at the start of a line now pulls it up past a divider or figure above.',
       'Long AI notes flow across as many sheets as they need, and a heading is never left behind.',
+      'A paragraph too long for a page now splits at the line, filling the page before it carries on.',
       'Manus now reads attached images, PDFs, documents, and voice notes, not just text.',
     ],
   },

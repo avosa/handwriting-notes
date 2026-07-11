@@ -365,6 +365,62 @@ describe('document store', () => {
     expect(doc.doc.pages[1].blocks.map((b) => b.id)).toEqual(['body'])
   })
 
+  it('splits a paragraph at an offset, marking the tail a continuation, then rejoins it', () => {
+    const doc = useDocument()
+    doc.doc.pages[0].blocks = [
+      {
+        id: 'p',
+        type: 'text',
+        text: { id: 'tp', role: 'body', align: 'justify', runs: [{ text: 'Hello ' }, { text: 'world', bold: true }] },
+      },
+    ]
+    const tailId = doc.splitParagraphAt('p', 6)
+    expect(tailId).toBeTruthy()
+    const head = doc.locate('p')!.block
+    const tail = doc.locate(tailId!)!.block
+    expect(head.type === 'text' && head.text.runs.map((r) => r.text).join('')).toBe('Hello ')
+    expect(tail.type === 'text' && tail.text.runs.map((r) => r.text).join('')).toBe('world')
+    // The tail keeps the paragraph's look and is flagged as carrying on from the head.
+    expect(tail.type === 'text' && tail.text.role).toBe('body')
+    expect(tail.type === 'text' && tail.text.align).toBe('justify')
+    expect(tail.type === 'text' && tail.text.runs[0].bold).toBe(true)
+    expect(tail.type === 'text' && tail.text.splitContinues).toBe(true)
+    // An out-of-range split does nothing.
+    expect(doc.splitParagraphAt('p', 0)).toBeNull()
+
+    // Rejoining puts the words back into one whole paragraph and drops the continuation.
+    doc.mergeSplitContinuations()
+    expect(doc.doc.pages[0].blocks).toHaveLength(1)
+    const whole = doc.locate('p')!.block
+    expect(whole.type === 'text' && whole.text.runs.map((r) => r.text).join('')).toBe('Hello world')
+  })
+
+  it('rejoins a continuation that flowed onto the next page, dropping the emptied page', () => {
+    const doc = useDocument()
+    doc.doc.pages = [
+      {
+        id: 'p0',
+        index: 0,
+        presetId: '1C',
+        blocks: [{ id: 'h', type: 'text', text: { id: 'th', role: 'body', runs: [{ text: 'Hello ' }] } }],
+        strokes: [],
+      },
+      {
+        id: 'p1',
+        index: 1,
+        presetId: '1C',
+        blocks: [
+          { id: 't', type: 'text', text: { id: 'tt', role: 'body', runs: [{ text: 'world' }], splitContinues: true } },
+        ],
+        strokes: [],
+      },
+    ] as never
+    doc.mergeSplitContinuations()
+    expect(doc.doc.pages).toHaveLength(1)
+    const whole = doc.locate('h')!.block
+    expect(whole.type === 'text' && whole.text.runs.map((r) => r.text).join('')).toBe('Hello world')
+  })
+
   it('fills a stroke by id', () => {
     const doc = useDocument()
     doc.addStroke(0, { id: 's1', tool: 'fine', color: '#000', width: 1, points: [{ x: 0, y: 0, pressure: 1 }] })

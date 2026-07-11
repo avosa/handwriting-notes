@@ -71,6 +71,28 @@ describe('note text export', () => {
     expect(html).toContain('<input type="checkbox" disabled> call mum')
   })
 
+  it('rejoins a paragraph split across a page boundary when exporting', () => {
+    const d = doc()
+    d.pages[0].blocks = [
+      { id: 'h', type: 'text', text: { id: 'th', role: 'body', runs: [{ text: 'The quick brown ' }] } },
+    ]
+    d.pages.push({
+      id: 'p2',
+      index: 1,
+      blocks: [
+        {
+          id: 't',
+          type: 'text',
+          text: { id: 'tt', role: 'body', runs: [{ text: 'fox jumps.' }], splitContinues: true },
+        },
+      ],
+    } as never)
+    // The words read as one paragraph, not two, in every text format.
+    expect(toPlainText(d)).toContain('The quick brown fox jumps.')
+    expect(toMarkdown(d)).toContain('The quick brown fox jumps.')
+    expect(toHtml(d)).toContain('The quick brown fox jumps.')
+  })
+
   it('nests an indented list by depth in Markdown and HTML', () => {
     const d = doc()
     d.pages[0].blocks.push({

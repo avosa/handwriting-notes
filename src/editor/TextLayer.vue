@@ -62,7 +62,9 @@ function defaultAlign(role: TextRole): 'left' | 'center' | 'justify' {
 
 function paragraphStyle(block: Extract<Block, { type: 'text' }>): CSSProperties {
   const t = block.text
-  const leadRules = Math.round(props.metrics.roleLeadIn[t.role])
+  // A continuation carries no lead-in space, so a paragraph split across a page boundary reads as
+  // one unbroken passage rather than two with a gap between.
+  const leadRules = t.splitContinues ? 0 : Math.round(props.metrics.roleLeadIn[t.role])
   return {
     fontFamily: roleFont(t.role),
     fontSize: `${props.metrics.fontSize[t.role] * props.pxPerMm * (block.scale ?? 1)}px`,

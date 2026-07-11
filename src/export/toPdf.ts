@@ -13,6 +13,7 @@ import { rect as wobbleRect, line as wobbleLine, hashSeed } from '@/diagrams/wob
 import { penProfile } from '@/tools/penTypes'
 import { useSettings } from '@/store/settings'
 import { listMarkers } from '@/util/listMarker'
+import { joinSplitParagraphs } from './continuations'
 
 const MM_TO_PT = 72 / 25.4
 const mm = (v: number) => v * MM_TO_PT
@@ -542,6 +543,7 @@ function layoutBlocks(
 }
 
 export async function documentToPdf(doc: NoteDocument): Promise<Uint8Array> {
+  doc = joinSplitParagraphs(doc)
   const pdf = await PDFDocument.create()
   pdf.registerFontkit(fontkit)
   const hand = getHandwriting(useSettings().activeHandwritingId)
