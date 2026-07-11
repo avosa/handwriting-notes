@@ -278,6 +278,11 @@ export interface LibraryEntry {
    *  A trashed note is hidden from the library but kept, so it can be restored; it is
    *  purged for good after a grace period or when the trash is emptied. */
   deletedAt?: number
+  /** Kept at the top of the library, ahead of the sort. Unset means an ordinary note. */
+  pinned?: boolean
+  /** When the note was archived, in epoch ms. An archived note is filed away out of the
+   *  main list but is not deleted; it lives in its own Archive view until brought back. */
+  archivedAt?: number
 }
 
 export type AttachmentKind = 'image' | 'video' | 'document' | 'audio'

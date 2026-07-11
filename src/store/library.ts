@@ -29,18 +29,25 @@ function entryFor(doc: NoteDocument, favorite = false): LibraryEntry {
 export const useLibrary = defineStore('library', {
   state: (): LibraryState => ({ entries: [], currentId: '' }),
   getters: {
-    // The live notes, newest first. Trashed notes are held in `entries` but kept out of
-    // every list the writer browses, so a deleted note disappears until it is restored.
-    recent: (state) => state.entries.filter((e) => !e.deletedAt).sort((a, b) => b.updatedAt - a.updatedAt),
+    // The live notes, newest first. Trashed and archived notes are held in `entries` but
+    // kept out of the main list, so a note that was deleted or filed away disappears from
+    // here until it is restored or unarchived.
+    recent: (state) =>
+      state.entries.filter((e) => !e.deletedAt && !e.archivedAt).sort((a, b) => b.updatedAt - a.updatedAt),
     favorites(): LibraryEntry[] {
       return this.recent.filter((e) => e.favorite)
     },
+    // Notes filed away in the archive, most recently archived first.
+    archived: (state) =>
+      state.entries
+        .filter((e) => !e.deletedAt && e.archivedAt)
+        .sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0)),
     // Notes in the trash, most recently deleted first, for the recently-deleted view.
     trash: (state) => state.entries.filter((e) => e.deletedAt).sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0)),
     // Every label used across the live library, sorted, for a filter row.
     allTags(): string[] {
       const set = new Set<string>()
-      for (const e of this.entries) if (!e.deletedAt) for (const t of e.tags ?? []) set.add(t)
+      for (const e of this.entries) if (!e.deletedAt && !e.archivedAt) for (const t of e.tags ?? []) set.add(t)
       return [...set].sort()
     },
     current: (state) => state.entries.find((e) => e.id === state.currentId) ?? null,
@@ -162,6 +169,33 @@ export const useLibrary = defineStore('library', {
     toggleFavorite(id: string) {
       const entry = this.entries.find((e) => e.id === id)
       if (entry) entry.favorite = !entry.favorite
+    },
+    // Pin a note to the top of the library, or release it. Pinned notes lead every sort.
+    togglePin(id: string) {
+      const entry = this.entries.find((e) => e.id === id)
+      if (entry) entry.pinned = !entry.pinned
+    },
+    // File a note away into the archive. Like the trash it leaves the main list, but it is a
+    // tidy keep rather than a delete: it stays until unarchived and is never purged. If the
+    // open note is archived, another live note is opened, or a fresh one started when none remain.
+    async archiveNote(id: string) {
+      const entry = this.entries.find((e) => e.id === id)
+      if (!entry) return
+      entry.archivedAt = Date.now()
+      entry.pinned = false
+      if (id === this.currentId) {
+        const next = this.recent[0]
+        if (next) await this.openInto(next.id)
+        else await this.createNote('blank')
+      }
+    },
+    // Bring an archived note back into the main library.
+    async unarchiveNote(id: string) {
+      const entry = this.entries.find((e) => e.id === id)
+      if (entry) {
+        delete entry.archivedAt
+        entry.updatedAt = Date.now()
+      }
     },
     // Add or remove a label on a note, trimmed and kept unique, so the library can be filtered by it.
     toggleTag(id: string, tag: string) {

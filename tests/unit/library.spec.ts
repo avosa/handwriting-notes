@@ -67,3 +67,48 @@ describe('library trash', () => {
     expect(lib.trash.map((e) => e.id)).toEqual(['b', 'a'])
   })
 })
+
+describe('library archive and pin', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  function seed() {
+    const lib = useLibrary()
+    lib.hydrate(
+      [
+        { id: 'a', title: 'Alpha', createdAt: 0, updatedAt: 2, favorite: false, tags: ['keep'] },
+        { id: 'b', title: 'Bravo', createdAt: 0, updatedAt: 1, favorite: false },
+      ],
+      'x',
+    )
+    return lib
+  }
+
+  it('archives a note out of the main list into its own view, and brings it back', async () => {
+    const lib = seed()
+    await lib.archiveNote('a')
+    expect(lib.recent.map((e) => e.id)).toEqual(['b'])
+    expect(lib.archived.map((e) => e.id)).toEqual(['a'])
+    expect(lib.allTags).toEqual([])
+    await lib.unarchiveNote('a')
+    expect(lib.archived).toEqual([])
+    expect(lib.recent.map((e) => e.id)).toContain('a')
+    expect(lib.allTags).toEqual(['keep'])
+  })
+
+  it('archiving clears a pin so a filed note does not float when it returns unpinned', async () => {
+    const lib = seed()
+    lib.togglePin('a')
+    expect(lib.entries.find((e) => e.id === 'a')!.pinned).toBe(true)
+    await lib.archiveNote('a')
+    expect(lib.entries.find((e) => e.id === 'a')!.pinned).toBe(false)
+  })
+
+  it('a trashed or archived note is not counted among the live library', async () => {
+    const lib = seed()
+    await lib.archiveNote('a')
+    await lib.deleteNote('b')
+    expect(lib.recent).toEqual([])
+    expect(lib.archived.map((e) => e.id)).toEqual(['a'])
+    expect(lib.trash.map((e) => e.id)).toEqual(['b'])
+  })
+})

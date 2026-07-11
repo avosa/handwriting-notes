@@ -66,6 +66,9 @@ export const icons: Record<string, string> = {
   pageBreak: '<path d="M6 4h12"/><path d="M6 20h12"/><path d="M4 12h4"/><path d="M10 12h4"/><path d="M16 12h4"/>',
   trash:
     '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M5 6l1 14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-14"/>',
+  archive:
+    '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><line x1="10" y1="12" x2="14" y2="12"/>',
+  pin: '<path d="M9 3h6l-1 6 3 3v2H7v-2l3-3z"/><line x1="12" y1="14" x2="12" y2="21"/>',
   alignLeft:
     '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/>',
   alignCenter:

@@ -4,6 +4,7 @@
 // with a star and a small menu to open, rename, duplicate, or delete. Choosing a note
 // or a template opens it in the editor.
 import { computed, nextTick, onMounted, ref } from 'vue'
+import type { LibraryEntry } from '@/types'
 import { useLibrary } from '@/store/library'
 import { templates } from '@/content/blankDocument'
 import { buildSearchIndex, useNoteSearch } from './noteSearch'
@@ -15,7 +16,8 @@ const emit = defineEmits<{ (e: 'close'): void }>()
 const library = useLibrary()
 const { matches, snippet } = useNoteSearch()
 
-const tab = ref<'recent' | 'favorites' | 'trash'>('recent')
+const tab = ref<'recent' | 'favorites' | 'archive' | 'trash'>('recent')
+const sortMode = ref<'updated' | 'created' | 'az' | 'za'>('updated')
 const query = ref('')
 const renamingId = ref<string | null>(null)
 const renameInput = ref<HTMLInputElement | null>(null)
@@ -25,12 +27,30 @@ const renameInput = ref<HTMLInputElement | null>(null)
 onMounted(() => void buildSearchIndex())
 
 const activeTag = ref<string | null>(null)
+
+// Order a list by the chosen sort, always floating pinned notes to the top so a pin holds
+// wherever the sort would otherwise put the note.
+function sortList(list: LibraryEntry[]): LibraryEntry[] {
+  const by: Record<typeof sortMode.value, (a: LibraryEntry, b: LibraryEntry) => number> = {
+    updated: (a, b) => b.updatedAt - a.updatedAt,
+    created: (a, b) => b.createdAt - a.createdAt,
+    az: (a, b) => a.title.localeCompare(b.title),
+    za: (a, b) => b.title.localeCompare(a.title),
+  }
+  return [...list].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || by[sortMode.value](a, b))
+}
+
+// Whether the current tab is one of the filed-away views, which share a compact card.
+const filed = computed(() => tab.value === 'trash' || tab.value === 'archive')
+
 const shown = computed(() => {
   if (tab.value === 'trash') return library.trash
+  if (tab.value === 'archive') return sortList(library.archived)
   let list = tab.value === 'favorites' ? library.favorites : library.recent
   if (activeTag.value) list = list.filter((e) => (e.tags ?? []).includes(activeTag.value!))
   const q = query.value.trim()
-  return q ? list.filter((e) => matches(e.id, e.title, q)) : list
+  if (q) list = list.filter((e) => matches(e.id, e.title, q))
+  return sortList(list)
 })
 const newTag = ref('')
 function addTag(id: string) {
@@ -111,10 +131,23 @@ function commitRename(id: string) {
           <button :class="{ on: tab === 'favorites' }" @click="tab = 'favorites'">
             <Icon name="star" :size="15" /> Favourites
           </button>
+          <button :class="{ on: tab === 'archive' }" @click="tab = 'archive'">
+            <Icon name="archive" :size="15" /> Archive
+            <span v-if="library.archived.length" class="count">{{ library.archived.length }}</span>
+          </button>
           <button :class="{ on: tab === 'trash' }" @click="tab = 'trash'">
             <Icon name="trash" :size="15" /> Trash
             <span v-if="library.trash.length" class="count">{{ library.trash.length }}</span>
           </button>
+          <div v-if="tab !== 'trash'" class="sort">
+            <label>Sort</label>
+            <select v-model="sortMode">
+              <option value="updated">Last edited</option>
+              <option value="created">Date created</option>
+              <option value="az">Title A–Z</option>
+              <option value="za">Title Z–A</option>
+            </select>
+          </div>
         </div>
 
         <div v-if="tab === 'trash' && library.trash.length" class="trash-bar">
@@ -136,18 +169,23 @@ function commitRename(id: string) {
         </div>
 
         <div v-if="shown.length" class="grid">
-          <div
-            v-for="e in shown"
-            :key="e.id"
-            class="card"
-            :class="{ current: e.id === library.currentId && tab !== 'trash' }"
-          >
+          <div v-for="e in shown" :key="e.id" class="card" :class="{ current: e.id === library.currentId && !filed }">
             <button v-if="tab === 'trash'" class="open dim" title="Restore" @click="library.restoreNote(e.id)">
               <NoteThumbnail :title="e.title" />
             </button>
-            <button v-else class="open" @click="open(e.id)"><NoteThumbnail :title="e.title" /></button>
             <button
-              v-if="tab !== 'trash'"
+              v-else-if="tab === 'archive'"
+              class="open dim"
+              title="Unarchive"
+              @click="library.unarchiveNote(e.id)"
+            >
+              <NoteThumbnail :title="e.title" />
+            </button>
+            <button v-else class="open" @click="open(e.id)"><NoteThumbnail :title="e.title" /></button>
+
+            <span v-if="!filed && e.pinned" class="pin-badge" title="Pinned"><Icon name="pin" :size="13" /></span>
+            <button
+              v-if="!filed"
               class="fav"
               :class="{ on: e.favorite }"
               :title="e.favorite ? 'Unfavourite' : 'Favourite'"
@@ -165,6 +203,19 @@ function commitRename(id: string) {
                 </button>
                 <button class="tbtn danger" @click="library.purgeNote(e.id)">
                   <Icon name="trash" :size="14" /> Delete forever
+                </button>
+              </div>
+            </div>
+
+            <div v-else-if="tab === 'archive'" class="trash-card">
+              <span class="name plain">{{ e.title || 'Untitled' }}</span>
+              <span class="date">Archived {{ when(e.archivedAt ?? 0) }}</span>
+              <div class="trash-actions">
+                <button class="tbtn" @click="library.unarchiveNote(e.id)">
+                  <Icon name="arrowLeft" :size="14" /> Unarchive
+                </button>
+                <button class="tbtn danger" @click="library.deleteNote(e.id)">
+                  <Icon name="trash" :size="14" /> Delete
                 </button>
               </div>
             </div>
@@ -193,6 +244,12 @@ function commitRename(id: string) {
                     </button>
                     <button class="menu-item" @click="library.duplicateNote(e.id)">
                       <Icon name="copy" :size="16" /><span>Duplicate</span>
+                    </button>
+                    <button class="menu-item" @click="library.togglePin(e.id)">
+                      <Icon name="pin" :size="16" /><span>{{ e.pinned ? 'Unpin' : 'Pin to top' }}</span>
+                    </button>
+                    <button class="menu-item" @click="library.archiveNote(e.id)">
+                      <Icon name="archive" :size="16" /><span>Archive</span>
                     </button>
                     <div class="sep" />
                     <div class="tag-editor">
@@ -224,23 +281,28 @@ function commitRename(id: string) {
                 </template>
               </Popover>
             </div>
-            <div v-if="tab !== 'trash' && (e.tags ?? []).length" class="card-tags">
+            <div v-if="!filed && (e.tags ?? []).length" class="card-tags">
               <span v-for="t in e.tags" :key="t" class="tag-chip small ghost">#{{ t }}</span>
             </div>
-            <span v-if="tab !== 'trash'" class="date">{{ when(e.updatedAt) }}</span>
-            <p v-if="tab !== 'trash' && excerptFor(e.id)" class="excerpt">{{ excerptFor(e.id) }}</p>
+            <span v-if="!filed" class="date">{{ when(e.updatedAt) }}</span>
+            <p v-if="!filed && excerptFor(e.id)" class="excerpt">{{ excerptFor(e.id) }}</p>
           </div>
         </div>
 
         <div v-else class="empty">
-          <Icon :name="tab === 'favorites' ? 'star' : tab === 'trash' ? 'trash' : 'grid'" :size="26" />
+          <Icon
+            :name="tab === 'favorites' ? 'star' : tab === 'archive' ? 'archive' : tab === 'trash' ? 'trash' : 'grid'"
+            :size="26"
+          />
           <p>
             {{
               tab === 'favorites'
                 ? 'Star a note to keep it here.'
-                : tab === 'trash'
-                  ? 'The trash is empty.'
-                  : 'No notes yet. Start one above.'
+                : tab === 'archive'
+                  ? 'Archive a note to file it away here.'
+                  : tab === 'trash'
+                    ? 'The trash is empty.'
+                    : 'No notes yet. Start one above.'
             }}
           </p>
         </div>
@@ -374,6 +436,7 @@ h2 {
 }
 .tabs {
   display: flex;
+  align-items: center;
   gap: 4px;
   margin-bottom: 16px;
   border-bottom: 1px solid var(--border);
@@ -602,6 +665,37 @@ h2 {
   background: var(--border);
   margin: 5px 8px;
 }
+.sort {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.sort select {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.pin-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 0 0 1px var(--border-subtle);
+}
 .count {
   display: inline-grid;
   place-items: center;
@@ -744,11 +838,20 @@ h2 {
     flex: 0 0 132px;
     scroll-snap-align: start;
   }
+  .tabs {
+    flex-wrap: wrap;
+  }
   .tabs button {
     flex: 1;
     justify-content: center;
     font-size: 15px;
     padding: 11px 8px;
+  }
+  .sort {
+    flex-basis: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+    padding: 6px 0;
   }
   /* Two roomy columns that fill the width with proper gutters. */
   .grid {

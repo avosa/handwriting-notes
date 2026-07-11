@@ -214,7 +214,7 @@ export async function installPersistence(): Promise<void> {
 
   // Open the most recent live note, or start a fresh one if the library is empty. A note in
   // the trash is never reopened, so a device does not come back to a note the writer deleted.
-  const live = entries.filter((e) => !e.deletedAt)
+  const live = entries.filter((e) => !e.deletedAt && !e.archivedAt)
   let currentId = await loadCurrentId()
   let openDoc: NoteDocument | undefined
   if (currentId && live.some((e) => e.id === currentId)) openDoc = await loadNote(currentId)
