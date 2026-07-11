@@ -57,6 +57,41 @@ Reply only EDIT or ASK.`
 // the prompt tight and the citations legible.
 const TOP_K = 8
 
+// A keyword-based grounding used when the on-device semantic index is unavailable, so the chat
+// still answers from the notes. It scores each live note by how many of the query's words it
+// contains and returns the best few, note by note.
+async function keywordSources(q: string, liveIds: Set<string>, titleOf: (id: string) => string): Promise<ChatSource[]> {
+  try {
+    const { loadAllNotes } = await import('@/store/persistence')
+    const { toPlainText } = await import('@/export/toText')
+    const terms = q
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((t) => t.length > 2)
+    if (!terms.length) return []
+    const notes = (await loadAllNotes()).filter((n) => liveIds.has(n.id))
+    const scored = notes
+      .map((n) => {
+        const text = toPlainText(n)
+        const hay = `${n.title}\n${text}`.toLowerCase()
+        const score = terms.reduce((s, t) => s + (hay.includes(t) ? 1 : 0), 0)
+        return { id: n.id, text, score }
+      })
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, TOP_K)
+    return scored.map((x, i) => ({
+      n: i + 1,
+      noteId: x.id,
+      title: titleOf(x.id),
+      text: x.text.slice(0, 500),
+      score: x.score,
+    }))
+  } catch {
+    return []
+  }
+}
+
 export function useNotesChat() {
   const settings = useSettings()
   const library = useLibrary()
@@ -154,15 +189,15 @@ export function useNotesChat() {
       return finish()
     }
 
-    // ASK: ground an answer in the retrieved notes. Retrieval runs on-device and is a separate
-    // failure domain from the model call, so its errors are reported as retrieval errors — not
-    // misattributed to the AI provider. The embedder times out rather than hanging forever.
+    // ASK: ground an answer in the retrieved notes. Retrieval prefers the on-device semantic index,
+    // but if that is unavailable (a slow or failed model) it falls back to a keyword search over the
+    // notes, so the chat keeps working rather than dead-ending. Either way the answer is grounded.
+    const liveIds = new Set(library.recent.map((e) => e.id))
+    const titleOf = (id: string) => library.entries.find((e) => e.id === id)?.title || 'Untitled'
     let sources: ChatSource[]
     try {
       await indexAll()
-      const liveIds = new Set(library.recent.map((e) => e.id))
       const hits = (await searchBlocks(q, TOP_K * 3)).filter((h) => liveIds.has(h.noteId)).slice(0, TOP_K)
-      const titleOf = (id: string) => library.entries.find((e) => e.id === id)?.title || 'Untitled'
       sources = hits.map((h, i) => ({
         n: i + 1,
         noteId: h.noteId,
@@ -171,12 +206,8 @@ export function useNotesChat() {
         score: h.score,
       }))
     } catch (e) {
-      console.error('Notes chat: on-device retrieval failed', e)
-      const reason = String(e instanceof Error ? e.message : e)
-        .replace(/^Error:\s*/, '')
-        .slice(0, 140)
-      if (!signal.aborted) error.value = `Could not prepare on-device search: ${reason || 'unknown error'}.`
-      return finish()
+      console.error('Notes chat: semantic retrieval failed, falling back to keyword search', e)
+      sources = await keywordSources(q, liveIds, titleOf)
     }
     if (signal.aborted) return finish()
 
