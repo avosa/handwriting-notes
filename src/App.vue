@@ -135,11 +135,11 @@ function scrollToBlock(id: string | null, block: 'nearest' | 'center' = 'nearest
   })
 }
 
-// Follow the writing while the AI works: keep the line being typed lifted a little above the
-// bottom dock, so the words are never written behind the toolbar. The page is eased up only
-// when the line dips into that band, so it reads as a gentle pull rather than a jump, and the
-// writer can still scroll freely everywhere else.
-const HEADROOM_PX = 30
+// Follow the writing while the AI works so the line being typed is never hidden behind the
+// bottom dock. The line is kept a clear two lines above the top of the dock; the moment it
+// sinks past that band the page is pulled up the whole way, so the words stay in view rather
+// than slipping under the toolbar. The writer can still scroll freely above the writing.
+const CLEARANCE_LINES = 2
 let followFrame = 0
 function followWriting() {
   const stack = document.querySelector('.stack') as HTMLElement | null
@@ -148,10 +148,14 @@ function followWriting() {
   if (stack && dock && id) {
     const el = stack.querySelector(`[data-block-id="${CSS.escape(id)}"]`)
     if (el) {
+      const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 34
       const lineBottom = el.getBoundingClientRect().bottom
-      const limit = dock.getBoundingClientRect().top - HEADROOM_PX
+      const limit = dock.getBoundingClientRect().top - lineHeight * CLEARANCE_LINES
       const overshoot = lineBottom - limit
-      if (overshoot > 1) stack.scrollBy({ top: overshoot * 0.25 })
+      // Pull the page up the whole overshoot at once. Smooth scrolling is turned off for the
+      // run (see below), so this lands immediately rather than lagging a frame behind fast
+      // writing and letting the line slip under the dock.
+      if (overshoot > 1) stack.scrollBy({ top: overshoot })
     }
   }
   if (documentStore.generating) followFrame = requestAnimationFrame(followWriting)
@@ -159,9 +163,16 @@ function followWriting() {
 watch(
   () => documentStore.generating,
   (now, was) => {
-    if (now && !was) followFrame = requestAnimationFrame(followWriting)
+    const stack = document.querySelector('.stack') as HTMLElement | null
+    if (now && !was) {
+      // Follow instantly while the AI writes, then hand the page's smooth scrolling back so
+      // coming to rest on the finished line eases rather than snaps.
+      if (stack) stack.style.scrollBehavior = 'auto'
+      followFrame = requestAnimationFrame(followWriting)
+    }
     if (was && !now) {
       cancelAnimationFrame(followFrame)
+      if (stack) stack.style.scrollBehavior = ''
       // Come to rest on the last line written, deterministically.
       scrollToBlock(documentStore.selectedBlockId, 'center')
     }
@@ -766,7 +777,7 @@ function addPage() {
   flex-direction: column;
   align-items: center;
   gap: 30px;
-  padding: 30px 16px 170px;
+  padding: 30px 16px 220px;
   scroll-behavior: smooth;
 }
 .page-wrap {
@@ -990,7 +1001,7 @@ function addPage() {
     max-width: 46vw;
   }
   .stack {
-    padding: 16px 8px 150px;
+    padding: 16px 8px 200px;
     gap: 22px;
   }
   /* Push-drawer: the whole page eases aside and shrinks to a card as the menu slides
