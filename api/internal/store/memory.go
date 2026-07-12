@@ -8,8 +8,8 @@ import (
 )
 
 // Memory is an in-memory Store for local runs and tests. It is safe for concurrent use and holds
-// accounts and their trusted refresh tokens in maps; a real deployment swaps in a database-backed
-// store behind the same interface.
+// accounts, sessions, encrypted notes, and encrypted blobs in maps. A database-backed store
+// implements the same interface.
 type Memory struct {
 	mu      sync.RWMutex
 	byID    map[string]User

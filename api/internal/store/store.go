@@ -1,8 +1,7 @@
 // Package store is the persistence seam. The service is a thin relay that mostly holds ciphertext it
-// cannot read, so the interface stays small and grows one method at a time as accounts, sync, and
-// blobs arrive. Keeping every query behind this interface means the rest of the service never
-// depends on a particular database, and a fake in-memory store makes the handlers testable without
-// one.
+// cannot read, so the interface is small: one method per thing the service needs of its database.
+// Keeping every query behind this interface means the rest of the service depends on no particular
+// database, and an in-memory store makes the handlers testable without one.
 package store
 
 import (
@@ -42,9 +41,9 @@ type SyncNote struct {
 	UpdatedAt  time.Time
 }
 
-// Store is everything the service asks of its database: accounts, and the set of refresh tokens each
-// account currently trusts, which is what lets a refresh token be rotated and revoked. Sync and blob
-// methods join it as those features land, each still a thin read or write.
+// Store is everything the service asks of its database: accounts and the refresh tokens each account
+// trusts, the account's end-to-end-encrypted notes, and its encrypted attachment blobs. Every method
+// is a thin read or write over opaque, mostly-ciphertext data.
 type Store interface {
 	// Ping checks that the store is reachable, for the health endpoint and startup.
 	Ping(ctx context.Context) error
@@ -108,14 +107,9 @@ type Blob struct {
 	UpdatedAt  time.Time
 }
 
-// Open returns the store for the given configuration. With no database URL it returns the in-memory
-// store, which is what local runs and tests use; a real deployment sets DATABASE_URL and a database
-// backed store is opened instead (added with the deploy work).
-func Open(_ context.Context, cfg config.Config) (Store, error) {
-	if cfg.DatabaseURL == "" {
-		return NewMemory(), nil
-	}
-	// A database-backed store is wired here once a database is provisioned; until then a configured
-	// URL still falls back to memory so the service always starts.
+// Open returns the store for the given configuration. It returns the in-memory store, which local
+// runs and tests use. A database-backed store implements the same interface and is selected here by
+// DatabaseURL where one is configured.
+func Open(_ context.Context, _ config.Config) (Store, error) {
 	return NewMemory(), nil
 }

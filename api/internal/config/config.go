@@ -14,8 +14,8 @@ import (
 type Config struct {
 	// Addr is the TCP address the HTTP server listens on, e.g. ":8080".
 	Addr string
-	// DatabaseURL is the connection string for the store. Empty means the in-memory store, which is
-	// used for local runs and tests; a real deployment sets a database URL.
+	// DatabaseURL is the store connection string. Empty selects the in-memory store used for local
+	// runs and tests.
 	DatabaseURL string
 	// ShutdownTimeout bounds how long in-flight requests have to finish when the server is stopping.
 	ShutdownTimeout time.Duration
