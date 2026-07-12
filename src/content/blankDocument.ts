@@ -74,3 +74,9 @@ export function noteFromTemplate(key: string): NoteDocument {
       return blankDocument()
   }
 }
+
+// A journal entry for a given day: the date as the title, then a place to start writing. The
+// library opens or creates one of these for today when the writer reaches for their daily note.
+export function journalDocument(title: string): NoteDocument {
+  return document(title, [textBlock('title', title), textBlock('body')])
+}

@@ -4,10 +4,11 @@
 // this keeps that in step with the list and with what is saved on disk.
 import { defineStore } from 'pinia'
 import type { Folder, LibraryEntry, NoteDocument, SavedSearch } from '@/types'
-import { blankDocument, noteFromTemplate, documentFromBlocks } from '@/content/blankDocument'
+import { blankDocument, noteFromTemplate, documentFromBlocks, journalDocument } from '@/content/blankDocument'
 import type { Block } from '@/types'
 import { uid } from '@/util/id'
 import { APP_SLUG } from '@/brand'
+import { journalTitle, JOURNAL_TAG } from '@/journal/journal'
 import { useDocument } from './document'
 import {
   loadNote,
@@ -22,6 +23,7 @@ import {
   deleteVersionsFor,
   deleteVectorsForNote,
   deleteCardsForNote,
+  deleteRemindersForNote,
 } from './persistence'
 
 interface LibraryState {
@@ -131,6 +133,29 @@ export const useLibrary = defineStore('library', {
       this.currentId = doc.id
       return doc.id
     },
+    // Open today's journal note, starting it if there is not one yet. A journal note is an ordinary
+    // note titled with the date and tagged so tomorrow finds today's entry rather than making a
+    // second one. Reaching for the daily note twice in a day lands on the same page.
+    async openDailyNote(): Promise<string> {
+      const title = journalTitle()
+      const existing = this.entries.find(
+        (e) => !e.deletedAt && e.title === title && (e.tags ?? []).includes(JOURNAL_TAG),
+      )
+      if (existing) {
+        await this.openNote(existing.id)
+        return existing.id
+      }
+      const documentStore = useDocument()
+      await this.parkCurrent()
+      const doc = journalDocument(title)
+      await saveNote(doc)
+      const entry = entryFor(doc)
+      entry.tags = [JOURNAL_TAG]
+      this.entries.push(entry)
+      documentStore.hydrate(doc)
+      this.currentId = doc.id
+      return doc.id
+    },
     // Bring in a note built from blocks that came from outside — an imported document, a paste, or
     // an agent — as a new note, opened. The single seam every ingestion path lands on.
     async importNote(title: string, blocks: Block[]): Promise<string> {
@@ -187,6 +212,7 @@ export const useLibrary = defineStore('library', {
       await deleteVersionsFor(id)
       await deleteVectorsForNote(id)
       await deleteCardsForNote(id)
+      await deleteRemindersForNote(id)
       if (doc) {
         for (const page of doc.pages) {
           for (const block of page.blocks) {

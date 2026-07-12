@@ -120,6 +120,9 @@ export const icons: Record<string, string> = {
   waveform:
     '<line x1="4" y1="10" x2="4" y2="14"/><line x1="8" y1="6" x2="8" y2="18"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="16" y1="7" x2="16" y2="17"/><line x1="20" y1="10" x2="20" y2="14"/>',
   cards: '<rect x="3" y="7" width="14" height="13" rx="2"/><path d="M7 4h10a2 2 0 0 1 2 2v10"/>',
+  bell: '<path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+  calendar:
+    '<rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="3" x2="8" y2="6"/><line x1="16" y1="3" x2="16" y2="6"/>',
   send: '<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>',
   play: '<path d="M7 4l13 8-13 8z"/>',
   chevronUp: '<path d="M6 15l6-6 6 6"/>',

@@ -306,6 +306,19 @@ export interface LibraryEntry {
   archivedAt?: number
 }
 
+/** A local reminder tied to a note: at its due time the app raises a notification so a note is not
+ *  forgotten. Reminders live on the device and fire while the app is open. */
+export interface Reminder {
+  id: string
+  noteId: string
+  /** The note's title when the reminder was set, so the list reads without loading each note. */
+  title: string
+  /** When to remind, in epoch ms. */
+  due: number
+  /** True once it has fired, so it is never raised twice. */
+  done?: boolean
+}
+
 export type AttachmentKind = 'image' | 'video' | 'document' | 'audio'
 
 export interface Attachment {
