@@ -3,10 +3,31 @@
 // hand is one more entry here; nothing else changes.
 import type { ColorScheme, Handwriting } from '@/types'
 
-// The math set symbols the notes use are absent from the handwriting fonts, so the
-// browser falls back per glyph to a font that has them. Appending the fallback keeps
-// the handwriting for letters while showing the symbols correctly.
-const MATH_FALLBACK = "'STIX Two Math', 'Cambria Math', 'Noto Sans Math', serif"
+// The math set symbols the notes use are absent from the handwriting fonts, so the browser falls
+// back per glyph to a font that has them. Appending the fallback keeps the handwriting for letters
+// while showing the symbols correctly.
+const MATH_FALLBACK = "'STIX Two Math', 'Cambria Math', 'Noto Sans Math'"
+
+// Scripts the Latin handwriting fonts do not cover — CJK, Arabic, Indic, and more — fall back per
+// glyph to a font on the device that does, so a note written in any language shows correctly even
+// where the chosen hand has no glyph for it. A dedicated handwriting font for one of these scripts is
+// just another registry entry when one is added; until then these keep every script legible.
+const SCRIPT_FALLBACK = [
+  "'Hiragino Sans'",
+  "'Hiragino Kaku Gothic ProN'",
+  "'PingFang SC'",
+  "'Microsoft YaHei'",
+  "'Malgun Gothic'",
+  "'Noto Sans CJK SC'",
+  "'Geeza Pro'",
+  "'Noto Sans Arabic'",
+  "'Nirmala UI'",
+  "'Noto Sans Devanagari'",
+  'system-ui',
+  'serif',
+].join(', ')
+
+const FALLBACK = `${MATH_FALLBACK}, ${SCRIPT_FALLBACK}`
 
 export const notePalette: ColorScheme = {
   title: '#29297E',
@@ -18,11 +39,11 @@ export const notePalette: ColorScheme = {
 }
 
 export function bodyFontStack(handwriting: Handwriting): string {
-  return `'${handwriting.bodyFont}', ${MATH_FALLBACK}`
+  return `'${handwriting.bodyFont}', ${FALLBACK}`
 }
 
 export function headerFontStack(handwriting: Handwriting): string {
-  return `'${handwriting.headerFont}', ${MATH_FALLBACK}`
+  return `'${handwriting.headerFont}', ${FALLBACK}`
 }
 
 const order: Handwriting[] = [
