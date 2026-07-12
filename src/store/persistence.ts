@@ -6,6 +6,7 @@
 import { openDB, type IDBPDatabase } from 'idb'
 import type { Folder, LibraryEntry, NoteDocument, ProviderId, Reminder, SavedSearch, Settings } from '@/types'
 import type { Card } from '@/study/card'
+import type { HandwritingSample } from '@/handwriting/samples'
 import { useDocument } from './document'
 import { useSettings } from './settings'
 import { useLibrary } from './library'
@@ -51,14 +52,25 @@ interface Stores {
   vectors: VectorRecord
   cards: Card
   reminders: Reminder
+  handwritingSamples: HandwritingSample
 }
 
 let dbPromise: Promise<IDBPDatabase<Stores>> | null = null
 
 // Every object store the app relies on. document/settings/blobs/meta are the originals; versions
-// holds per-note history; vectors holds the local semantic index (one embedding per block); cards
-// holds study flashcards; reminders holds local note reminders.
-const REQUIRED_STORES = ['document', 'settings', 'blobs', 'meta', 'versions', 'vectors', 'cards', 'reminders'] as const
+// holds per-note history; vectors holds the local semantic index; cards holds study flashcards;
+// reminders holds local note reminders; handwritingSamples holds captured handwriting for training.
+const REQUIRED_STORES = [
+  'document',
+  'settings',
+  'blobs',
+  'meta',
+  'versions',
+  'vectors',
+  'cards',
+  'reminders',
+  'handwritingSamples',
+] as const
 
 // Create any store that is missing, by name rather than by version number, so a database left in a
 // partial state is repaired rather than being stuck without a store its version says it has.
@@ -294,6 +306,24 @@ export async function deleteRemindersForNote(noteId: string): Promise<void> {
   for (const reminder of await database.getAll('reminders')) {
     if (reminder.noteId === noteId) await database.delete('reminders', reminder.id)
   }
+}
+
+// --- Handwriting samples (train on your handwriting) -------------------------------------------
+export async function putSample(sample: HandwritingSample): Promise<void> {
+  await (await db()).put('handwritingSamples', plain(sample), sample.id)
+}
+
+export async function getAllSamples(): Promise<HandwritingSample[]> {
+  return (await db()).getAll('handwritingSamples')
+}
+
+export async function countSamples(): Promise<number> {
+  return (await db()).count('handwritingSamples')
+}
+
+export async function clearSamples(): Promise<void> {
+  const database = await db()
+  for (const key of await database.getAllKeys('handwritingSamples')) await database.delete('handwritingSamples', key)
 }
 
 // The keys of every attachment blob a note points at, across all its pages.
