@@ -9,6 +9,8 @@ import { onMounted, ref, watch } from 'vue'
 import type { Page, Stroke, StrokePoint } from '@/types'
 import { penProfile } from '@/tools/penTypes'
 import { strokeWidths, grain } from '@/tools/inkPhysics'
+import { recognizeShape, shapeToStroke, type Shape } from '@/tools/shapeRecognition'
+import Icon from '@/ui/Icon.vue'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
 import { uid } from '@/util/id'
@@ -39,6 +41,18 @@ const PALM_WINDOW_MS = 1400
 let working: Stroke[] | null = null
 let lastErase: StrokePoint | null = null
 const eraserRing = ref<{ x: number; y: number; r: number } | null>(null)
+
+// After a rough figure is drawn, an offer to tidy it into a clean shape hovers by the stroke until
+// it is taken or the writer moves on. The tidy version is still hand drawn, never a perfect shape.
+const suggestion = ref<{ id: string; shape: Shape; left: number; top: number } | null>(null)
+const INK_TOOLS = new Set(['pencil', 'fine', 'marker'])
+
+// A stable numeric seed from a stroke id, so a tidied shape wobbles the same way every render.
+function seedFrom(id: string): number {
+  let n = 0
+  for (let i = 0; i < id.length; i++) n = (n * 31 + id.charCodeAt(i)) % 100000
+  return n + 1
+}
 
 function ctx(): CanvasRenderingContext2D | null {
   return canvas.value?.getContext('2d') ?? null
@@ -223,6 +237,8 @@ function onDown(event: PointerEvent) {
     return
   }
   ;(event.target as HTMLElement).setPointerCapture(event.pointerId)
+  // Starting a new stroke drops any pending tidy offer from the last one.
+  suggestion.value = null
   const point = pointFrom(event)
 
   if (settings.activeTool === 'fill') {
@@ -277,9 +293,42 @@ function onUp(event: PointerEvent) {
     redraw()
     return
   }
-  if (current && current.points.length > 1) documentStore.addStroke(props.pageIndex, current)
+  if (current && current.points.length > 1) {
+    documentStore.addStroke(props.pageIndex, current)
+    offerTidy(current)
+  }
   current = null
   redraw()
+}
+
+// If a just-drawn inked stroke looks like a figure, offer to tidy it. The offer hovers by the
+// stroke's top-right; the highlighter, fill, and eraser never trigger it.
+function offerTidy(stroke: Stroke) {
+  if (!INK_TOOLS.has(stroke.tool)) return
+  const shape = recognizeShape(stroke.points)
+  if (!shape) return
+  let maxX = -Infinity
+  let minY = Infinity
+  for (const p of stroke.points) {
+    maxX = Math.max(maxX, p.x)
+    minY = Math.min(minY, p.y)
+  }
+  suggestion.value = { id: stroke.id, shape, left: maxX * props.pxPerMm, top: minY * props.pxPerMm }
+}
+
+// Replace the rough stroke with a clean, still hand-drawn version of the shape it outlined.
+function acceptTidy() {
+  const s = suggestion.value
+  if (!s) return
+  const original = props.page.strokes.find((k) => k.id === s.id)
+  if (original) {
+    const cleaned: Stroke = { ...original, points: shapeToStroke(s.shape, seedFrom(s.id)), fill: undefined }
+    documentStore.replaceStrokes(
+      props.pageIndex,
+      props.page.strokes.map((k) => (k.id === s.id ? cleaned : k)),
+    )
+  }
+  suggestion.value = null
 }
 
 onMounted(resize)
@@ -291,24 +340,40 @@ watch(
     working = null
     lastErase = null
     eraserRing.value = null
+    suggestion.value = null
     redraw()
   },
 )
+
+const tidyLabel = { line: 'straight line', circle: 'circle', rect: 'rectangle', triangle: 'triangle' }
 </script>
 
 <template>
-  <canvas
-    ref="canvas"
-    class="ink"
-    :class="{ active }"
-    @pointerdown="onDown"
-    @pointermove="onMove"
-    @pointerup="onUp"
-    @pointercancel="onUp"
-  />
+  <div class="ink-wrap">
+    <canvas
+      ref="canvas"
+      class="ink"
+      :class="{ active }"
+      @pointerdown="onDown"
+      @pointermove="onMove"
+      @pointerup="onUp"
+      @pointercancel="onUp"
+    />
+    <Transition name="tidy-pop">
+      <div v-if="suggestion" class="tidy" :style="{ left: `${suggestion.left}px`, top: `${suggestion.top}px` }">
+        <button class="tidy-do" @click="acceptTidy">Tidy {{ tidyLabel[suggestion.shape.kind] }}</button>
+        <button class="tidy-x" title="Keep as is" @click="suggestion = null"><Icon name="close" :size="13" /></button>
+      </div>
+    </Transition>
+  </div>
 </template>
 
 <style scoped>
+.ink-wrap {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
 .ink {
   position: absolute;
   inset: 0;
@@ -320,5 +385,57 @@ watch(
 .ink.active {
   pointer-events: auto;
   cursor: crosshair;
+}
+.tidy {
+  position: absolute;
+  transform: translate(6px, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--pop-shadow, 0 8px 22px rgba(0, 0, 0, 0.22));
+  pointer-events: auto;
+  white-space: nowrap;
+}
+.tidy-do {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 5px 9px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.tidy-do:hover {
+  background: var(--accent-wash);
+}
+.tidy-x {
+  display: inline-flex;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 5px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.tidy-x:hover {
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+.tidy-pop-enter-active,
+.tidy-pop-leave-active {
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+.tidy-pop-enter-from,
+.tidy-pop-leave-to {
+  opacity: 0;
+  transform: translate(6px, -50%) scale(0.9);
 }
 </style>
