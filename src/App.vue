@@ -12,7 +12,6 @@ import { refreshConnections } from './compose/aiConnection'
 import { useTheme } from './theme/useTheme'
 import NotePage from './editor/NotePage.vue'
 import EditorBar from './editor/EditorBar.vue'
-import AudioBar from './ui/AudioBar.vue'
 import HandwritingTrainer from './ui/HandwritingTrainer.vue'
 import SelectionMenu from './editor/SelectionMenu.vue'
 import WholeNoteBar from './editor/WholeNoteBar.vue'
@@ -131,8 +130,11 @@ function onFocusShift() {
   isEditing.value = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
 }
 // The tool dock hides while reading (scrolled down, not editing); writing — by hand or by the AI
-// — always shows it, so the tools and Stop control stay in reach.
-const dockTucked = computed(() => dockHiddenByScroll.value && !isEditing.value && !generating.value)
+// — always shows it, so the tools and Stop control stay in reach. In draw mode it always stays put,
+// since the pens, colours, and eraser are the whole point of being there.
+const dockTucked = computed(
+  () => mode.value !== 'draw' && dockHiddenByScroll.value && !isEditing.value && !generating.value,
+)
 // The chat button tucks on a phone while scrolling or writing so it never covers the page.
 const fabTucked = computed(() => isPhone.value && (isScrolling.value || isEditing.value))
 // On a wide screen the chat docks beside the notes and the page makes room (a split view, not an
@@ -1144,12 +1146,6 @@ function addPage() {
         </div>
       </Transition>
 
-      <Transition name="toast">
-        <div v-if="mode === 'draw'" class="audio-wrap" :class="{ tucked: dockTucked }">
-          <AudioBar />
-        </div>
-      </Transition>
-
       <div class="dock-wrap" :class="{ tucked: dockTucked }">
         <EditorBar :mode="mode" @update:mode="mode = $event" @need-key="showKey = true" />
       </div>
@@ -1618,21 +1614,6 @@ function addPage() {
     transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
     left 0.32s cubic-bezier(0.4, 0, 0.2, 1),
     opacity 0.2s ease;
-}
-/* The audio-synced ink bar rides just above the drawing dock, moving with it. */
-.audio-wrap {
-  position: fixed;
-  left: 50%;
-  bottom: calc(max(18px, env(safe-area-inset-bottom)) + 104px);
-  transform: translateX(-50%);
-  z-index: 41;
-  transition:
-    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.2s ease;
-}
-.audio-wrap.tucked {
-  transform: translate(-50%, calc(100% + 140px));
-  opacity: 0;
 }
 /* While reading (scrolled down, not editing) the dock slides off the bottom so it never covers
    the page; it springs straight back on scroll-up or when a line is edited. */
