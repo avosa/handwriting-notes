@@ -249,6 +249,38 @@ async function onPhotoPicked(event: Event) {
   await onSubmit(PHOTO_TO_NOTES, [attachment], false)
 }
 
+// Read the handwriting drawn on the current page and add it back as editable text, using the
+// browser's on-device recogniser. Where the browser has none, it says so rather than doing nothing.
+async function convertInkToText() {
+  const page = documentStore.doc.pages[documentStore.activePageIndex]
+  const strokes = page?.strokes ?? []
+  if (!strokes.length) {
+    aiError.value = 'Write something with the pen first, then convert it to text.'
+    return
+  }
+  const { handwritingSupported, inkToText } = await import('./ink/inkToText')
+  if (!handwritingSupported()) {
+    aiError.value = 'Reading handwriting needs a browser with on-device recognition, like Chrome.'
+    return
+  }
+  try {
+    const text = await inkToText(strokes)
+    if (!text) {
+      aiError.value = 'That handwriting could not be read.'
+      return
+    }
+    const { uid } = await import('./util/id')
+    const block = {
+      id: uid('b'),
+      type: 'text' as const,
+      text: { id: uid('t'), role: 'body' as const, runs: [{ text }] },
+    }
+    documentStore.select(documentStore.insertAfter(documentStore.selectedBlockId, block))
+  } catch {
+    aiError.value = 'Handwriting could not be read on this device.'
+  }
+}
+
 // Drawer actions close the menu first, then run — so the page eases back before a sheet
 // or dialog takes over the screen.
 function drawerHome() {
@@ -633,6 +665,13 @@ const commands = computed<Command[]>(() => [
     hint: 'transcribe a page or whiteboard',
     icon: 'image',
     run: () => photoInput.value?.click(),
+  },
+  {
+    id: 'ink-to-text',
+    title: 'Ink to text',
+    hint: 'read this page of handwriting',
+    icon: 'handwriting',
+    run: () => void convertInkToText(),
   },
   { id: 'undo', title: 'Undo', hint: `${mod}Z`, icon: 'undo', run: () => documentStore.undo() },
   { id: 'redo', title: 'Redo', hint: `${shiftMod}Z`, icon: 'redo', run: () => documentStore.redo() },
