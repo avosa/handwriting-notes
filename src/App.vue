@@ -12,6 +12,7 @@ import { refreshConnections } from './compose/aiConnection'
 import { useTheme } from './theme/useTheme'
 import NotePage from './editor/NotePage.vue'
 import EditorBar from './editor/EditorBar.vue'
+import AudioBar from './ui/AudioBar.vue'
 import SelectionMenu from './editor/SelectionMenu.vue'
 import WholeNoteBar from './editor/WholeNoteBar.vue'
 import LineSelectionBar from './editor/LineSelectionBar.vue'
@@ -1123,6 +1124,12 @@ function addPage() {
         </div>
       </Transition>
 
+      <Transition name="toast">
+        <div v-if="mode === 'draw'" class="audio-wrap" :class="{ tucked: dockTucked }">
+          <AudioBar />
+        </div>
+      </Transition>
+
       <div class="dock-wrap" :class="{ tucked: dockTucked }">
         <EditorBar :mode="mode" @update:mode="mode = $event" @need-key="showKey = true" />
       </div>
@@ -1589,6 +1596,21 @@ function addPage() {
     transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
     left 0.32s cubic-bezier(0.4, 0, 0.2, 1),
     opacity 0.2s ease;
+}
+/* The audio-synced ink bar rides just above the drawing dock, moving with it. */
+.audio-wrap {
+  position: fixed;
+  left: 50%;
+  bottom: calc(max(18px, env(safe-area-inset-bottom)) + 104px);
+  transform: translateX(-50%);
+  z-index: 41;
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease;
+}
+.audio-wrap.tucked {
+  transform: translate(-50%, calc(100% + 140px));
+  opacity: 0;
 }
 /* While reading (scrolled down, not editing) the dock slides off the bottom so it never covers
    the page; it springs straight back on scroll-up or when a line is edited. */
