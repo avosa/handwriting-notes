@@ -1,0 +1,27 @@
+# The web app's gate. A push or PR runs the same checks as `bun run check` plus a production build, so
+# a broken typecheck, lint, test, or build is caught before it lands rather than after a push.
+name: web
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: install
+        run: bun install --frozen-lockfile
+      - name: typecheck
+        run: bun run typecheck
+      - name: lint
+        run: bun run lint
+      - name: test
+        run: bun run test
+      - name: build
+        run: bun run build
