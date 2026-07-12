@@ -42,6 +42,13 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/auth/me", s.requireUser(http.HandlerFunc(s.handleMe)))
 	mux.Handle("DELETE /api/auth/account", s.requireUser(http.HandlerFunc(s.handleDeleteAccount)))
 
+	// End-to-end-encrypted sync: the server relays ciphertext it cannot read. Every route is gated and
+	// scoped to the caller's own account.
+	mux.Handle("GET /api/sync/changes", s.requireUser(http.HandlerFunc(s.handleChanges)))
+	mux.Handle("PUT /api/sync/notes/{id}", s.requireUser(http.HandlerFunc(s.handlePutNote)))
+	mux.Handle("GET /api/sync/notes/{id}", s.requireUser(http.HandlerFunc(s.handleGetNote)))
+	mux.Handle("DELETE /api/sync/notes/{id}", s.requireUser(http.HandlerFunc(s.handleDeleteNote)))
+
 	return withRecovery(s.log, withRequestLog(s.log, mux))
 }
 

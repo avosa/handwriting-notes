@@ -30,6 +30,18 @@ type User struct {
 	CreatedAt    time.Time
 }
 
+// SyncNote is one note as the server holds it: opaque ciphertext the server cannot read, and the
+// bookkeeping that lets devices sync without the server ever learning what a note says. Rev is a
+// per-account sequence the server assigns on every write; a device pulls everything with a higher rev
+// than it last saw, and pushes with the rev it based its edit on so a clash is caught.
+type SyncNote struct {
+	NoteID     string
+	Ciphertext []byte
+	Rev        int64
+	Deleted    bool
+	UpdatedAt  time.Time
+}
+
 // Store is everything the service asks of its database: accounts, and the set of refresh tokens each
 // account currently trusts, which is what lets a refresh token be rotated and revoked. Sync and blob
 // methods join it as those features land, each still a thin read or write.
@@ -60,6 +72,20 @@ type Store interface {
 	RevokeRefresh(ctx context.Context, userID, tokenID string) error
 	// RevokeAllRefresh drops every refresh token for a user, for signing out everywhere.
 	RevokeAllRefresh(ctx context.Context, userID string) error
+
+	// PutNote stores a note's ciphertext for a user. baseRev is the rev the device based its edit on;
+	// if the stored note has moved past it, the write is refused with ErrConflict and the current note
+	// is returned so the device can merge. On success a new rev is assigned and the stored note
+	// returned. A first write for a note uses baseRev 0.
+	PutNote(ctx context.Context, userID string, note SyncNote, baseRev int64) (SyncNote, error)
+	// GetNote returns one note's stored ciphertext, or ErrNotFound.
+	GetNote(ctx context.Context, userID, noteID string) (SyncNote, error)
+	// NotesSince returns the notes for a user whose rev is greater than sinceRev, oldest change first,
+	// up to limit, with the highest rev returned as the cursor for the next pull.
+	NotesSince(ctx context.Context, userID string, sinceRev int64, limit int) (notes []SyncNote, cursor int64, err error)
+	// DeleteNote tombstones a note (a delete still syncs, so other devices learn of it). Same
+	// optimistic check as PutNote.
+	DeleteNote(ctx context.Context, userID, noteID string, baseRev int64) (SyncNote, error)
 }
 
 // Open returns the store for the given configuration. With no database URL it returns the in-memory
