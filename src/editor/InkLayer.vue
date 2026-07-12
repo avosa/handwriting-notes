@@ -8,6 +8,7 @@
 import { onMounted, ref, watch } from 'vue'
 import type { Page, Stroke, StrokePoint } from '@/types'
 import { penProfile } from '@/tools/penTypes'
+import { strokeWidths, grain } from '@/tools/inkPhysics'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
 import { uid } from '@/util/id'
@@ -75,10 +76,25 @@ function drawStroke(context: CanvasRenderingContext2D, stroke: Stroke) {
     context.globalAlpha = 1
   }
   context.globalCompositeOperation = stroke.tool === 'highlighter' ? 'multiply' : 'source-over'
-  context.globalAlpha = profile.opacity
   context.strokeStyle = stroke.color
   context.lineCap = 'round'
   context.lineJoin = 'round'
+
+  const widths = strokeWidths(stroke)
+
+  // Bleed: a faint, wider under-pass so a pen's ink looks soaked a little into the paper rather than
+  // sitting on a hard edge. Only for the ink instruments; pencil and highlighter have no wet edge.
+  if (stroke.tool === 'fine' || stroke.tool === 'marker') {
+    const avg = widths.reduce((sum, w) => sum + w, 0) / widths.length
+    context.globalAlpha = profile.opacity * 0.12
+    context.lineWidth = avg * 1.8 * props.pxPerMm
+    tracePath(context, stroke)
+    context.stroke()
+  }
+
+  // Pencil catches on the paper's tooth, so its darkness is mottled by the grain; other tools lay
+  // an even line.
+  const grainy = stroke.tool === 'pencil'
   context.beginPath()
   context.moveTo(pts[0].x * props.pxPerMm, pts[0].y * props.pxPerMm)
   for (let i = 1; i < pts.length; i++) {
@@ -86,7 +102,8 @@ function drawStroke(context: CanvasRenderingContext2D, stroke: Stroke) {
     const prev = pts[i - 1]
     const midX = ((prev.x + p.x) / 2) * props.pxPerMm
     const midY = ((prev.y + p.y) / 2) * props.pxPerMm
-    context.lineWidth = stroke.width * p.pressure * props.pxPerMm
+    context.lineWidth = Math.max(0.12, widths[i]) * props.pxPerMm
+    context.globalAlpha = grainy ? profile.opacity * (0.72 + 0.28 * grain(p.x, p.y)) : profile.opacity
     context.quadraticCurveTo(prev.x * props.pxPerMm, prev.y * props.pxPerMm, midX, midY)
     context.stroke()
     context.beginPath()
