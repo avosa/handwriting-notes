@@ -13,9 +13,6 @@ export interface Stroke {
   points: StrokePoint[]
   /** When set, the closed shape the stroke outlines is flooded with this colour. */
   fill?: string
-  /** Milliseconds from the start of the note's audio recording to when this stroke was drawn, set
-   *  only for strokes made while recording. Tapping the stroke later seeks the audio back to it. */
-  t?: number
 }
 
 export interface StrokePoint {
@@ -270,9 +267,6 @@ export interface NoteDocument {
   /** The writer's own comments, one per block, keyed by block id. A margin note the reader
    *  attaches to a line to remind, question, or annotate, without touching the writing. */
   comments?: Record<string, string>
-  /** A voice recording made while writing this note, stored as an attachment blob. Strokes drawn
-   *  during it carry the time they were made, so tapping one plays back what was said then. */
-  audio?: { blobRef: string; mime: string }
 }
 
 /** A folder in the library. Folders nest: a folder with a `parentId` sits inside that folder,

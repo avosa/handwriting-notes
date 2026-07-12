@@ -20,7 +20,6 @@ import {
   hasClipboard,
   type Bounds,
 } from '@/tools/lasso'
-import { audioSync, recordingClock, requestSeek } from '@/audio/audioSync'
 import Icon from '@/ui/Icon.vue'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
@@ -109,24 +108,6 @@ function handleAt(point: StrokePoint): number | null {
 function insideSelection(point: StrokePoint): boolean {
   const b = selBounds.value
   return !!b && point.x >= b.x && point.x <= b.x + b.w && point.y >= b.y && point.y <= b.y + b.h
-}
-
-// Find the recorded stroke nearest a tap and play the audio back from when it was drawn. Strokes
-// with no timestamp (drawn outside a recording) are skipped.
-function seekToNearestStroke(point: StrokePoint) {
-  let best: Stroke | null = null
-  let bestDist = Infinity
-  for (const stroke of props.page.strokes) {
-    if (stroke.t == null) continue
-    for (const p of stroke.points) {
-      const d = Math.hypot(p.x - point.x, p.y - point.y)
-      if (d < bestDist) {
-        bestDist = d
-        best = stroke
-      }
-    }
-  }
-  if (best && best.t != null && bestDist <= 12) requestSeek(best.t)
 }
 
 // Replace the page's strokes with the current preview (the committed transform) and refresh the box.
@@ -444,13 +425,6 @@ function onDown(event: PointerEvent) {
   suggestion.value = null
   const point = pointFrom(event)
 
-  // Listen mode: a tap plays back the audio from when the nearest stamped stroke was drawn, instead
-  // of laying ink.
-  if (audioSync.listening) {
-    seekToNearestStroke(point)
-    return
-  }
-
   if (settings.activeTool === 'lasso') {
     drawing = true
     const corner = handleAt(point)
@@ -555,9 +529,6 @@ function onUp(event: PointerEvent) {
     return
   }
   if (current && current.points.length > 1) {
-    // While recording, stamp the stroke with the moment it was drawn so it can be heard again later.
-    const t = recordingClock()
-    if (t != null) current.t = t
     documentStore.addStroke(props.pageIndex, current)
     offerTidy(current)
   }
