@@ -892,6 +892,17 @@ onMounted(() => {
   void refreshConnections()
   // Begin watching for reminders that come due so a set reminder actually fires while the app is open.
   reminders.start()
+  // If on-device AI is on and its model is already downloaded, load it into memory in the background
+  // now, so it is ready the moment it is used instead of making the writer press Load now after a
+  // refresh. Guarded by the cache check, so it never sets off a fresh multi-gigabyte download.
+  void (async () => {
+    if (!settings.localAiEnabled) return
+    const { webgpuAvailable, isModelCached, preloadLocalModel } = await import('./ai/local/localLlm')
+    if (!webgpuAvailable()) return
+    const { modelById } = await import('./ai/local/localModels')
+    const mlcId = modelById(settings.localModelId).mlcId
+    if (await isModelCached(mlcId)) void preloadLocalModel(mlcId)
+  })()
   try {
     if (!localStorage.getItem(WELCOMED_KEY)) showWelcome.value = true
   } catch {

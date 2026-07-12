@@ -48,6 +48,9 @@ function select(id: string) {
 
 async function load() {
   await preloadLocalModel(selectedModel.value.mlcId)
+  // Downloading or loading a model is a clear sign the writer wants to use it, so turn on-device AI
+  // on. This also means a model that is ready can never sit behind an unticked box.
+  if (!enabled.value) enabled.value = true
   await refreshCached()
 }
 </script>

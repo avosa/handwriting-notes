@@ -17,6 +17,9 @@ function defaultSettings(): Settings {
     activeTool: 'fine',
     activeColor: '#4A72B0',
     activeWidth: penProfile('fine').width,
+    // On-device AI is off until the writer turns it on. Kept in the defaults so it is always a
+    // stable, saved field and, once turned on, stays on across reloads rather than reverting.
+    localAiEnabled: false,
   }
 }
 
