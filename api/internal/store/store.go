@@ -86,6 +86,21 @@ type Store interface {
 	// DeleteNote tombstones a note (a delete still syncs, so other devices learn of it). Same
 	// optimistic check as PutNote.
 	DeleteNote(ctx context.Context, userID, noteID string, baseRev int64) (SyncNote, error)
+
+	// PutBlob stores an encrypted attachment blob for a user, overwriting any earlier one at that id.
+	PutBlob(ctx context.Context, userID, blobID string, ciphertext []byte) error
+	// GetBlob returns an encrypted attachment blob, or ErrNotFound.
+	GetBlob(ctx context.Context, userID, blobID string) (Blob, error)
+	// DeleteBlob removes an encrypted attachment blob.
+	DeleteBlob(ctx context.Context, userID, blobID string) error
+}
+
+// Blob is an encrypted attachment as the server holds it: opaque ciphertext, keyed elsewhere by
+// account and blob id. Like a note, the server never reads it.
+type Blob struct {
+	BlobID     string
+	Ciphertext []byte
+	UpdatedAt  time.Time
 }
 
 // Open returns the store for the given configuration. With no database URL it returns the in-memory

@@ -103,3 +103,25 @@ func TestPKCE(t *testing.T) {
 		t.Fatal("wrong verifier matched challenge")
 	}
 }
+
+func TestCapability(t *testing.T) {
+	s := NewSigner([]byte("secret"))
+	now := time.Unix(1_700_000_000, 0)
+	cap, err := s.SignCapability(Capability{Subject: "u1", Resource: "blob1", Op: "put", Expires: now.Add(time.Minute).Unix()})
+	if err != nil {
+		t.Fatalf("sign capability: %v", err)
+	}
+	c, err := s.VerifyCapability(cap, now)
+	if err != nil || c.Subject != "u1" || c.Resource != "blob1" || c.Op != "put" {
+		t.Fatalf("verify capability: %v %+v", err, c)
+	}
+	// Expired.
+	if _, err := s.VerifyCapability(cap, now.Add(2*time.Minute)); err != ErrCapabilityInvalid {
+		t.Fatalf("expired capability: got %v", err)
+	}
+	// A session token must not verify as a capability.
+	tok, _ := s.Sign(Claims{Subject: "u1", Expires: now.Add(time.Hour).Unix()})
+	if _, err := s.VerifyCapability(tok, now); err != ErrCapabilityInvalid {
+		t.Fatalf("session token accepted as capability: %v", err)
+	}
+}
