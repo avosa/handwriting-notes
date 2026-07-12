@@ -4,7 +4,7 @@
 // the home screen. Writes are debounced; the first load hydrates the stores before the
 // app renders.
 import { openDB, type IDBPDatabase } from 'idb'
-import type { Folder, LibraryEntry, NoteDocument, ProviderId, SavedSearch, Settings } from '@/types'
+import type { Folder, LibraryEntry, NoteDocument, ProviderId, Reminder, SavedSearch, Settings } from '@/types'
 import type { Card } from '@/study/card'
 import { useDocument } from './document'
 import { useSettings } from './settings'
@@ -50,13 +50,15 @@ interface Stores {
   versions: VersionRecord
   vectors: VectorRecord
   cards: Card
+  reminders: Reminder
 }
 
 let dbPromise: Promise<IDBPDatabase<Stores>> | null = null
 
 // Every object store the app relies on. document/settings/blobs/meta are the originals; versions
-// holds per-note history; vectors holds the local semantic index (one embedding per block).
-const REQUIRED_STORES = ['document', 'settings', 'blobs', 'meta', 'versions', 'vectors', 'cards'] as const
+// holds per-note history; vectors holds the local semantic index (one embedding per block); cards
+// holds study flashcards; reminders holds local note reminders.
+const REQUIRED_STORES = ['document', 'settings', 'blobs', 'meta', 'versions', 'vectors', 'cards', 'reminders'] as const
 
 // Create any store that is missing, by name rather than by version number, so a database left in a
 // partial state is repaired rather than being stuck without a store its version says it has.
@@ -271,6 +273,26 @@ export async function deleteCardsForNote(noteId: string): Promise<void> {
   const database = await db()
   for (const card of await database.getAll('cards')) {
     if (card.noteId === noteId) await database.delete('cards', card.id)
+  }
+}
+
+// --- Reminders ---------------------------------------------------------------------------------
+export async function putReminder(reminder: Reminder): Promise<void> {
+  await (await db()).put('reminders', plain(reminder), reminder.id)
+}
+
+export async function getAllReminders(): Promise<Reminder[]> {
+  return (await db()).getAll('reminders')
+}
+
+export async function deleteReminder(id: string): Promise<void> {
+  await (await db()).delete('reminders', id)
+}
+
+export async function deleteRemindersForNote(noteId: string): Promise<void> {
+  const database = await db()
+  for (const reminder of await database.getAll('reminders')) {
+    if (reminder.noteId === noteId) await database.delete('reminders', reminder.id)
   }
 }
 

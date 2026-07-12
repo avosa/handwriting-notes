@@ -34,6 +34,9 @@ import StoragePanel from './ui/StoragePanel.vue'
 import LocalAiSheet from './ui/LocalAiSheet.vue'
 import StudyPanel from './ui/StudyPanel.vue'
 import ReadingView from './ui/ReadingView.vue'
+import RemindDialog from './ui/RemindDialog.vue'
+import RemindersPanel from './ui/RemindersPanel.vue'
+import { useReminders, stopReminders } from './reminders/useReminders'
 import NotesChat from './ui/NotesChat.vue'
 import FindBar from './ui/FindBar.vue'
 import { APP_DOMAIN } from './brand'
@@ -80,6 +83,9 @@ const showStorage = ref(false)
 const showLocalAi = ref(false)
 const showStudy = ref(false)
 const showReading = ref(false)
+const showRemind = ref(false)
+const showReminders = ref(false)
+const reminders = useReminders()
 const showChat = ref(false)
 const showFind = ref(false)
 
@@ -149,6 +155,13 @@ async function openNoteById(id: string) {
 // closing the conversation is the reader's choice, so they can follow several citations in a row.
 async function openNoteFromChat(id: string) {
   await library.openNote(id)
+}
+// Tapping a reminder banner opens its note and clears the banner.
+async function openFiredReminder() {
+  const fired = reminders.justFired.value
+  if (!fired) return
+  reminders.dismissBanner()
+  await openNoteById(fired.noteId)
 }
 // Swap the links panel for the full map.
 function openMap() {
@@ -664,6 +677,27 @@ const commands = computed<Command[]>(() => [
     run: () => (showReading.value = true),
   },
   {
+    id: 'daily-note',
+    title: "Today's note",
+    hint: 'open or start your journal for today',
+    icon: 'calendar',
+    run: () => void library.openDailyNote(),
+  },
+  {
+    id: 'remind',
+    title: 'Remind me about this note',
+    hint: 'set a local reminder',
+    icon: 'bell',
+    run: () => (showRemind.value = true),
+  },
+  {
+    id: 'reminders',
+    title: 'Reminders',
+    hint: 'upcoming and past',
+    icon: 'bell',
+    run: () => (showReminders.value = true),
+  },
+  {
     id: 'history',
     title: 'Version history',
     hint: 'restore an earlier version',
@@ -773,6 +807,8 @@ onMounted(() => {
   fit()
   measureTopbar()
   void refreshConnections()
+  // Begin watching for reminders that come due so a set reminder actually fires while the app is open.
+  reminders.start()
   try {
     if (!localStorage.getItem(WELCOMED_KEY)) showWelcome.value = true
   } catch {
@@ -795,6 +831,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('scroll', onScrollActivity, true)
   document.removeEventListener('focusin', onFocusShift)
   document.removeEventListener('focusout', onFocusShift)
+  stopReminders()
 })
 
 const title = computed({
@@ -1093,6 +1130,24 @@ function addPage() {
     <StudyPanel v-if="showStudy" @close="showStudy = false" />
 
     <ReadingView v-if="showReading" @close="showReading = false" />
+
+    <RemindDialog v-if="showRemind" @close="showRemind = false" />
+
+    <RemindersPanel v-if="showReminders" @close="showReminders = false" @open="openNoteById" />
+
+    <!-- When a reminder comes due while the app is open, a banner nudges the writer and opens the note. -->
+    <Transition name="toast">
+      <button v-if="reminders.justFired.value" class="reminder-toast" @click="openFiredReminder">
+        <Icon name="bell" :size="16" />
+        <span class="rt-text">
+          <strong>Reminder</strong>
+          <span>{{ reminders.justFired.value.title }}</span>
+        </span>
+        <span class="rt-dismiss" title="Dismiss" @click.stop="reminders.dismissBanner()">
+          <Icon name="close" :size="14" />
+        </span>
+      </button>
+    </Transition>
 
     <!-- A floating button to chat with your notes, kept out of the crowded top bar. It tucks
          away while the chat, the home screen, or a full-screen overlay is open. -->
@@ -1571,6 +1626,55 @@ function addPage() {
   font-size: 13px;
   cursor: pointer;
   z-index: 90;
+}
+/* The reminder banner: a quiet accent card, distinct from the red error toast, that opens the note. */
+.reminder-toast {
+  position: fixed;
+  top: calc(max(10px, env(safe-area-inset-top)) + 60px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(460px, 92vw);
+  padding: 11px 12px 11px 15px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 12px;
+  box-shadow: var(--pop-shadow, 0 12px 34px rgba(0, 0, 0, 0.25));
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  z-index: 92;
+}
+.reminder-toast .rt-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.reminder-toast .rt-text strong {
+  font-size: 12px;
+  color: var(--accent);
+}
+.reminder-toast .rt-text span {
+  font-size: 13.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}
+.reminder-toast .rt-dismiss {
+  display: inline-flex;
+  color: var(--text-muted);
+  padding: 4px;
+  border-radius: 7px;
+}
+.reminder-toast .rt-dismiss:hover {
+  background: var(--surface-sunken);
+  color: var(--text);
 }
 .scrim-enter-active,
 .scrim-leave-active {
