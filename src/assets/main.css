@@ -282,3 +282,19 @@ button {
   letter-spacing: 0.035em;
   word-spacing: 0.08em;
 }
+
+/* Dark-mode paper. The sheet is a light document, which glares in a dark room, so on screen the
+   paper is shown dark with light ink. This is a display-only inversion of the page layers — the
+   ruled sheet, the writing, and the ink — so the saved note and every export keep their true light
+   colours and still print white from a dark editor, the way a word processor does. The page's own
+   shadow is left alone (only the layers invert), and photographs are inverted back so they are never
+   shown as negatives. */
+:root[data-theme='dark'] .note-page {
+  background: #14141c;
+}
+:root[data-theme='dark'] .note-page .layer {
+  filter: invert(1) hue-rotate(180deg);
+}
+:root[data-theme='dark'] .note-page .layer img {
+  filter: invert(1) hue-rotate(180deg);
+}
