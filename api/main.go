@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/avosa/handwriting-notes/api/internal/api"
+	"github.com/avosa/handwriting-notes/api/internal/auth"
 	"github.com/avosa/handwriting-notes/api/internal/config"
 	"github.com/avosa/handwriting-notes/api/internal/store"
 )
@@ -41,9 +42,14 @@ func run() error {
 	}
 	defer func() { _ = st.Close() }()
 
+	secret, err := tokenSecret(cfg, log)
+	if err != nil {
+		return err
+	}
+
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           api.New(cfg, st, log).Handler(),
+		Handler:           api.New(cfg, st, secret, log).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -67,6 +73,24 @@ func run() error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+// tokenSecret returns the HMAC key for signing session tokens. It must be configured in production;
+// a local run without one gets a fresh random key each start, which is fine (it only logs everyone
+// out on restart) and means a developer never has to set one to get going.
+func tokenSecret(cfg config.Config, log *slog.Logger) ([]byte, error) {
+	if cfg.TokenSecret != "" {
+		return []byte(cfg.TokenSecret), nil
+	}
+	if cfg.IsProduction() {
+		return nil, errors.New("API_TOKEN_SECRET must be set in production")
+	}
+	key, err := auth.RandomID(32)
+	if err != nil {
+		return nil, err
+	}
+	log.Warn("API_TOKEN_SECRET not set; using a random key for this run (sessions reset on restart)")
+	return []byte(key), nil
 }
 
 // newLogger builds the structured logger: plain text for a readable local run, JSON in production so

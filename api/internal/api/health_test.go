@@ -13,7 +13,7 @@ import (
 )
 
 func newTestServer() *Server {
-	return New(config.Config{Env: "development"}, store.NewMemory(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return New(config.Config{Env: "development"}, store.NewMemory(), []byte("test-secret"), slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
 func TestHealthOK(t *testing.T) {
