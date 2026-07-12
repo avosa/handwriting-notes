@@ -22,6 +22,10 @@ type Config struct {
 	// Env names the environment ("development" or "production"), which decides how much detail an
 	// error reveals and whether extra developer conveniences are on.
 	Env string
+	// TokenSecret is the HMAC key session tokens are signed with. It must be set and kept private in
+	// production; a local run without one gets a fresh random key each start (which logs everyone out
+	// on restart, which is fine for development).
+	TokenSecret string
 }
 
 // Load reads the configuration from the environment, applying sensible defaults so the service runs
@@ -32,6 +36,7 @@ func Load() Config {
 		DatabaseURL:     env("DATABASE_URL", ""),
 		ShutdownTimeout: envDuration("API_SHUTDOWN_TIMEOUT", 15*time.Second),
 		Env:             env("API_ENV", "development"),
+		TokenSecret:     env("API_TOKEN_SECRET", ""),
 	}
 }
 
