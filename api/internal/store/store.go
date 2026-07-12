@@ -93,6 +93,11 @@ type Store interface {
 	GetBlob(ctx context.Context, userID, blobID string) (Blob, error)
 	// DeleteBlob removes an encrypted attachment blob.
 	DeleteBlob(ctx context.Context, userID, blobID string) error
+
+	// AllNotes returns every note the store holds for a user, tombstones included, for a data export.
+	AllNotes(ctx context.Context, userID string) ([]SyncNote, error)
+	// AllBlobs returns every encrypted attachment blob for a user, for a data export.
+	AllBlobs(ctx context.Context, userID string) ([]Blob, error)
 }
 
 // Blob is an encrypted attachment as the server holds it: opaque ciphertext, keyed elsewhere by

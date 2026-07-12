@@ -91,3 +91,15 @@ func (m *Memory) DeleteNote(_ context.Context, userID, noteID string, baseRev in
 	notes[noteID] = tomb
 	return tomb, nil
 }
+
+// AllNotes returns every note for a user, tombstones included, ordered by rev for a stable export.
+func (m *Memory) AllNotes(_ context.Context, userID string) ([]SyncNote, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]SyncNote, 0, len(m.notes[userID]))
+	for _, n := range m.notes[userID] {
+		out = append(out, n)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Rev < out[j].Rev })
+	return out, nil
+}

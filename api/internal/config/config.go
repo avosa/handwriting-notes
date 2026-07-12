@@ -26,6 +26,10 @@ type Config struct {
 	// production; a local run without one gets a fresh random key each start (which logs everyone out
 	// on restart, which is fine for development).
 	TokenSecret string
+	// RatePerSec and RateBurst bound how fast one client may call the API: a steady rate with a burst
+	// on top, so a normal session never notices but a flood or a brute-force is throttled.
+	RatePerSec float64
+	RateBurst  float64
 }
 
 // Load reads the configuration from the environment, applying sensible defaults so the service runs
@@ -37,6 +41,8 @@ func Load() Config {
 		ShutdownTimeout: envDuration("API_SHUTDOWN_TIMEOUT", 15*time.Second),
 		Env:             env("API_ENV", "development"),
 		TokenSecret:     env("API_TOKEN_SECRET", ""),
+		RatePerSec:      envFloat("API_RATE_PER_SEC", 20),
+		RateBurst:       envFloat("API_RATE_BURST", 40),
 	}
 }
 
@@ -46,6 +52,15 @@ func (c Config) IsProduction() bool { return c.Env == "production" }
 func env(key, fallback string) string {
 	if v, ok := os.LookupEnv(key); ok && v != "" {
 		return v
+	}
+	return fallback
+}
+
+func envFloat(key string, fallback float64) float64 {
+	if v, ok := os.LookupEnv(key); ok {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
 	}
 	return fallback
 }

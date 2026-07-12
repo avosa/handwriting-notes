@@ -41,6 +41,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/auth/logout", s.handleLogout)
 	mux.Handle("GET /api/auth/me", s.requireUser(http.HandlerFunc(s.handleMe)))
 	mux.Handle("DELETE /api/auth/account", s.requireUser(http.HandlerFunc(s.handleDeleteAccount)))
+	// GDPR: take everything the server holds for you (as ciphertext), or delete it (the endpoint
+	// above, which cascades notes, blobs, and sessions).
+	mux.Handle("GET /api/account/export", s.requireUser(http.HandlerFunc(s.handleExport)))
 
 	// End-to-end-encrypted sync: the server relays ciphertext it cannot read. Every route is gated and
 	// scoped to the caller's own account.
@@ -57,7 +60,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/blobs/{id}", s.handleGetBlob)
 	mux.Handle("DELETE /api/blobs/{id}", s.requireUser(http.HandlerFunc(s.handleDeleteBlob)))
 
-	return withRecovery(s.log, withRequestLog(s.log, mux))
+	// The chain, outermost first: recover from a panic, log the request, then throttle per client
+	// before any handler runs.
+	rl := newLimiter(s.cfg.RatePerSec, s.cfg.RateBurst)
+	return withRecovery(s.log, withRequestLog(s.log, rl.middleware(mux)))
 }
 
 // writeJSON sends a value as JSON with a status code — the single place responses are encoded, so
