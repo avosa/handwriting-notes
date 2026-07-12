@@ -13,8 +13,10 @@ import (
 type Memory struct {
 	mu      sync.RWMutex
 	byID    map[string]User
-	byEmail map[string]string           // lower-cased email -> user id
-	refresh map[string]map[string]int64 // user id -> refresh token id -> expiry unix
+	byEmail map[string]string              // lower-cased email -> user id
+	refresh map[string]map[string]int64    // user id -> refresh token id -> expiry unix
+	notes   map[string]map[string]SyncNote // user id -> note id -> ciphertext record
+	rev     map[string]int64               // user id -> last assigned rev
 }
 
 // NewMemory returns an empty in-memory store.
@@ -76,6 +78,8 @@ func (m *Memory) DeleteUser(_ context.Context, id string) error {
 	delete(m.byEmail, emailKey(u.Email))
 	delete(m.byID, id)
 	delete(m.refresh, id)
+	delete(m.notes, id)
+	delete(m.rev, id)
 	return nil
 }
 
