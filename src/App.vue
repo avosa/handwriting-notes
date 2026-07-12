@@ -222,6 +222,33 @@ async function onImportPicked(event: Event) {
   showHome.value = false
 }
 
+// Photo to notes: read a picture of a page, a whiteboard, or a document and let the AI transcribe
+// and restructure it into clean notes on a fresh page. It reuses the same attachment and writing
+// path as Write with AI, so the notes stream on in handwriting exactly the same way.
+const PHOTO_TO_NOTES =
+  'This is a photo of handwritten notes, a printed document, or a whiteboard. Transcribe everything in it and rewrite it as clean, well organised notes: a short title, headings, lists, and any tables or figures it contains. Keep the meaning and every fact exact; do not invent anything that is not in the picture.'
+const photoInput = ref<HTMLInputElement | null>(null)
+async function onPhotoPicked(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !file.type.startsWith('image/')) return
+  showHome.value = false
+  const { putBlob } = await import('./store/persistence')
+  const { uid } = await import('./util/id')
+  const blobRef = uid('blob')
+  await putBlob(blobRef, file)
+  const attachment: Attachment = {
+    id: uid('att'),
+    kind: 'image',
+    name: file.name || 'photo',
+    mime: file.type,
+    size: file.size,
+    blobRef,
+  }
+  await onSubmit(PHOTO_TO_NOTES, [attachment], false)
+}
+
 // Drawer actions close the menu first, then run — so the page eases back before a sheet
 // or dialog takes over the screen.
 function drawerHome() {
@@ -599,6 +626,13 @@ const commands = computed<Command[]>(() => [
     hint: 'text or Markdown to a note',
     icon: 'file',
     run: () => importInput.value?.click(),
+  },
+  {
+    id: 'photo-notes',
+    title: 'Photo to notes',
+    hint: 'transcribe a page or whiteboard',
+    icon: 'image',
+    run: () => photoInput.value?.click(),
   },
   { id: 'undo', title: 'Undo', hint: `${mod}Z`, icon: 'undo', run: () => documentStore.undo() },
   { id: 'redo', title: 'Redo', hint: `${shiftMod}Z`, icon: 'redo', run: () => documentStore.redo() },
@@ -989,6 +1023,9 @@ function addPage() {
                   <Icon name="cards" :size="16" /><span>Study — flashcards</span>
                 </button>
                 <div class="sep" />
+                <button class="menu-item" @click="photoInput?.click()">
+                  <Icon name="image" :size="16" /><span>Photo to notes</span>
+                </button>
                 <button class="menu-item" @click="importInput?.click()">
                   <Icon name="file" :size="16" /><span>Import a document</span>
                 </button>
@@ -1105,6 +1142,14 @@ function addPage() {
       accept=".md,.markdown,.txt,text/plain,text/markdown"
       style="display: none"
       @change="onImportPicked"
+    />
+    <input
+      ref="photoInput"
+      type="file"
+      accept="image/*"
+      capture="environment"
+      style="display: none"
+      @change="onPhotoPicked"
     />
 
     <ShortcutsSheet v-if="showShortcuts" @close="showShortcuts = false" />
