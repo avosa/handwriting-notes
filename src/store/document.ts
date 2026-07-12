@@ -1133,6 +1133,12 @@ export const useDocument = defineStore('document', {
       page.strokes = strokes
       this.touch()
     },
+    // Attach (or clear) the note's voice recording, made while writing for audio-synced ink.
+    setAudio(audio: { blobRef: string; mime: string } | null) {
+      if (audio) this.doc.audio = audio
+      else delete this.doc.audio
+      this.touch()
+    },
     fillStroke(pageIndex: number, strokeId: string, color: string) {
       const stroke = this.doc.pages[pageIndex]?.strokes.find((s) => s.id === strokeId)
       if (stroke) {

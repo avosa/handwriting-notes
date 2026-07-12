@@ -304,6 +304,7 @@ function blobRefsInDoc(doc: NoteDocument): string[] {
       if (block.type === 'image' && block.blobRef) refs.push(block.blobRef)
     }
   }
+  if (doc.audio?.blobRef) refs.push(doc.audio.blobRef)
   return refs
 }
 
