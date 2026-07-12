@@ -13,6 +13,7 @@ import { useTheme } from './theme/useTheme'
 import NotePage from './editor/NotePage.vue'
 import EditorBar from './editor/EditorBar.vue'
 import AudioBar from './ui/AudioBar.vue'
+import HandwritingTrainer from './ui/HandwritingTrainer.vue'
 import SelectionMenu from './editor/SelectionMenu.vue'
 import WholeNoteBar from './editor/WholeNoteBar.vue'
 import LineSelectionBar from './editor/LineSelectionBar.vue'
@@ -84,6 +85,7 @@ const showStorage = ref(false)
 const showLocalAi = ref(false)
 const showStudy = ref(false)
 const showReading = ref(false)
+const showTrainer = ref(false)
 const showRemind = ref(false)
 const showReminders = ref(false)
 const reminders = useReminders()
@@ -674,6 +676,13 @@ const commands = computed<Command[]>(() => [
     icon: 'handwriting',
     run: () => void convertInkToText(),
   },
+  {
+    id: 'train-handwriting',
+    title: 'Train your handwriting',
+    hint: 'capture samples for a personal font',
+    icon: 'handwriting',
+    run: () => (showTrainer.value = true),
+  },
   { id: 'undo', title: 'Undo', hint: `${mod}Z`, icon: 'undo', run: () => documentStore.undo() },
   { id: 'redo', title: 'Redo', hint: `${shiftMod}Z`, icon: 'redo', run: () => documentStore.redo() },
   { id: 'theme-light', title: 'Theme: Light', icon: 'sun', run: () => settings.setTheme('light') },
@@ -1221,6 +1230,8 @@ function addPage() {
     <StudyPanel v-if="showStudy" @close="showStudy = false" />
 
     <ReadingView v-if="showReading" @close="showReading = false" />
+
+    <HandwritingTrainer v-if="showTrainer" @close="showTrainer = false" />
 
     <RemindDialog v-if="showRemind" @close="showRemind = false" />
 
