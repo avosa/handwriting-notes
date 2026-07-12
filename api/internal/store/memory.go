@@ -17,6 +17,7 @@ type Memory struct {
 	refresh map[string]map[string]int64    // user id -> refresh token id -> expiry unix
 	notes   map[string]map[string]SyncNote // user id -> note id -> ciphertext record
 	rev     map[string]int64               // user id -> last assigned rev
+	blobs   map[string]map[string]Blob     // user id -> blob id -> ciphertext blob
 }
 
 // NewMemory returns an empty in-memory store.
@@ -80,6 +81,7 @@ func (m *Memory) DeleteUser(_ context.Context, id string) error {
 	delete(m.refresh, id)
 	delete(m.notes, id)
 	delete(m.rev, id)
+	delete(m.blobs, id)
 	return nil
 }
 

@@ -49,6 +49,14 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/sync/notes/{id}", s.requireUser(http.HandlerFunc(s.handleGetNote)))
 	mux.Handle("DELETE /api/sync/notes/{id}", s.requireUser(http.HandlerFunc(s.handleDeleteNote)))
 
+	// Encrypted attachment blobs. Granting and deleting use the session token; the transfer itself
+	// goes through a short-lived, single-blob, single-operation capability URL, so bytes move under
+	// least privilege.
+	mux.Handle("POST /api/blobs/{id}/grant", s.requireUser(http.HandlerFunc(s.handleGrantBlob)))
+	mux.HandleFunc("PUT /api/blobs/{id}", s.handlePutBlob)
+	mux.HandleFunc("GET /api/blobs/{id}", s.handleGetBlob)
+	mux.Handle("DELETE /api/blobs/{id}", s.requireUser(http.HandlerFunc(s.handleDeleteBlob)))
+
 	return withRecovery(s.log, withRequestLog(s.log, mux))
 }
 
