@@ -10,6 +10,16 @@ import type { Page, Stroke, StrokePoint } from '@/types'
 import { penProfile } from '@/tools/penTypes'
 import { strokeWidths, grain } from '@/tools/inkPhysics'
 import { recognizeShape, shapeToStroke, type Shape } from '@/tools/shapeRecognition'
+import {
+  strokesInLasso,
+  strokesBounds,
+  translateStroke,
+  scaleStroke,
+  copyToClipboard,
+  clipboardStrokes,
+  hasClipboard,
+  type Bounds,
+} from '@/tools/lasso'
 import Icon from '@/ui/Icon.vue'
 import { useDocument } from '@/store/document'
 import { useSettings } from '@/store/settings'
@@ -52,6 +62,141 @@ function seedFrom(id: string): number {
   let n = 0
   for (let i = 0; i < id.length; i++) n = (n * 31 + id.charCodeAt(i)) % 100000
   return n + 1
+}
+
+// Lasso selection: the ids of the picked strokes, the box around them, and the interaction in
+// progress. While moving or resizing, a preview holds the whole page with the picked strokes
+// transformed, so the change is seen live before it is committed.
+const selectedIds = ref<Set<string>>(new Set())
+const selBounds = ref<Bounds | null>(null)
+const clipboardReady = ref(hasClipboard())
+let lassoPts: StrokePoint[] = []
+let lassoMode: 'idle' | 'lasso' | 'move' | 'resize' = 'idle'
+let dragStart: StrokePoint | null = null
+let origSelected: Stroke[] = []
+let resizeCorner = 0
+let preview: Stroke[] | null = null
+// How close, in millimetres, a press must be to a corner to grab its resize handle.
+const HANDLE_MM = 4
+
+function selectedStrokes(): Stroke[] {
+  return props.page.strokes.filter((s) => selectedIds.value.has(s.id))
+}
+
+function clearSelection() {
+  selectedIds.value = new Set()
+  selBounds.value = null
+  preview = null
+}
+
+// The corner of the selection box a press is grabbing, or null when it is not on a handle.
+function handleAt(point: StrokePoint): number | null {
+  const b = selBounds.value
+  if (!b) return null
+  const corners = [
+    { x: b.x, y: b.y },
+    { x: b.x + b.w, y: b.y },
+    { x: b.x + b.w, y: b.y + b.h },
+    { x: b.x, y: b.y + b.h },
+  ]
+  for (let i = 0; i < corners.length; i++) {
+    if (Math.hypot(point.x - corners[i].x, point.y - corners[i].y) <= HANDLE_MM) return i
+  }
+  return null
+}
+
+function insideSelection(point: StrokePoint): boolean {
+  const b = selBounds.value
+  return !!b && point.x >= b.x && point.x <= b.x + b.w && point.y >= b.y && point.y <= b.y + b.h
+}
+
+// Replace the page's strokes with the current preview (the committed transform) and refresh the box.
+function commitPreview() {
+  if (preview) documentStore.replaceStrokes(props.pageIndex, preview)
+  preview = null
+  selBounds.value = strokesBounds(selectedStrokes())
+}
+
+function deleteSelection() {
+  if (!selectedIds.value.size) return
+  documentStore.replaceStrokes(
+    props.pageIndex,
+    props.page.strokes.filter((s) => !selectedIds.value.has(s.id)),
+  )
+  clearSelection()
+  redraw()
+}
+
+function recolorSelection() {
+  if (!selectedIds.value.size) return
+  documentStore.replaceStrokes(
+    props.pageIndex,
+    props.page.strokes.map((s) => (selectedIds.value.has(s.id) ? { ...s, color: settings.activeColor } : s)),
+  )
+  redraw()
+}
+
+function duplicateSelection() {
+  const picked = selectedStrokes()
+  if (!picked.length) return
+  const copies = picked.map((s) => ({ ...translateStroke(s, 4, 4), id: uid('s') }))
+  documentStore.replaceStrokes(props.pageIndex, [...props.page.strokes, ...copies])
+  selectedIds.value = new Set(copies.map((s) => s.id))
+  selBounds.value = strokesBounds(copies)
+  redraw()
+}
+
+function copySelection() {
+  const picked = selectedStrokes()
+  if (!picked.length) return
+  copyToClipboard(picked)
+  clipboardReady.value = true
+}
+
+function cutSelection() {
+  copySelection()
+  deleteSelection()
+}
+
+function pasteClipboard() {
+  const copies = clipboardStrokes().map((s) => ({ ...translateStroke(s, 6, 6), id: uid('s') }))
+  if (!copies.length) return
+  documentStore.replaceStrokes(props.pageIndex, [...props.page.strokes, ...copies])
+  selectedIds.value = new Set(copies.map((s) => s.id))
+  selBounds.value = strokesBounds(copies)
+  redraw()
+}
+
+// The selection box as it stood when a drag began, so a resize scales against a fixed frame.
+let origBounds: Bounds | null = null
+
+// Build the live preview by transforming the picked strokes with fn, leaving the rest untouched, and
+// keep the box tracking them so the handles follow.
+function applyPreview(fn: (s: Stroke) => Stroke) {
+  const map = new Map(origSelected.map((s) => [s.id, s]))
+  preview = props.page.strokes.map((s) => (map.has(s.id) ? fn(map.get(s.id)!) : s))
+  selBounds.value = strokesBounds(preview.filter((s) => selectedIds.value.has(s.id)))
+}
+
+// Scale the selection about the corner opposite the one being dragged, so that fixed corner stays
+// put while the grabbed corner follows the pointer.
+function applyResize(point: StrokePoint) {
+  const b = origBounds
+  if (!b) return
+  const corners = [
+    { x: b.x, y: b.y },
+    { x: b.x + b.w, y: b.y },
+    { x: b.x + b.w, y: b.y + b.h },
+    { x: b.x, y: b.y + b.h },
+  ]
+  const anchor = corners[(resizeCorner + 2) % 4]
+  const grabbed = corners[resizeCorner]
+  const origW = grabbed.x - anchor.x
+  const origH = grabbed.y - anchor.y
+  const keep = (v: number) => (Math.abs(v) < 0.05 ? (v < 0 ? -0.05 : 0.05) : v)
+  const sx = origW !== 0 ? keep((point.x - anchor.x) / origW) : 1
+  const sy = origH !== 0 ? keep((point.y - anchor.y) / origH) : 1
+  applyPreview((s) => scaleStroke(s, anchor, sx, sy))
 }
 
 function ctx(): CanvasRenderingContext2D | null {
@@ -137,7 +282,7 @@ function redraw() {
   const el = canvas.value
   if (!context || !el) return
   context.clearRect(0, 0, el.width, el.height)
-  for (const stroke of working ?? props.page.strokes) drawStroke(context, stroke)
+  for (const stroke of working ?? preview ?? props.page.strokes) drawStroke(context, stroke)
   if (current) drawStroke(context, current)
   const ring = eraserRing.value
   if (ring) {
@@ -147,6 +292,45 @@ function redraw() {
     context.strokeStyle = 'rgba(51,51,76,0.55)'
     context.lineWidth = 1
     context.stroke()
+    context.restore()
+  }
+  drawLasso(context)
+}
+
+// The lasso loop as it is drawn, and the box with corner handles around the current selection.
+function drawLasso(context: CanvasRenderingContext2D) {
+  const k = props.pxPerMm
+  if (lassoMode === 'lasso' && lassoPts.length > 1) {
+    context.save()
+    context.setLineDash([4, 4])
+    context.strokeStyle = 'rgba(74,114,176,0.9)'
+    context.lineWidth = 1
+    context.beginPath()
+    context.moveTo(lassoPts[0].x * k, lassoPts[0].y * k)
+    for (const p of lassoPts) context.lineTo(p.x * k, p.y * k)
+    context.stroke()
+    context.restore()
+  }
+  const b = selBounds.value
+  if (b && selectedIds.value.size) {
+    context.save()
+    context.setLineDash([5, 4])
+    context.strokeStyle = 'rgba(74,114,176,0.95)'
+    context.lineWidth = 1
+    context.strokeRect(b.x * k, b.y * k, b.w * k, b.h * k)
+    context.setLineDash([])
+    context.fillStyle = '#fff'
+    for (const [cx, cy] of [
+      [b.x, b.y],
+      [b.x + b.w, b.y],
+      [b.x + b.w, b.y + b.h],
+      [b.x, b.y + b.h],
+    ]) {
+      context.beginPath()
+      context.rect(cx * k - 4, cy * k - 4, 8, 8)
+      context.fill()
+      context.stroke()
+    }
     context.restore()
   }
 }
@@ -241,6 +425,29 @@ function onDown(event: PointerEvent) {
   suggestion.value = null
   const point = pointFrom(event)
 
+  if (settings.activeTool === 'lasso') {
+    drawing = true
+    const corner = handleAt(point)
+    if (corner !== null && selectedIds.value.size) {
+      lassoMode = 'resize'
+      resizeCorner = corner
+      dragStart = point
+      origBounds = selBounds.value
+      origSelected = selectedStrokes().map((s) => ({ ...s, points: s.points.map((p) => ({ ...p })) }))
+    } else if (insideSelection(point) && selectedIds.value.size) {
+      lassoMode = 'move'
+      dragStart = point
+      origBounds = selBounds.value
+      origSelected = selectedStrokes().map((s) => ({ ...s, points: s.points.map((p) => ({ ...p })) }))
+    } else {
+      lassoMode = 'lasso'
+      clearSelection()
+      lassoPts = [point]
+    }
+    redraw()
+    return
+  }
+
   if (settings.activeTool === 'fill') {
     const target = strokeContaining(point)
     if (target) documentStore.fillStroke(props.pageIndex, target.id, settings.activeColor)
@@ -266,6 +473,20 @@ function onDown(event: PointerEvent) {
 function onMove(event: PointerEvent) {
   if (event.pointerType === 'pen') lastPenAt = performance.now()
   if (!drawing) return
+  if (settings.activeTool === 'lasso') {
+    const point = pointFrom(event)
+    if (lassoMode === 'lasso') {
+      lassoPts.push(point)
+    } else if (lassoMode === 'move' && dragStart) {
+      const dx = point.x - dragStart.x
+      const dy = point.y - dragStart.y
+      applyPreview((s) => translateStroke(s, dx, dy))
+    } else if (lassoMode === 'resize' && dragStart && selBounds.value) {
+      applyResize(point)
+    }
+    redraw()
+    return
+  }
   if (settings.activeTool === 'eraser') {
     eraseAt(pointFrom(event))
     return
@@ -285,6 +506,20 @@ function onUp(event: PointerEvent) {
   }
   if (!drawing) return
   drawing = false
+  if (settings.activeTool === 'lasso') {
+    if (lassoMode === 'lasso') {
+      const loop = lassoPts.map((p) => ({ x: p.x, y: p.y }))
+      selectedIds.value = new Set(strokesInLasso(props.page.strokes, loop))
+      selBounds.value = strokesBounds(selectedStrokes())
+      lassoPts = []
+    } else if (lassoMode === 'move' || lassoMode === 'resize') {
+      commitPreview()
+    }
+    lassoMode = 'idle'
+    dragStart = null
+    redraw()
+    return
+  }
   if (settings.activeTool === 'eraser') {
     if (working) documentStore.replaceStrokes(props.pageIndex, working)
     working = null
@@ -341,7 +576,18 @@ watch(
     lastErase = null
     eraserRing.value = null
     suggestion.value = null
+    clearSelection()
     redraw()
+  },
+)
+// Leaving the lasso for another tool drops the selection so its box does not linger over drawing.
+watch(
+  () => settings.activeTool,
+  (tool) => {
+    if (tool !== 'lasso') {
+      clearSelection()
+      redraw()
+    }
   },
 )
 
@@ -365,6 +611,24 @@ const tidyLabel = { line: 'straight line', circle: 'circle', rect: 'rectangle', 
         <button class="tidy-x" title="Keep as is" @click="suggestion = null"><Icon name="close" :size="13" /></button>
       </div>
     </Transition>
+
+    <!-- The actions for a lasso selection, hovering just above its box. -->
+    <Transition name="tidy-pop">
+      <div
+        v-if="selBounds && selectedIds.size && lassoMode === 'idle'"
+        class="sel-bar"
+        :style="{ left: `${(selBounds.x + selBounds.w / 2) * pxPerMm}px`, top: `${selBounds.y * pxPerMm}px` }"
+      >
+        <button title="Recolour to the ink colour" @click="recolorSelection">
+          <span class="swatch" :style="{ background: settings.activeColor }" />
+        </button>
+        <button title="Duplicate" @click="duplicateSelection"><Icon name="copy" :size="15" /></button>
+        <button title="Copy" @click="copySelection"><Icon name="file" :size="15" /></button>
+        <button title="Cut" @click="cutSelection"><Icon name="eraser" :size="15" /></button>
+        <button v-if="clipboardReady" title="Paste" @click="pasteClipboard"><Icon name="plus" :size="15" /></button>
+        <button title="Delete" class="danger" @click="deleteSelection"><Icon name="trash" :size="15" /></button>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -385,6 +649,43 @@ const tidyLabel = { line: 'straight line', circle: 'circle', rect: 'rectangle', 
 .ink.active {
   pointer-events: auto;
   cursor: crosshair;
+}
+.sel-bar {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 8px));
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  box-shadow: var(--pop-shadow, 0 8px 22px rgba(0, 0, 0, 0.22));
+  pointer-events: auto;
+}
+.sel-bar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 7px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.sel-bar button:hover {
+  background: var(--accent-wash);
+}
+.sel-bar button.danger:hover {
+  background: color-mix(in srgb, var(--danger, #c0392b) 14%, transparent);
+  color: var(--danger, #c0392b);
+}
+.sel-bar .swatch {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 .tidy {
   position: absolute;

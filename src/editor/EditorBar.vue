@@ -332,8 +332,16 @@ function imageRatio(file: Blob): Promise<number> {
       </div>
       <div class="divider" />
       <div class="draw-controls">
+        <button
+          class="lasso-btn"
+          :class="{ on: settings.activeTool === 'lasso' }"
+          title="Lasso select"
+          @click="settings.selectTool('lasso')"
+        >
+          <Icon name="lasso" :size="18" />
+        </button>
         <input
-          v-if="settings.activeTool !== 'fill'"
+          v-if="settings.activeTool !== 'fill' && settings.activeTool !== 'lasso'"
           class="width"
           type="range"
           :min="penProfile(settings.activeTool).minWidth"
@@ -533,6 +541,27 @@ function imageRatio(file: Blob): Promise<number> {
   background: linear-gradient(to top, var(--accent-wash-2), transparent);
 }
 
+.lasso-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  border-radius: 10px;
+  padding: 9px;
+  min-width: 40px;
+  min-height: 40px;
+  cursor: pointer;
+}
+.lasso-btn:hover {
+  background: var(--accent-wash-2);
+}
+.lasso-btn.on {
+  background: var(--accent-wash-2);
+  color: var(--brand);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
 .width {
   width: 96px;
   accent-color: var(--accent);

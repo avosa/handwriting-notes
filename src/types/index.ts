@@ -1,6 +1,6 @@
 // Domain types shared across the editor, stores, AI layer, and exporters.
 
-export type PenType = 'pencil' | 'fine' | 'marker' | 'highlighter' | 'eraser' | 'fill'
+export type PenType = 'pencil' | 'fine' | 'marker' | 'highlighter' | 'eraser' | 'fill' | 'lasso'
 
 export type InkColor = string
 
