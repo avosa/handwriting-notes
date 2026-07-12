@@ -43,3 +43,14 @@ func (m *Memory) DeleteBlob(_ context.Context, userID, blobID string) error {
 	delete(m.blobs[userID], blobID)
 	return nil
 }
+
+// AllBlobs returns every encrypted blob for a user, for a data export.
+func (m *Memory) AllBlobs(_ context.Context, userID string) ([]Blob, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]Blob, 0, len(m.blobs[userID]))
+	for _, b := range m.blobs[userID] {
+		out = append(out, b)
+	}
+	return out, nil
+}
