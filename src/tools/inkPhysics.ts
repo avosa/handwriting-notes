@@ -26,7 +26,10 @@ export function strokeWidths(stroke: Stroke): number[] {
     // means a fast stroke. A slow stroke pools wider, a fast one thins.
     const speed = Math.hypot(p.x - prev.x, p.y - prev.y)
     const pool = shapes ? clamp(1.18 - speed * 0.5, 0.62, 1.18) : 1
-    return base * p.pressure * pool
+    // A tilted stylus lays a broader mark, like shading with the side of the nib; upright pens and
+    // fingers (tilt unset) are unaffected.
+    const tilt = 1 + 0.7 * (p.tilt ?? 0)
+    return base * p.pressure * pool * tilt
   })
 
   const smooth = raw.map((_, i) => {

@@ -63,6 +63,17 @@ describe('strokeWidths', () => {
     ])
     expect(strokeWidths(s)).toEqual(strokeWidths(s))
   })
+
+  it('lays a broader mark when the stylus is tilted', () => {
+    const upright = stroke('fine', [
+      [0, 0],
+      [1, 0],
+      [2, 0],
+    ])
+    const tilted: Stroke = { ...upright, points: upright.points.map((p) => ({ ...p, tilt: 1 })) }
+    const mid = (arr: number[]) => arr[Math.floor(arr.length / 2)]
+    expect(mid(strokeWidths(tilted))).toBeGreaterThan(mid(strokeWidths(upright)))
+  })
 })
 
 describe('grain', () => {

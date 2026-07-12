@@ -28,6 +28,12 @@ const canvas = ref<HTMLCanvasElement | null>(null)
 
 let drawing = false
 let current: Stroke | null = null
+// Palm rejection: once a stylus is in use, touches are the hand resting on the glass, not drawing.
+// A pen currently down blocks touch outright; a short window after the last pen contact blocks the
+// palm that lands just before or after a pen stroke.
+let penDown = false
+let lastPenAt = 0
+const PALM_WINDOW_MS = 1400
 // While the eraser is down, work on a copy of the strokes so rubbing shows live, then
 // commit the result once. The ring shows where and how big the eraser is.
 let working: Stroke[] | null = null
@@ -134,11 +140,23 @@ function redraw() {
 function pointFrom(event: PointerEvent): StrokePoint {
   const rect = canvas.value!.getBoundingClientRect()
   const pressure = event.pressure && event.pressure > 0 ? event.pressure : 0.5
-  return {
+  const point: StrokePoint = {
     x: (event.clientX - rect.left) / props.pxPerMm,
     y: (event.clientY - rect.top) / props.pxPerMm,
     pressure: 0.4 + pressure * 0.9,
   }
+  // Tilt, where a stylus reports it: the angle from upright, normalised so flat reads as 1. Rounded
+  // to keep the stored stroke compact.
+  if (event.pointerType === 'pen' && (event.tiltX || event.tiltY)) {
+    const tilt = Math.min(1, Math.hypot(event.tiltX, event.tiltY) / 90)
+    if (tilt > 0.02) point.tilt = Math.round(tilt * 100) / 100
+  }
+  return point
+}
+
+// Whether this pointer should be ignored as a resting palm rather than a drawing touch.
+function isPalm(event: PointerEvent): boolean {
+  return event.pointerType === 'touch' && (penDown || performance.now() - lastPenAt < PALM_WINDOW_MS)
 }
 
 // Split a stroke where the eraser touches it, keeping the runs of points left behind.
@@ -197,6 +215,13 @@ function strokeContaining(point: StrokePoint): Stroke | null {
 
 function onDown(event: PointerEvent) {
   if (!props.active) return
+  if (event.pointerType === 'pen') {
+    penDown = true
+    lastPenAt = performance.now()
+  } else if (isPalm(event)) {
+    // A palm resting on the glass while writing: ignore it so it never lays a stray mark.
+    return
+  }
   ;(event.target as HTMLElement).setPointerCapture(event.pointerId)
   const point = pointFrom(event)
 
@@ -223,17 +248,25 @@ function onDown(event: PointerEvent) {
 }
 
 function onMove(event: PointerEvent) {
+  if (event.pointerType === 'pen') lastPenAt = performance.now()
   if (!drawing) return
-  const point = pointFrom(event)
   if (settings.activeTool === 'eraser') {
-    eraseAt(point)
+    eraseAt(pointFrom(event))
     return
   }
-  current?.points.push(point)
+  // A stylus reports far more points than the screen refreshes; the coalesced events hold every one
+  // between frames, so the line follows fast handwriting smoothly instead of cutting corners.
+  const events = typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : []
+  const batch = events.length ? events : [event]
+  for (const e of batch) current?.points.push(pointFrom(e))
   redraw()
 }
 
-function onUp() {
+function onUp(event: PointerEvent) {
+  if (event?.pointerType === 'pen') {
+    penDown = false
+    lastPenAt = performance.now()
+  }
   if (!drawing) return
   drawing = false
   if (settings.activeTool === 'eraser') {

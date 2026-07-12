@@ -19,6 +19,10 @@ export interface StrokePoint {
   x: number
   y: number
   pressure: number
+  /** How far the stylus is tilted from upright, 0 (upright) to 1 (flat), where the browser reports
+   *  it. A tilted pen lays a broader mark, like shading with the side of a nib. Unset for a finger
+   *  or mouse, which read as upright. */
+  tilt?: number
 }
 
 /**
