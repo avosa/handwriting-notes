@@ -261,6 +261,7 @@ defineExpose({
     :class="{ empty: plainText(model) === '' }"
     contenteditable="true"
     spellcheck="false"
+    dir="auto"
     :data-placeholder="props.placeholder ?? ''"
     @input="onInput"
     @focus="onFocus"
